@@ -8,7 +8,7 @@
 			"type": "npm",
 			"script": "compile-standalone",
 			"group": "build",
-			"problemMatcher": [],
+			"problemMatcher": "$esbuild",
 			"presentation": {
 				"reveal": "always"
 			}
@@ -140,25 +140,7 @@
 			"type": "npm",
 			"script": "watch:esbuild",
 			"group": "build",
-			"problemMatcher": {
-				"pattern": [
-					{
-						"regexp": "^✘ \\[ERROR\\] (.*)$",
-						"message": 1
-					},
-					{
-						"regexp": "^\\s+(.*):(\\d+):(\\d+):$",
-						"file": 1,
-						"line": 2,
-						"column": 3
-					}
-				],
-				"background": {
-					"activeOnStart": true,
-					"beginsPattern": "^\\[watch\\] build started$",
-					"endsPattern": "^\\[watch\\] build finished$"
-				}
-			},
+			"problemMatcher": "$esbuild-watch",
 			"isBackground": true,
 			"label": "npm: watch:esbuild",
 			"dependsOn": [
@@ -178,25 +160,7 @@
 			"type": "npm",
 			"script": "watch:esbuild:test",
 			"group": "build",
-			"problemMatcher": {
-				"pattern": [
-					{
-						"regexp": "^✘ \\[ERROR\\] (.*)$",
-						"message": 1
-					},
-					{
-						"regexp": "^\\s+(.*):(\\d+):(\\d+):$",
-						"file": 1,
-						"line": 2,
-						"column": 3
-					}
-				],
-				"background": {
-					"activeOnStart": true,
-					"beginsPattern": "^\\[watch\\] build started$",
-					"endsPattern": "^\\[watch\\] build finished$"
-				}
-			},
+			"problemMatcher": "$esbuild-watch",
 			"isBackground": true,
 			"label": "npm: watch:esbuild:test",
 			"dependsOn": [
