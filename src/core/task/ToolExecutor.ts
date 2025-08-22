@@ -186,6 +186,8 @@ export class ToolExecutor {
 				return `[${block.name} for '${block.params.path}']`
 			case "list_code_definition_names":
 				return `[${block.name} for '${block.params.path}']`
+			case "rag_search":
+				return `[${block.name} for '${block.params.query}']`
 			case "browser_action":
 				return `[${block.name} for '${block.params.action}']`
 			case "use_mcp_tool":
@@ -983,6 +985,52 @@ export class ToolExecutor {
 					}
 				} catch (error) {
 					await this.handleError("searching files", error, block)
+					await this.saveCheckpoint()
+					break
+				}
+			}
+			case "rag_search": {
+				const query: string | undefined = block.params.query
+				const knowledge_base: string | undefined = block.params.knowledge_base
+				const max_results: string | undefined = block.params.max_results
+
+				try {
+					if (block.partial) {
+						const partialMessage = JSON.stringify({
+							tool: "ragSearch",
+							query: this.removeClosingTag(block, "query", query),
+							knowledgeBase: this.removeClosingTag(block, "knowledge_base", knowledge_base),
+							maxResults: this.removeClosingTag(block, "max_results", max_results),
+						} satisfies ClineSayTool)
+
+						// RAG search should generally auto-approve as it's read-only
+						if (this.shouldAutoApproveTool(block.name)) {
+							this.removeLastPartialMessageIfExistsWithType("ask", "tool")
+							await this.say("tool", partialMessage, undefined, undefined, block.partial)
+						} else {
+							this.removeLastPartialMessageIfExistsWithType("say", "tool")
+							await this.ask("tool", partialMessage, block.partial).catch(() => {})
+						}
+						break
+					} else {
+						if (!query) {
+							this.taskState.consecutiveMistakeCount++
+							this.pushToolResult(await this.sayAndCreateMissingParamError("rag_search", "query"), block)
+							await this.saveCheckpoint()
+							break
+						}
+
+						this.taskState.consecutiveMistakeCount = 0
+
+						// Execute RAG search - you'd implement this
+						const ragResults = await this.performRagSearch(query, knowledge_base, max_results)
+
+						this.pushToolResult(formatResponse.toolResult(ragResults), block)
+						await this.saveCheckpoint()
+						break
+					}
+				} catch (error) {
+					await this.handleError("performing RAG search", error, block)
 					await this.saveCheckpoint()
 					break
 				}
@@ -2397,5 +2445,50 @@ export class ToolExecutor {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Performs a RAG (Retrieval-Augmented Generation) search
+	 * @param query The search query
+	 * @param knowledge_base Optional knowledge base identifier
+	 * @param max_results Optional maximum number of results
+	 * @returns The search results
+	 */
+	private async performRagSearch(query: string, knowledge_base?: string, max_results?: string): Promise<string> {
+		// TODO: Implement actual RAG functionality
+		// This is a placeholder implementation
+
+		const maxRes = max_results ? parseInt(max_results, 10) : 5
+		const kb = knowledge_base || "default"
+
+		// Placeholder implementation - replace with actual RAG service
+		const results = [
+			{
+				title: "Sample Result 1",
+				content: "This is a placeholder result for the RAG search query: " + query,
+				score: 0.95,
+			},
+			{
+				title: "Sample Result 2",
+				content: "Another placeholder result showing RAG functionality.",
+				score: 0.87,
+			},
+		].slice(0, maxRes)
+
+		const formattedResults = results
+			.map(
+				(result, index) =>
+					`${index + 1}. **${result.title}** (Score: ${result.score})
+${result.content}`,
+			)
+			.join("\n\n")
+
+		return `RAG Search Results for query: "${query}"
+Knowledge Base: ${kb}
+Max Results: ${maxRes}
+
+${formattedResults}
+
+Note: This is a placeholder implementation. Replace performRagSearch method with actual RAG service integration.`
 	}
 }

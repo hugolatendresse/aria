@@ -147,6 +147,7 @@ export interface ClineSayTool {
 		| "listFilesRecursive"
 		| "listCodeDefinitionNames"
 		| "searchFiles"
+		| "ragSearch"
 		| "webFetch"
 		| "summarizeTask"
 	path?: string
@@ -154,6 +155,9 @@ export interface ClineSayTool {
 	content?: string
 	regex?: string
 	filePattern?: string
+	query?: string
+	knowledgeBase?: string
+	maxResults?: string
 	operationIsLocatedInWorkspace?: boolean
 }
 

@@ -180,7 +180,28 @@ Parameters:
 Usage:
 <list_code_definition_names>
 <path>Directory path here</path>
-</list_code_definition_names>${
+</list_code_definition_names>
+
+## rag_search
+Description: Search relevant information from knowledge bases using retrieval-augmented generation. Use this when you need to find specific information, context, or examples related to the user's query from external knowledge sources.
+Parameters:
+- query: (required) The search query to find relevant information
+- knowledge_base: (optional) Specific knowledge base to search in, if not provided searches all available sources
+- max_results: (optional) Maximum number of results to return (default: 5)
+${focusChainSettings.enabled ? `- task_progress: (optional) A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)` : ""}
+Usage:
+<rag_search>
+<query>Your search query here</query>
+<knowledge_base>Optional knowledge base name</knowledge_base>
+<max_results>5</max_results>
+${
+	focusChainSettings.enabled
+		? `<task_progress>
+Checklist here (optional)
+</task_progress>`
+		: ""
+}
+</rag_search>${
 		supportsBrowserUse
 			? `
 
@@ -726,7 +747,7 @@ Example:
 }
 CAPABILITIES
 
-- You have access to tools that let you execute CLI commands on the user's computer, list files, view source code definitions, regex search${
+- You have access to tools that let you execute CLI commands on the user's computer, list files, view source code definitions, regex search, perform RAG searches${
 		supportsBrowserUse ? ", use the browser" : ""
 	}, read and edit files, and ask follow-up questions. These tools help you effectively accomplish a wide range of tasks, such as writing code, making edits or improvements to existing files, understanding the current state of a project, performing system operations, and much more.
 - When the user initially gives you a task, a recursive list of all filepaths in the current working directory ('${cwd.toPosix()}') will be included in environment_details. This provides an overview of the project's file structure, offering key insights into the project from directory/file names (how developers conceptualize and organize their code) and file extensions (the language used). This can also guide decision-making on which files to explore further. If you need to further explore directories such as outside the current working directory, you can use the list_files tool. If you pass 'true' for the recursive parameter, it will list files recursively. Otherwise, it will list files at the top level, which is better suited for generic directories where you don't necessarily need the nested structure, like the Desktop.

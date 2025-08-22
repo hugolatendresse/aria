@@ -16,6 +16,7 @@ export const toolUseNames = [
 	"search_files",
 	"list_files",
 	"list_code_definition_names",
+	"rag_search",
 	"browser_action",
 	"use_mcp_tool",
 	"access_mcp_resource",
@@ -63,6 +64,9 @@ export const toolParamNames = [
 	"additional_context",
 	"needs_more_exploration",
 	"task_progress",
+	"query",
+	"knowledge_base",
+	"max_results",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
