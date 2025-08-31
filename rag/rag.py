@@ -1,3 +1,8 @@
+"""
+This is a "standalone" RAG, not connected to MCP or Cline.
+It works well, but needs to be somehow connected to Cline. 
+"""
+
 import numpy
 import getpass
 import os
