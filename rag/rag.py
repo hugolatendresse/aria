@@ -6,6 +6,7 @@ It works well, but needs to be somehow connected to Cline.
 import os
 from langchain import hub
 from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langgraph.graph import START, StateGraph
 from typing_extensions import List, TypedDict
@@ -21,7 +22,7 @@ load_dotenv(env_path)
 # Configuration toggle: 
 # - Set to True: Load/update documents in vector database (first run or when adding new docs)
 # - Set to False: Skip document loading and use existing vector database (for testing)
-REBUILD_VECTOR_DB = True
+REBUILD_VECTOR_DB = False  # Skip rebuilding to test improved prompts and questions
 
 # TODO it's good to do this to help trace what's going on inside the agent:
 
@@ -138,7 +139,24 @@ else:
 # Define prompt for question-answering
 # N.B. for non-US LangSmith endpoints, you may need to specify
 # api_url="https://api.smith.langchain.com" in hub.pull.
-prompt = hub.pull("rlm/rag-prompt")
+# Use a custom prompt that's more encouraging
+
+prompt = ChatPromptTemplate.from_template("""
+You are an expert actuary assistant. Use the following context from actuarial documents to answer the question.
+
+Context from actuarial documents:
+{context}
+
+Question: {question}
+
+Instructions:
+- Provide a detailed answer based on the actuarial context provided
+- If the context contains relevant information, explain it thoroughly
+- Include specific details, formulas, or methods mentioned in the context
+- Do not ever make inferences, only rely on the context provided
+- Say "I don't know" if the context is completely unrelated to the question
+
+Answer:""")
 
 
 # Define state for application
@@ -157,11 +175,11 @@ def retrieve(state: State):
     retrieved_docs = []
     
     if search_scope in ["both", "friedland"]:
-        friedland_docs = friedland_store.similarity_search(question, k=3)
+        friedland_docs = friedland_store.similarity_search(question, k=5)  
         retrieved_docs.extend(friedland_docs)
     
     if search_scope in ["both", "werner-modlin"]:
-        werner_modlin_docs = werner_modlin_store.similarity_search(question, k=3)
+        werner_modlin_docs = werner_modlin_store.similarity_search(question, k=5)  
         retrieved_docs.extend(werner_modlin_docs)
     
     return {"context": retrieved_docs}
@@ -192,6 +210,27 @@ def search_both_papers(question: str) -> str:
     result = graph.invoke(state)
     return result["answer"]
 
+def debug_search(question: str, search_scope: str = "both"):
+    """Debug function to show what chunks are being retrieved"""
+    print(f"=== DEBUG: Searching for '{question}' in {search_scope} ===")
+    
+    retrieved_docs = []
+    if search_scope in ["both", "friedland"]:
+        friedland_docs = friedland_store.similarity_search(question, k=3)
+        retrieved_docs.extend(friedland_docs)
+        print(f"Found {len(friedland_docs)} chunks from Friedland paper")
+    
+    if search_scope in ["both", "werner-modlin"]:
+        werner_modlin_docs = werner_modlin_store.similarity_search(question, k=3)
+        retrieved_docs.extend(werner_modlin_docs)
+        print(f"Found {len(werner_modlin_docs)} chunks from Werner-Modlin paper")
+    
+    for i, doc in enumerate(retrieved_docs[:3]): 
+        print(f"\nChunk {i+1} (from {doc.metadata.get('paper_type', 'unknown')}):")
+        print(f"  Page: {doc.metadata.get('page_label', 'unknown')}")
+        print(f"  Content: {doc.page_content[:300]}...")
+    print("=" * 50)
+
 
 # Compile application and test
 graph_builder = StateGraph(State).add_sequence([retrieve, generate])
@@ -204,17 +243,25 @@ if __name__ == "__main__":
     print(f"Assets directory: {os.path.join(repo_root, 'assets', 'actuarial')}")
     print("(Change REBUILD_VECTOR_DB to False at top of file to skip document loading)\n")
     
+    # Test 1: Debug what chunks are retrieved for better understanding
+    debug_search("What is the Bornhuetter-Ferguson technique and how does it work?", "friedland")
+    
     # Test searching both papers
     print("1. Searching both papers:")
     response = search_both_papers("What is the difference between the Friedland and Werner-Modlin papers?")
     print(f"Answer: {response}\n")
     
-    # Test searching only Friedland paper
+    # Test searching only Friedland paper with more specific question
     print("2. Searching only Friedland paper:")
-    friedland_response = search_friedland("When should the BF method be used?")
+    friedland_response = search_friedland("What is the Bornhuetter-Ferguson technique and how does it work?")
     print(f"Answer: {friedland_response}\n")
     
-    # Test searching only Werner-Modlin paper  
+    # Test searching only Werner-Modlin paper with more specific question
     print("3. Searching only Werner-Modlin paper:")
-    werner_response = search_werner_modlin("When should the LR indication method be used?")
+    werner_response = search_werner_modlin("What is a loss ratio and how is it calculated?")
     print(f"Answer: {werner_response}\n")
+    
+    # Test with very specific actuarial question
+    print("4. Testing specific technique:")
+    technique_response = search_friedland("Explain the expected claims method in actuarial analysis")
+    print(f"Answer: {technique_response}\n")
