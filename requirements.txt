@@ -1,5 +1,9 @@
-pandas
+langchain
+langchain-community
+langchain-google-genai
+langgraph
 numpy
+pandas
 pyperclip
 watchdog
 
