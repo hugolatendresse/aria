@@ -23,6 +23,8 @@ pnpm-lock.yaml
 webview-ui/src/**/*.js
 webview-ui/src/**/*.js.map
 
+*.db
+
 # Ignore coverage directories and files
 coverage
 # But don't ignore the coverage scripts in .github/scripts/

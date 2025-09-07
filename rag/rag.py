@@ -2,7 +2,6 @@
 This is a "standalone" RAG, not connected to MCP or Cline.
 It works well, but needs to be somehow connected to Cline. 
 """
-
 import os
 from langchain import hub
 from langchain_core.documents import Document
@@ -12,17 +11,23 @@ from langgraph.graph import START, StateGraph
 from typing_extensions import List, TypedDict
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import SQLiteVec
+from langchain_ollama import OllamaEmbeddings
 
 from dotenv import load_dotenv
+
+
+############################### Configuration ################################# 
+# - Set to True: Load/update documents in vector database (first run or when adding new docs)
+# - Set to False: Skip document loading and use existing vector database (for testing)
+REBUILD_VECTOR_DB = False  # Skip rebuilding to test improved prompts and questions
+
+EMBEDDING_MODEL = "ollama" # "ollama" or "gemini"
+###############################################################################
 
 # Load environment variables from .env file in the rag directory
 env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
 load_dotenv(env_path)
 
-# Configuration toggle: 
-# - Set to True: Load/update documents in vector database (first run or when adding new docs)
-# - Set to False: Skip document loading and use existing vector database (for testing)
-REBUILD_VECTOR_DB = False  # Skip rebuilding to test improved prompts and questions
 
 # TODO it's good to do this to help trace what's going on inside the agent:
 
@@ -39,8 +44,6 @@ export LANGSMITH_TRACING="true"
 export LANGSMITH_API_KEY="..."
 """
 
-
-
 if not os.environ.get("GOOGLE_API_KEY"):
   raise ValueError('no GOOGLE_API_KEY!')
 
@@ -54,18 +57,25 @@ if not os.environ.get("GOOGLE_API_KEY"):
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-
-
 # Path
 script_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(script_dir)
 
-vector_store_mode = "sqlite"
-db_file = os.path.join(script_dir, "actuarial_vector.db")
-
 # Create separate vector stores for Werner-Modlin and Friedland
-embedding_function = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+if EMBEDDING_MODEL == "gemini":
+    embedding_function = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+    db_filename = "gemini_vector.db"
+elif EMBEDDING_MODEL == "ollama":
+    embedding_function = OllamaEmbeddings(
+    model="nomic-embed-text:latest",base_url="http://127.0.0.1:11434"
+)
+    db_filename = "ollama_vector.db"
+else:
+    raise ValueError(f"Unsupported EMBEDDING_MODEL option: {EMBEDDING_MODEL}")
+
+vector_store_mode = "sqlite"
+db_file = os.path.join(script_dir, db_filename)
+
 connection = SQLiteVec.create_connection(db_file=db_file)
 
 friedland_store = SQLiteVec(table="friedland_paper", db_file=db_file, embedding=embedding_function, connection=connection)
