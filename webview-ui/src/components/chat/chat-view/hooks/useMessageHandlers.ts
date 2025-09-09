@@ -118,15 +118,6 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 			const hasContent = trimmedInput || (images && images.length > 0) || (files && files.length > 0)
 
 			switch (actionType) {
-				case "retry":
-					// For API retry (api_req_failed), always send simple approval without content
-					await TaskServiceClient.askResponse(
-						AskResponseRequest.create({
-							responseType: "yesButtonClicked",
-						}),
-					)
-					clearInputState()
-					break
 				case "approve":
 					if (hasContent) {
 						await TaskServiceClient.askResponse(
@@ -169,14 +160,7 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 
 				case "proceed":
 					if (hasContent) {
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "yesButtonClicked",
-								text: trimmedInput,
-								images: images,
-								files: files,
-							}),
-						)
+						await handleSendMessage(trimmedInput || "", images || [], files || [])
 					} else {
 						await TaskServiceClient.askResponse(
 							AskResponseRequest.create({

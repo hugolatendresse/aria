@@ -11,7 +11,6 @@ export { config as gpt5Config, type GPT5VariantConfig } from "./gpt-5/config"
 export { config as nextGenConfig, type NextGenVariantConfig } from "./next-gen/config"
 export { config as xsConfig, type XsVariantConfig } from "./xs/config"
 
-import { ModelFamily } from "@/shared/prompts"
 import { config as genericConfig } from "./generic/config"
 import { config as gpt5Config } from "./gpt-5/config"
 import { config as nextGenConfig } from "./next-gen/config"
@@ -27,21 +26,20 @@ export const VARIANT_CONFIGS = {
 	 * Generic variant - Fallback for all model types
 	 * Optimized for broad compatibility and stable performance
 	 */
-	[ModelFamily.GENERIC]: genericConfig,
+	generic: genericConfig,
+
 	/**
 	 * Next-gen variant - Advanced models with enhanced capabilities
 	 * Includes additional features like feedback loops and web fetching
 	 */
-	[ModelFamily.NEXT_GEN]: nextGenConfig,
-	/**
-	 * GPT-5 variant
-	 */
-	[ModelFamily.GPT_5]: gpt5Config,
+	"next-gen": nextGenConfig,
+	gpt5: gpt5Config,
+
 	/**
 	 * XS variant - Compact models with limited context windows
 	 * Streamlined for efficiency with essential tools only
 	 */
-	[ModelFamily.XS]: xsConfig,
+	xs: xsConfig,
 } as const
 
 /**

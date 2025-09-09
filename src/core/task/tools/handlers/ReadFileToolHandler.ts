@@ -1,11 +1,10 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
 import { extractFileContent } from "@integrations/misc/extract-file-content"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
+import * as path from "path"
 import { telemetryService } from "@/services/telemetry"
 import { ClineSayTool } from "@/shared/ExtensionMessage"
-import { ClineDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -15,7 +14,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class ReadFileToolHandler implements IFullyManagedTool {
-	readonly name = ClineDefaultTool.FILE_READ
+	readonly name = "read_file"
 
 	constructor(private validator: ToolValidator) {}
 
@@ -55,7 +54,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		const pathValidation = this.validator.assertRequiredParams(block, "path")
 		if (!pathValidation.ok) {
 			config.taskState.consecutiveMistakeCount++
-			return await config.callbacks.sayAndCreateMissingParamError(this.name, "path")
+			return await config.callbacks.sayAndCreateMissingParamError("read_file", "path")
 		}
 
 		// Check clineignore access
@@ -66,7 +65,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		}
 
 		config.taskState.consecutiveMistakeCount = 0
-		const absolutePath = resolveWorkspacePath(config.cwd, relPath!, "ReadFileToolHandler.execute")
+		const absolutePath = path.resolve(config.cwd, relPath!)
 
 		// Handle approval flow
 		const sharedMessageProps = {
@@ -88,7 +87,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, true, true)
 		} else {
 			// Manual approval flow
-			const notificationMessage = `Cline wants to read ${getWorkspaceBasename(absolutePath, "ReadFileToolHandler.notification")}`
+			const notificationMessage = `Cline wants to read ${path.basename(absolutePath)}`
 
 			// Show notification
 			showNotificationForApprovalIfAutoApprovalEnabled(

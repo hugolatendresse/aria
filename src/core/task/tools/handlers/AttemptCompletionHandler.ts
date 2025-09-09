@@ -6,7 +6,6 @@ import { showSystemNotification } from "@integrations/notifications"
 import { findLastIndex } from "@shared/array"
 import { COMPLETION_RESULT_CHANGES_FLAG } from "@shared/ExtensionMessage"
 import { telemetryService } from "@/services/telemetry"
-import { ClineDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -14,7 +13,9 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHandler {
-	readonly name = ClineDefaultTool.ATTEMPT
+	readonly name = "attempt_completion"
+
+	constructor() {}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`
@@ -47,7 +48,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// Validate required parameters
 		if (!result) {
 			config.taskState.consecutiveMistakeCount++
-			return await config.callbacks.sayAndCreateMissingParamError(this.name, "result")
+			return await config.callbacks.sayAndCreateMissingParamError("attempt_completion", "result")
 		}
 
 		config.taskState.consecutiveMistakeCount = 0
@@ -95,11 +96,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				await config.callbacks.saveCheckpoint(true)
 			}
 
-			// Attempt completion is a special tool where we want to update the focus chain list before the user provides response
-			if (!block.partial && config.focusChainSettings.enabled) {
-				await config.callbacks.updateFCListFromToolResponse(block.params.task_progress)
-			}
-
 			// complete command message - need to ask for approval
 			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("command", command, config)
 			if (!didApprove) {
@@ -126,11 +122,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		if (config.messageState.getClineMessages().at(-1)?.ask === "command_output") {
 			await config.callbacks.say("command_output", "")
 		}
-
-		if (!block.partial && config.focusChainSettings.enabled) {
-			await config.callbacks.updateFCListFromToolResponse(block.params.task_progress)
-		}
-
 		const { response, text, images, files: completionFiles } = await config.callbacks.ask("completion_result", "", false)
 		if (response === "yesButtonClicked") {
 			return "" // signals to recursive loop to stop (for now this never happens since yesButtonClicked will trigger a new task)

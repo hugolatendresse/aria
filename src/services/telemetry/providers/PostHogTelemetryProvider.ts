@@ -1,8 +1,6 @@
 import { PostHog } from "posthog-node"
 import * as vscode from "vscode"
-import { HostProvider } from "@/hosts/host-provider"
 import { getDistinctId, setDistinctId } from "@/services/logging/distinctId"
-import { Setting } from "@/shared/proto/index.host"
 import { posthogConfig } from "../../../shared/services/config/posthog-config"
 import type { ClineAccountUserInfo } from "../../auth/AuthService"
 import type { ITelemetryProvider, TelemetrySettings } from "./ITelemetryProvider"
@@ -37,21 +35,13 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 			hostEnabled: true,
 			level: "all",
 		}
-	}
-	public async initialize(): Promise<PostHogTelemetryProvider> {
-		// Listen for host telemetry changes
-		HostProvider.env.subscribeToTelemetrySettings(
-			{},
-			{
-				onResponse: (event) => {
-					const hostEnabled = event.isEnabled === Setting.ENABLED || event.isEnabled === Setting.UNSUPPORTED
-					this.telemetrySettings.hostEnabled = hostEnabled
-				},
-			},
-		)
 
-		const hostSettings = await HostProvider.env.getTelemetrySettings({})
-		if (hostSettings.isEnabled === Setting.DISABLED) {
+		// Listen for VS Code telemetry changes
+		vscode.env.onDidChangeTelemetryEnabled((isTelemetryEnabled) => {
+			this.telemetrySettings.hostEnabled = isTelemetryEnabled
+		})
+
+		if (vscode?.env?.isTelemetryEnabled === false) {
 			this.telemetrySettings.hostEnabled = false
 		}
 
@@ -61,8 +51,7 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 			this.telemetrySettings.extensionEnabled = false
 		}
 
-		this.telemetrySettings.level = await this.getTelemetryLevel()
-		return this
+		this.telemetrySettings.level = this.getTelemetryLevel()
 	}
 
 	public log(event: string, properties?: Record<string, unknown>): void {
@@ -135,9 +124,8 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 	/**
 	 * Get the current telemetry level from VS Code settings
 	 */
-	private async getTelemetryLevel(): Promise<TelemetrySettings["level"]> {
-		const hostSettings = await HostProvider.env.getTelemetrySettings({})
-		if (hostSettings.isEnabled === Setting.DISABLED) {
+	private getTelemetryLevel(): TelemetrySettings["level"] {
+		if (!vscode?.env?.isTelemetryEnabled) {
 			return "off"
 		}
 		const config = vscode.workspace.getConfiguration("telemetry")

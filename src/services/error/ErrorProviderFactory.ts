@@ -1,4 +1,4 @@
-import { PostHogClientConfig, posthogConfig } from "@/shared/services/config/posthog-config"
+import { PostHogClientConfig, PostHogClientValidConfig, posthogConfig } from "@/shared/services/config/posthog-config"
 import { IErrorProvider } from "./providers/IErrorProvider"
 import { PostHogErrorProvider } from "./providers/PostHogErrorProvider"
 
@@ -25,16 +25,16 @@ export class ErrorProviderFactory {
 	 * @param config Configuration for the error provider
 	 * @returns IErrorProvider instance
 	 */
-	public static async createProvider(config: ErrorProviderConfig): Promise<IErrorProvider> {
+	public static createProvider(config: ErrorProviderConfig): IErrorProvider {
 		switch (config.type) {
 			case "posthog":
 				if (config.config.apiKey !== undefined && config.config.errorTrackingApiKey !== undefined) {
-					return await new PostHogErrorProvider({
+					return new PostHogErrorProvider({
 						apiKey: config.config.apiKey,
 						errorTrackingApiKey: config.config.errorTrackingApiKey,
 						host: config.config.host,
 						uiHost: config.config.uiHost,
-					}).initialize()
+					})
 				}
 				return new NoOpErrorProvider()
 			default:
