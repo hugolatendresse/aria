@@ -2,9 +2,8 @@ import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { findLast, parsePartialArrayString } from "@shared/array"
 import { ClineAsk, ClineAskQuestion } from "@shared/ExtensionMessage"
-import { ClineDefaultTool } from "@shared/tools"
 import { telemetryService } from "@/services/telemetry"
-import { ToolUse } from "../../../assistant-message"
+import { ToolUse, ToolUseName } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { ToolResponse } from "../.."
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
@@ -12,7 +11,8 @@ import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlockHandler {
-	readonly name = ClineDefaultTool.ASK
+	name = "ask_followup_question"
+	supportedTools: ToolUseName[] = ["ask_followup_question"]
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.question}']`
@@ -36,7 +36,7 @@ export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlo
 		// Validate required parameter
 		if (!question) {
 			config.taskState.consecutiveMistakeCount++
-			return await config.callbacks.sayAndCreateMissingParamError(this.name, "question")
+			return await config.callbacks.sayAndCreateMissingParamError("ask_followup_question", "question")
 		}
 		config.taskState.consecutiveMistakeCount = 0
 

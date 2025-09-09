@@ -1,8 +1,7 @@
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import { ClineAsk, ClineSayTool } from "@shared/ExtensionMessage"
-import { ClineDefaultTool } from "@shared/tools"
 import { telemetryService } from "@/services/telemetry"
-import { ToolUse } from "../../../assistant-message"
+import { ToolUse, ToolUseName } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { ToolResponse } from "../.."
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
@@ -12,7 +11,8 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class WebFetchToolHandler implements IFullyManagedTool {
-	readonly name = ClineDefaultTool.WEB_FETCH
+	name = "web_fetch"
+	supportedTools: ToolUseName[] = ["web_fetch"]
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.url}']`
@@ -42,7 +42,7 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 			// Validate required parameter
 			if (!url) {
 				config.taskState.consecutiveMistakeCount++
-				return await config.callbacks.sayAndCreateMissingParamError(this.name, "url")
+				return await config.callbacks.sayAndCreateMissingParamError("web_fetch", "url")
 			}
 			config.taskState.consecutiveMistakeCount = 0
 
@@ -55,7 +55,7 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 			}
 			const completeMessage = JSON.stringify(sharedMessageProps)
 
-			if (config.callbacks.shouldAutoApproveTool(this.name)) {
+			if (config.callbacks.shouldAutoApproveTool("web_fetch" as ToolUseName)) {
 				// Auto-approve flow
 				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)

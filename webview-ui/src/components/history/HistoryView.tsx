@@ -324,7 +324,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 						}}>
 						History
 					</h3>
-					<VSCodeButton onClick={() => onDone()}>Done</VSCodeButton>
+					<VSCodeButton onClick={onDone}>Done</VSCodeButton>
 				</div>
 				<div style={{ padding: "5px 17px 6px 17px" }}>
 					<div
@@ -393,9 +393,19 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 							/>
 						</VSCodeRadioGroup>
 
-						<div className="flex justify-end gap-2.5">
-							<VSCodeButton onClick={() => handleBatchHistorySelect(true)}>Select All</VSCodeButton>
-							<VSCodeButton onClick={() => handleBatchHistorySelect(false)}>Select None</VSCodeButton>
+						<div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+							<VSCodeButton
+								onClick={() => {
+									handleBatchHistorySelect(true)
+								}}>
+								Select All
+							</VSCodeButton>
+							<VSCodeButton
+								onClick={() => {
+									handleBatchHistorySelect(false)
+								}}>
+								Select None
+							</VSCodeButton>
 						</div>
 					</div>
 				</div>
@@ -716,7 +726,6 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 							onClick={() => {
 								setDeleteAllDisabled(true)
 								TaskServiceClient.deleteAllTaskHistory(BooleanRequest.create({}))
-									.then(() => fetchTotalTasksSize())
 									.catch((error) => console.error("Error deleting task history:", error))
 									.finally(() => setDeleteAllDisabled(false))
 							}}

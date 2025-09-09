@@ -1,5 +1,6 @@
+import { BrowserSession } from "@services/browser/BrowserSession"
 import { BrowserAction, BrowserActionResult, browserActions, ClineSayBrowserAction } from "@shared/ExtensionMessage"
-import { ClineDefaultTool } from "@/shared/tools"
+import { modelDoesntSupportWebp } from "@utils/model-utils"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { ToolResponse } from "../.."
@@ -10,7 +11,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class BrowserToolHandler implements IFullyManagedTool {
-	readonly name = ClineDefaultTool.BROWSER
+	readonly name = "browser_action"
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.action}']`
@@ -46,7 +47,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 			}
 		} else {
 			await uiHelpers.say(
-				this.name,
+				"browser_action",
 				JSON.stringify({
 					action: action as BrowserAction,
 					coordinate: uiHelpers.removeClosingTag(block, "coordinate", coordinate),
@@ -69,7 +70,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 		if (!action || !browserActions.includes(action)) {
 			// if the block is complete and we don't have a valid action this is a mistake
 			config.taskState.consecutiveMistakeCount++
-			const errorResult = await config.callbacks.sayAndCreateMissingParamError(this.name, "action")
+			const errorResult = await config.callbacks.sayAndCreateMissingParamError("browser_action", "action")
 			await config.services.browserSession.closeBrowser()
 			return errorResult
 		}
@@ -81,7 +82,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 			if (action === "launch") {
 				if (!url) {
 					config.taskState.consecutiveMistakeCount++
-					const errorResult = await config.callbacks.sayAndCreateMissingParamError(this.name, "url")
+					const errorResult = await config.callbacks.sayAndCreateMissingParamError("browser_action", "url")
 					await config.services.browserSession.closeBrowser()
 					return errorResult
 				}
@@ -120,7 +121,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 				if (action === "click") {
 					if (!coordinate) {
 						config.taskState.consecutiveMistakeCount++
-						const errorResult = await config.callbacks.sayAndCreateMissingParamError(this.name, "coordinate")
+						const errorResult = await config.callbacks.sayAndCreateMissingParamError("browser_action", "coordinate")
 						await config.services.browserSession.closeBrowser()
 						return errorResult
 					}
@@ -128,7 +129,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 				if (action === "type") {
 					if (!text) {
 						config.taskState.consecutiveMistakeCount++
-						const errorResult = await config.callbacks.sayAndCreateMissingParamError(this.name, "text")
+						const errorResult = await config.callbacks.sayAndCreateMissingParamError("browser_action", "text")
 						await config.services.browserSession.closeBrowser()
 						return errorResult
 					}
@@ -137,7 +138,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 
 				// Send browser action message
 				await config.callbacks.say(
-					this.name,
+					"browser_action",
 					JSON.stringify({
 						action: action as BrowserAction,
 						coordinate,
