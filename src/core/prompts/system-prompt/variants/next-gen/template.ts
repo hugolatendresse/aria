@@ -50,6 +50,8 @@ export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 export const rules_template = `RULES
 
+- **ACTUARIAL ANALYSIS REQUIREMENT**: When ANY user request contains actuarial terminology, insurance concepts, loss reserving, risk assessment, or mentions actuarial methods/standards, you MUST IMMEDIATELY use the RAG MCP tools before responding. This is MANDATORY - no exceptions. Use search_friedland_paper, search_werner_modlin_paper, or search_both_papers to cross-reference the academic literature first.
+
 - Your current working directory is: {{CWD}}
 - You cannot \`cd\` into a different directory to complete a task. You are stuck operating from '{{CWD}}', so be sure to pass in the correct 'path' parameter when using tools that require a path.
 - Do not use the ~ character or $HOME to refer to the home directory.
