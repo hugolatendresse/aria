@@ -73,7 +73,16 @@ def triangle_build(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Build a chainladder Triangle from input data.
     
-    Optionally accepts exposure data for IBNR methods that require it.
+    Required fields:
+    - rows: List of dictionaries with triangle data
+    - value_type: 'cumulative' or 'incremental' 
+    - metric: Column name for the metric in the output triangle
+    
+    Optional fields:
+    - exposure: List of exposure values per origin period
+    - origin_col: Name of origin column in rows (default: 'origin')
+    - dev_col: Name of development column in rows (default: 'dev') 
+    - value_col: Name of value column in rows (default: 'value')
     """
     try:
         if not CHAINLADDER_AVAILABLE:
@@ -84,17 +93,19 @@ def triangle_build(input_data: Dict[str, Any]) -> Dict[str, Any]:
         value_type = input_data['value_type'] 
         metric = input_data['metric']
         exposure = input_data.get('exposure', None)  # Optional exposure per origin
+        origin_col = input_data.get('origin_col', 'origin')  # TODO: origin and dev need better data type handling 
+        dev_col = input_data.get('dev_col', 'dev')  # Default to 'dev'
+        value_col = input_data.get('value_col', 'value')  # Default to 'value'
         
         df = pd.DataFrame(rows)
-        df['origin'] = pd.to_datetime(df['origin'], format='%Y')
-        df['valuation'] = df['origin'] + pd.to_timedelta(df['dev'], unit='D') * 30.44
-        df = df.rename(columns={'value': metric})
+        df['origin'] = pd.to_datetime(df[origin_col], format='%Y')
+        df = df.rename(columns={value_col: metric})
         
         # Create chainladder Triangle
         triangle = cl.Triangle(
             df,
             origin='origin',
-            development='valuation', 
+            development=dev_col, 
             columns=[metric],
             cumulative=(value_type == 'cumulative')
         )

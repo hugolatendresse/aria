@@ -95,11 +95,17 @@ def triangle_build_tool(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Build an actuarial triangle from input data using chainladder-python.
     
-    Input: { 
+    Required Input: { 
         rows: [{origin, dev, value, segment?}], 
         value_type: "cumulative"|"incremental", 
         metric: "PaidLoss"|"ReportedLoss"|...,
-        exposure: [15000, 18000, 20000]  # Optional: exposure per origin period
+    }
+    
+    Optional Input: {
+        exposure: [15000, 18000, 20000],  # Exposure per origin period
+        origin_col: "origin",             # Name of origin column in rows (default: 'origin')
+        dev_col: "dev",                   # Name of development column in rows (default: 'dev') 
+        value_col: "value"                # Name of value column in rows (default: 'value')
     }
     
     Output: { 
