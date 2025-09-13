@@ -3,7 +3,7 @@ import { ClineDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
 import { validateVariant } from "../variant-validator"
-import { baseTemplate } from "./template"
+import { baseTemplate, mcp_template } from "./template"
 
 export const config = createVariant(ModelFamily.GENERIC)
 	.description("The fallback prompt for generic use cases and models.")
@@ -50,6 +50,10 @@ export const config = createVariant(ModelFamily.GENERIC)
 		MODEL_FAMILY: "generic",
 	})
 	.config({})
+	// Override the MCP component with actuarial-enhanced template
+	.overrideComponent(SystemPromptSection.MCP, {
+		template: mcp_template,
+	})
 	.build()
 
 // Compile-time validation
