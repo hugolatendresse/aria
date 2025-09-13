@@ -1,7 +1,6 @@
 import sys
 import logging
 import os
-from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
@@ -24,7 +23,7 @@ env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
 load_dotenv(env_path)
 
 # Create an MCP server
-mcp = FastMCP("RAG")
+mcp = FastMCP("Actuarial-RAG")
 
 # Hybrid approach: Ollama embeddings + Gemini LLM
 if not os.environ.get("GOOGLE_API_KEY"):
