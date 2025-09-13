@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import {
 	migrateCustomInstructionsToGlobalRules,
+	migrateTaskHistoryToFile,
 	migrateWelcomeViewCompleted,
 	migrateWorkspaceToGlobalStorage,
 } from "./core/storage/state-migrations"
@@ -11,7 +12,7 @@ import "./utils/path" // necessary to have access to String.prototype.toPosix
 
 import { HostProvider } from "@/hosts/host-provider"
 import { FileContextTracker } from "./core/context/context-tracking/FileContextTracker"
-import { errorService } from "./services/error"
+import { ErrorService } from "./services/error"
 import { featureFlagsService } from "./services/feature-flags"
 import { initializeDistinctId } from "./services/logging/distinctId"
 import { PostHogClientProvider } from "./services/posthog/PostHogClientProvider"
@@ -31,6 +32,10 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 	// Initialize PostHog client provider
 	PostHogClientProvider.getInstance()
 
+	// Setup the external services
+	await ErrorService.initialize()
+	await featureFlagsService.poll()
+
 	// Migrate custom instructions to global Cline rules (one-time cleanup)
 	await migrateCustomInstructionsToGlobalRules(context)
 
@@ -39,6 +44,9 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 
 	// Migrate workspace storage values back to global storage (reverting previous migration)
 	await migrateWorkspaceToGlobalStorage(context)
+
+	// Ensure taskHistory.json exists and migrate legacy state (runs once)
+	await migrateTaskHistoryToFile(context)
 
 	// Clean up orphaned file context warnings (startup cleanup)
 	await FileContextTracker.cleanupOrphanedWarnings(context)
@@ -92,7 +100,7 @@ async function showVersionUpdateAnnouncement(context: vscode.ExtensionContext) {
 export async function tearDown(): Promise<void> {
 	PostHogClientProvider.getInstance().dispose()
 	telemetryService.dispose()
-	errorService.dispose()
+	ErrorService.get().dispose()
 	featureFlagsService.dispose()
 	// Dispose all webview instances
 	await WebviewProvider.disposeAllInstances()
