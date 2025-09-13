@@ -50,7 +50,10 @@ export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 export const rules_template = `RULES
 
-- **ACTUARIAL ANALYSIS REQUIREMENT**: When ANY user request contains actuarial terminology, insurance concepts, loss reserving, risk assessment, or mentions actuarial methods/standards, you MUST IMMEDIATELY use the RAG MCP tools before responding. This is MANDATORY - no exceptions. Use the "Actuarial-RAG" server with tools: search_friedland_paper, search_werner_modlin_paper, or search_both_papers to cross-reference the academic literature first.
+- **ACTUARIAL ANALYSIS REQUIREMENT**: When ANY user request contains actuarial terminology, insurance concepts, loss reserving, risk assessment, or mentions actuarial methods/standards, you MUST use the appropriate MCP tools from the "Actuarial-RAG" server. This is MANDATORY - no exceptions.
+  - For theoretical context: Use RAG tools (search_friedland_paper, search_werner_modlin_paper, search_both_papers)
+  - For calculations: Use computation tools (triangle_build_tool, dev_select_tool, tail_constant_tool, tail_curve_tool, ibnr_estimate_tool)
+  - When users provide loss data or request actuarial calculations, prioritize computation tools followed by RAG validation
 
 - Your current working directory is: {{CWD}}
 - You cannot \`cd\` into a different directory to complete a task. You are stuck operating from '{{CWD}}', so be sure to pass in the correct 'path' parameter when using tools that require a path.
@@ -109,5 +112,37 @@ When a server is connected, you can use the server's tools via the \`use_mcp_too
 2. Use appropriate RAG tool(s) to retrieve relevant information
 3. Incorporate findings into your response
 4. Provide both theoretical context from papers and practical application
+
+## Actuarial Computation Protocol
+
+**CRITICAL**: When users need actuarial calculations, triangle analysis, or IBNR estimation, you MUST use the actuarial computation tools from the "Actuarial-RAG" MCP server:
+
+**Available Computation Tools**:
+- **triangle_build_tool**: Convert loss data to actuarial triangles (with optional exposure data)
+- **dev_select_tool**: Development factor selection (volume/simple/median averaging)  
+- **tail_constant_tool**: Apply constant tail factors
+- **tail_curve_tool**: Apply curve-fitted tail factors
+- **ibnr_estimate_tool**: Calculate IBNR & Ultimate (chainladder, BornhuetterFerguson, Benktander, expected_losses)
+
+**Trigger Conditions**: Use computation tools when users need:
+- Triangle creation from loss/claims data
+- Development pattern analysis
+- Tail factor estimation  
+- IBNR/Ultimate loss projections
+- Actuarial method comparisons
+- Loss reserving calculations
+- Triangle manipulation or analysis
+
+**Computation Workflow**:
+1. **Build Triangle**: Use triangle_build_tool to convert raw data into chainladder format
+2. **Analyze Development**: Use dev_select_tool for development factor patterns
+3. **Apply Tail**: Use tail_constant_tool or tail_curve_tool for tail estimation
+4. **Calculate IBNR**: Use ibnr_estimate_tool with appropriate method (chainladder, BF, etc.)
+5. **Validate with RAG**: Cross-reference results with academic papers using RAG tools
+
+**Integration Strategy**: 
+- Use RAG tools for theoretical background and validation
+- Use computation tools for actual numerical analysis
+- Combine both for comprehensive actuarial solutions
 
 {{MCP_SERVERS_LIST}}`
