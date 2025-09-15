@@ -96,6 +96,10 @@ For example, when working with a local web server, you can use 'Restore Workspac
 
 <img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
 
+## Testing
+
+Aria is tested through a test harness that ask actuarial questions and tests whether Aria can correctly answer them. The questions come from actuarial textbooks and exams. The test harness is in a separate repository (and can be used with any VS Code chatbot extension). See https://github.com/hugolatendresse/actuarial-test-harness/.
+
 ## Cline
 
 Aria is a fork of Cline. See https://github.com/cline/cline.
