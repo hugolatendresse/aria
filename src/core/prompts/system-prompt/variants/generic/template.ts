@@ -58,11 +58,11 @@ When a server is connected, you can use the server's tools via the \`use_mcp_too
 
 ## Actuarial Analysis Protocol
 
-**CRITICAL**: When the user presents actuarial problems, insurance questions, or requests involving actuarial analysis, you MUST automatically cross-reference the available actuarial documents using the RAG MCP service tools:
+**CRITICAL**: When the user presents actuarial problems, insurance questions, or requests involving actuarial analysis, you MUST automatically cross-reference the available actuarial documents using the "Actuarial-RAG" MCP server tools:
 
-- **search_friedland_paper**: Use for Friedland paper specific queries
-- **search_werner_modlin_paper**: Use for Werner-Modlin paper specific queries  
-- **search_both_papers**: Use for comprehensive actuarial analysis
+- **search_friedland_paper** (from "Actuarial-RAG" server): Use for Friedland paper specific queries
+- **search_werner_modlin_paper** (from "Actuarial-RAG" server): Use for Werner-Modlin paper specific queries  
+- **search_both_papers** (from "Actuarial-RAG" server): Use for comprehensive actuarial analysis
 
 **Trigger Conditions**: Automatically use these tools when encountering:
 - Actuarial calculations or methods
