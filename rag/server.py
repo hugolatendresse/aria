@@ -68,6 +68,7 @@ def generate_answer(question: str, context_docs: List[Document]) -> str:
     response = llm.invoke(messages)
     return response.content
 
+
 @mcp.tool()
 def search_friedland_paper(prompt: str) -> str:
     """Search the Friedland actuarial paper for information"""
@@ -87,6 +88,7 @@ def search_both_papers(prompt: str) -> str:
     werner_modlin_docs = werner_modlin_store.similarity_search(prompt, k=5)
     all_docs = friedland_docs + werner_modlin_docs
     return generate_answer(prompt, all_docs)
+
 
 if __name__ == "__main__":
     mcp.run()
