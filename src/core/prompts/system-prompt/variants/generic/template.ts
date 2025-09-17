@@ -1,4 +1,4 @@
-import { ACTUARIAL_MCP_TEMPLATE } from "../../../actuarial"
+import { ACTUARIAL_MCP_TEMPLATE } from "../../../actuarial/templates/mcp-template"
 import { SystemPromptSection } from "../../templates/placeholders"
 
 export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
