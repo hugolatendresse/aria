@@ -1,3 +1,4 @@
+import { ACTUARIAL_RULES_SECTION } from "../../actuarial"
 import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
@@ -8,7 +9,7 @@ const BROWSER_WAIT_RULES = ` Then if you want to test your work, you might use b
 
 const RULES_TEMPLATE_TEXT = `RULES
 
-- **ACTUARIAL ANALYSIS REQUIREMENT**: When ANY user request contains actuarial terminology, insurance concepts, loss reserving, risk assessment, or mentions actuarial methods/standards, you MUST IMMEDIATELY use the RAG MCP tools before responding. This is MANDATORY - no exceptions. Use the "Actuarial-RAG" server with tools: search_friedland_paper, search_werner_modlin_paper, or search_both_papers to cross-reference the academic literature first.
+${ACTUARIAL_RULES_SECTION}
 
 - Your current working directory is: {{CWD}}
 - You cannot \`cd\` into a different directory to complete a task. You are stuck operating from '{{CWD}}', so be sure to pass in the correct 'path' parameter when using tools that require a path.
