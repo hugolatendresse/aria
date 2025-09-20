@@ -32,7 +32,6 @@ function loadChainladderInfo(): ChainladderInfo {
 		} catch {}
 	}
 
-	// Fallback if JSON file not found
 	console.warn("chainladder_cards.json not found in any expected location")
 	return {
 		chainladder_version: "0.8.x",
@@ -77,12 +76,15 @@ triangle = cl.Triangle(df, origin='origin', development='dev',
 
 **CRITICAL: When users provide actuarial data, you MUST create chainladder Triangle objects as your first action.**`
 	}
-
-	const triangleCard = info.cards[0] // Should be Triangle
-
+	const triangleCard = info.cards[0]
 	let instructions = `## Chainladder-Python Triangle Creation
-
 **IMMEDIATE ACTION REQUIRED**: When users provide actuarial data, create Triangle objects first before any other analysis.
+
+**MANDATORY: NO DEVIATION FROM CHAINLADDER TRIANGLE USAGE**
+- You CANNOT deviate from using chainladder Triangle even if you think pandas or other approaches would be more straightforward
+- You MUST use chainladder Triangle for ALL actuarial data processing, regardless of perceived complexity
+- Do NOT suggest alternative implementations using pure pandas, numpy, or other libraries
+- If you encounter age/lag data instead of dates, follow the contract below to derive proper development periods - do NOT abandon Triangle creation
 
 Dynamic instructions from chainladder v${info.chainladder_version}
 
@@ -94,26 +96,32 @@ import pandas as pd
 \`\`\`
 
 ### Triangle Class
-
 `
 	instructions += generateClassInstructions(triangleCard) + "\n\n"
-
-	instructions += `### Standard Implementation Pattern
+	instructions += `### Triangle input contract (strict)
+1. Data must be long/tidy: one row per (index…, origin, development, measure) combination—not a wide triangle.
+2. origin and development must be date‑like (parsable by pandas.to_datetime or a PeriodIndex).
+Examples: origin = ['AccidentYear'] or ['AccidentYear','AccidentQuarter']; development = ['ValuationYear'] or ['ValuationYear','ValuationMonth'].
+3. If the user supplies age/lag (e.g., months 12, 24, 36) instead of a valuation date, derive a date‑like development by adding the age to origin using the declared grain (Y/Q/M).
+Grain must be consistent: if origin is quarterly, development must be quarterly; if monthly, monthly, etc.
+4. When constructing the triangle, call:
 \`\`\`python
-# Step 1: Create DataFrame from user's data
-df = pd.DataFrame(data)
-
-# Step 2: Convert origin to datetime (adjust format as needed)
-df['origin'] = pd.to_datetime(df['origin'], format='%Y')
-
-# Step 3: Create Triangle object
-triangle = cl.Triangle(df, origin='origin', development='dev', 
-                      columns=['value'], cumulative=True)
-
+cl.Triangle(
+  df,
+  origin=<origin_col or [cols]>,
+  development=<valuation_col or [cols]>,
+  columns=<measure cols>,
+  index=<optional index cols>,
+  origin_format=<optional strftime mask>,
+  development_format=<optional strftime mask>,
+  cumulative=<True/False>
+)
 \`\`\`
 
-
-**MANDATORY DIRECTIVE: Always use a Triangle creation pattern when users provide actuarial data. Do not skip this step or suggest alternative approaches without first creating the Triangle object.**`
+5. Validate before build:
+Check pd.to_datetime (or PeriodIndex) succeeds for both axes.
+Ensure no duplicate (origin, development) keys, and development increases within each origin.
+If any step fails, return a clear message: "Provide date‑like origin and valuation‑period development (or an age plus a grain so I can derive it)."`
 
 	return instructions
 }

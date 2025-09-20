@@ -1396,7 +1396,6 @@ export class Task {
 			const fs = await import("fs")
 			const path = await import("path")
 
-			// Create human-readable timestamp
 			const now = new Date()
 			const readableTime = now
 				.toLocaleString("en-US", {
