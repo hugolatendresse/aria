@@ -946,6 +946,10 @@ export class Task {
 	}
 
 	private async initiateTaskLoop(userContent: UserContent): Promise<void> {
+		// Reset debug run ID for new task loop (new user message)
+		this.taskState.debugRunId = undefined
+		this.taskState.debugAttemptCount = 0
+
 		let nextUserContent = userContent
 		let includeFileDetails = true
 		while (!this.taskState.abort) {
@@ -1391,22 +1395,55 @@ export class Task {
 		try {
 			const fs = await import("fs")
 			const path = await import("path")
-			const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
-			const debugDir = path.join(this.cwd, ".cline-debug")
-			if (!fs.existsSync(debugDir)) {
-				fs.mkdirSync(debugDir, { recursive: true })
+
+			// Create human-readable timestamp
+			const now = new Date()
+			const readableTime = now
+				.toLocaleString("en-US", {
+					year: "numeric",
+					month: "2-digit",
+					day: "2-digit",
+					hour: "2-digit",
+					minute: "2-digit",
+					second: "2-digit",
+					hour12: false,
+				})
+				.replace(/[/,\s:]/g, "-")
+
+			// Initialize run ID for this task if not exists (groups all attempts from same user message)
+			if (!this.taskState.debugRunId) {
+				this.taskState.debugRunId = `${readableTime}_run-${Math.random().toString(36).substr(2, 4)}`
 			}
 
-			// Track API request attempts to understand retries
-			const apiRequestCount = this.taskState.apiRequestCount || 0
-			const attemptSuffix = previousApiReqIndex >= 0 ? `_retry-${previousApiReqIndex}` : `_attempt-${apiRequestCount}`
+			// Create run-specific subfolder
+			const baseDebugDir = path.join(this.cwd, ".cline-debug")
+			const runDebugDir = path.join(baseDebugDir, this.taskState.debugRunId)
+			if (!fs.existsSync(runDebugDir)) {
+				fs.mkdirSync(runDebugDir, { recursive: true })
+			}
 
-			const debugFile = path.join(debugDir, `system-prompt-${timestamp}${attemptSuffix}.txt`)
+			// Track attempts properly - count this specific API call within the run
+			if (!this.taskState.debugAttemptCount) {
+				this.taskState.debugAttemptCount = 0
+			}
+			this.taskState.debugAttemptCount++
+
+			// Determine if this is a retry (previousApiReqIndex >= 0) or new attempt
+			let attemptLabel: string
+			if (previousApiReqIndex >= 0) {
+				attemptLabel = `retry-${previousApiReqIndex + 1}`
+			} else {
+				attemptLabel = `attempt-${this.taskState.debugAttemptCount}`
+			}
+
+			const debugFile = path.join(runDebugDir, `${attemptLabel}_system-prompt.txt`)
 
 			// Include metadata header in the debug file
 			const debugContent = `=== SYSTEM PROMPT DEBUG ===
-Timestamp: ${new Date().toISOString()}
-API Request Count: ${apiRequestCount}
+Timestamp: ${now.toLocaleString("en-US")}
+Run ID: ${this.taskState.debugRunId}
+Attempt: ${attemptLabel}
+API Request Count: ${this.taskState.apiRequestCount || 0}
 Previous API Request Index: ${previousApiReqIndex}
 System Prompt Length: ${systemPrompt.length} characters
 Model: ${promptContext.providerInfo.model.id}
@@ -1418,9 +1455,7 @@ ${systemPrompt}
 === END DEBUG ===`
 
 			fs.writeFileSync(debugFile, debugContent, "utf8")
-			console.log(
-				`[PROMPT DEBUG] System prompt saved to: ${debugFile} (${systemPrompt.length} chars, attempt: ${apiRequestCount}/${previousApiReqIndex})`,
-			)
+			console.log(`[PROMPT DEBUG] System prompt saved to: ${debugFile} (${systemPrompt.length} chars, ${attemptLabel})`)
 		} catch (error) {
 			console.warn("[PROMPT DEBUG] Failed to save system prompt:", error)
 		}
