@@ -1387,6 +1387,44 @@ export class Task {
 
 		const systemPrompt = await getSystemPrompt(promptContext)
 
+		// DEBUG: Log system prompt to file for debugging
+		try {
+			const fs = await import("fs")
+			const path = await import("path")
+			const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+			const debugDir = path.join(this.cwd, ".cline-debug")
+			if (!fs.existsSync(debugDir)) {
+				fs.mkdirSync(debugDir, { recursive: true })
+			}
+
+			// Track API request attempts to understand retries
+			const apiRequestCount = this.taskState.apiRequestCount || 0
+			const attemptSuffix = previousApiReqIndex >= 0 ? `_retry-${previousApiReqIndex}` : `_attempt-${apiRequestCount}`
+
+			const debugFile = path.join(debugDir, `system-prompt-${timestamp}${attemptSuffix}.txt`)
+
+			// Include metadata header in the debug file
+			const debugContent = `=== SYSTEM PROMPT DEBUG ===
+Timestamp: ${new Date().toISOString()}
+API Request Count: ${apiRequestCount}
+Previous API Request Index: ${previousApiReqIndex}
+System Prompt Length: ${systemPrompt.length} characters
+Model: ${promptContext.providerInfo.model.id}
+Provider: ${promptContext.providerInfo.providerId}
+
+=== PROMPT CONTENT ===
+${systemPrompt}
+
+=== END DEBUG ===`
+
+			fs.writeFileSync(debugFile, debugContent, "utf8")
+			console.log(
+				`[PROMPT DEBUG] System prompt saved to: ${debugFile} (${systemPrompt.length} chars, attempt: ${apiRequestCount}/${previousApiReqIndex})`,
+			)
+		} catch (error) {
+			console.warn("[PROMPT DEBUG] Failed to save system prompt:", error)
+		}
+
 		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(
 			this.messageStateHandler.getApiConversationHistory(),
 			this.messageStateHandler.getClineMessages(),

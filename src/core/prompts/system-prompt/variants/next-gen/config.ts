@@ -3,7 +3,7 @@ import { ClineDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
 import { validateVariant } from "../variant-validator"
-import { baseTemplate, mcp_template, rules_template } from "./template"
+import { baseTemplate, rules_template } from "./template"
 
 // Type-safe variant configuration using the builder pattern
 export const config = createVariant(ModelFamily.NEXT_GEN)
@@ -58,10 +58,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 	.overrideComponent(SystemPromptSection.RULES, {
 		template: rules_template,
 	})
-	// Override the MCP component with actuarial-enhanced template
-	.overrideComponent(SystemPromptSection.MCP, {
-		template: mcp_template,
-	})
+	// MCP component and template removed for chainladder testing
 	.build()
 
 // Compile-time validation

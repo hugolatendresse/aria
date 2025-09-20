@@ -1,4 +1,3 @@
-import { ACTUARIAL_MCP_TEMPLATE } from "../../../actuarial/templates/mcp-template"
 import { SystemPromptSection } from "../../templates/placeholders"
 
 export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
@@ -49,4 +48,4 @@ export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 {{${SystemPromptSection.USER_INSTRUCTIONS}}}`
 
-export const mcp_template = ACTUARIAL_MCP_TEMPLATE
+// MCP template removed for chainladder testing

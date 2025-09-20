@@ -1,4 +1,8 @@
-export const ACTUARIAL_RULES_SECTION = `- **ACTUARIAL ANALYSIS REQUIREMENT**: When ANY user request contains actuarial terminology, insurance concepts, loss reserving, risk assessment, or mentions actuarial methods/standards, you MUST IMMEDIATELY use the RAG MCP tools before responding. This is MANDATORY - no exceptions. Use the "Actuarial-RAG" server with tools: search_friedland_paper, search_werner_modlin_paper, or search_both_papers to cross-reference the academic literature first.`
+import { getChainladderInstructions } from "./chainladder-dynamic"
+
+export const ACTUARIAL_RULES_SECTION = `- **ACTUARIAL DATA PROCESSING RULE**: When users provide actuarial data (loss triangles, claims data, development patterns, or numerical datasets), you MUST use chainladder Triangle objects as the foundation for your implementation. Always create Triangle objects when executing solutions involving actuarial data.
+
+${getChainladderInstructions()}`
 
 export function getActuarialRulesSection(): string {
 	return ACTUARIAL_RULES_SECTION
