@@ -1389,7 +1389,64 @@ export class Task {
 			workspaceRoots,
 		}
 
-		const systemPrompt = await getSystemPrompt(promptContext)
+		// Check for relevant capability cards based on recent conversation context
+		let capabilityCardsBlock = ""
+		const capabilityCardsDebugInfo = {
+			cardsFound: false,
+			cardIds: [] as string[],
+			signals: [] as string[],
+			messageCount: 0,
+			error: null as string | null,
+		}
+
+		try {
+			const { getRelevantCapabilityCards } = await import("../capabilities")
+			const conversationHistory = this.messageStateHandler.getApiConversationHistory()
+
+			// Extract recent messages from both user and assistant (last 5 messages total)
+			const recentMessages = conversationHistory
+				.filter((msg) => msg.role === "user" || msg.role === "assistant")
+				.slice(-5)
+				.map((msg) => {
+					// Handle different content types
+					if (typeof msg.content === "string") {
+						return msg.content
+					} else if (Array.isArray(msg.content)) {
+						return msg.content
+							.filter((block) => block.type === "text")
+							.map((block) => (block as any).text)
+							.join(" ")
+					}
+					return ""
+				})
+				.filter((text) => text.length > 0)
+
+			capabilityCardsDebugInfo.messageCount = recentMessages.length
+
+			if (recentMessages.length > 0) {
+				const cardResult = getRelevantCapabilityCards(recentMessages, 800)
+				capabilityCardsDebugInfo.cardsFound = cardResult.cardsFound
+				capabilityCardsDebugInfo.cardIds = cardResult.cardIds
+				capabilityCardsDebugInfo.signals = cardResult.signals
+
+				if (cardResult.cardsFound) {
+					capabilityCardsBlock = cardResult.cardsBlock
+					console.log(
+						`[CAPABILITY CARDS] Injected ${cardResult.cardIds.length} cards: ${cardResult.cardIds.join(", ")} (detected from conversation context)`,
+					)
+				}
+			}
+		} catch (error) {
+			capabilityCardsDebugInfo.error = error instanceof Error ? error.message : String(error)
+			console.warn("[CAPABILITY CARDS] Failed to load capability cards:", error)
+		}
+
+		let systemPrompt = await getSystemPrompt(promptContext)
+
+		// Prepend capability cards to system prompt if found
+		if (capabilityCardsBlock) {
+			systemPrompt = `${capabilityCardsBlock}\n\n${systemPrompt}`
+		}
 
 		// DEBUG: Log system prompt to file for debugging
 		try {
@@ -1437,6 +1494,15 @@ export class Task {
 
 			const debugFile = path.join(runDebugDir, `${attemptLabel}_system-prompt.txt`)
 
+			// Capability cards info for debug header
+			const capabilityCardsInfo = capabilityCardsDebugInfo.cardsFound
+				? `Cards Found: ${capabilityCardsDebugInfo.cardIds.join(", ")}
+Signals Detected: ${capabilityCardsDebugInfo.signals.join(", ")}
+Cards Block Length: ${capabilityCardsBlock.length} characters`
+				: capabilityCardsDebugInfo.error
+					? `Cards Error: ${capabilityCardsDebugInfo.error}`
+					: `No Cards Found (${capabilityCardsDebugInfo.messageCount} messages analyzed)`
+
 			// Include metadata header in the debug file
 			const debugContent = `=== SYSTEM PROMPT DEBUG ===
 Timestamp: ${now.toLocaleString("en-US")}
@@ -1447,6 +1513,9 @@ Previous API Request Index: ${previousApiReqIndex}
 System Prompt Length: ${systemPrompt.length} characters
 Model: ${promptContext.providerInfo.model.id}
 Provider: ${promptContext.providerInfo.providerId}
+
+=== CAPABILITY CARDS ===
+${capabilityCardsInfo}
 
 === PROMPT CONTENT ===
 ${systemPrompt}

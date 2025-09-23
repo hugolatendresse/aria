@@ -34,5 +34,4 @@ export function getCapabilityCardsForMessage(message: string, tokenBudget?: numb
 
 export { cards } from "./card_registry"
 export { detectCards } from "./detect"
-// Re-export for convenience
 export { formatCardsForPrompt } from "./format"
