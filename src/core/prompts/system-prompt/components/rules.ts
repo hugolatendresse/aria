@@ -1,4 +1,3 @@
-import { ACTUARIAL_RULES_SECTION } from "../../actuarial"
 import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
@@ -8,8 +7,6 @@ const BROWSER_RULES = `- The user may ask generic non-development tasks, such as
 const BROWSER_WAIT_RULES = ` Then if you want to test your work, you might use browser_action to launch the site, wait for the user's response confirming the site was launched along with a screenshot, then perhaps e.g., click a button to test functionality if needed, wait for the user's response confirming the button was clicked along with a screenshot of the new state, before finally closing the browser.`
 
 const RULES_TEMPLATE_TEXT = `RULES
-
-${ACTUARIAL_RULES_SECTION}
 
 - Your current working directory is: {{CWD}}
 - You cannot \`cd\` into a different directory to complete a task. You are stuck operating from '{{CWD}}', so be sure to pass in the correct 'path' parameter when using tools that require a path.

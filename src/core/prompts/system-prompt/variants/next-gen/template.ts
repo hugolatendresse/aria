@@ -1,4 +1,3 @@
-import { ACTUARIAL_RULES_SECTION } from "../../../actuarial"
 import { SystemPromptSection } from "../../templates/placeholders"
 
 export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
@@ -50,8 +49,6 @@ export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 {{${SystemPromptSection.USER_INSTRUCTIONS}}}`
 
 export const rules_template = `RULES
-
-${ACTUARIAL_RULES_SECTION}
 
 - Your current working directory is: {{CWD}}
 - You cannot \`cd\` into a different directory to complete a task. You are stuck operating from '{{CWD}}', so be sure to pass in the correct 'path' parameter when using tools that require a path.
