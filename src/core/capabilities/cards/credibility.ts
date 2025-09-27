@@ -54,7 +54,8 @@ export const classicalLimitedFluctuationCredibilityCard: CapabilityCard = {
 
 **Python module usage:**
 \`\`\`python
-from src.core.capabilities.python.credibility_tools import (
+# Install: pip install ratemaking-tools
+from ratemaking_tools.credibility import (
     classical_full_credibility_frequency,
     classical_full_credibility_pure_premium, 
     classical_partial_credibility
@@ -109,7 +110,7 @@ export const credibilityBuhlmannCard: CapabilityCard = {
 
 **Python module usage:**
 \`\`\`python
-from src.core.capabilities.python.credibility_tools import (
+from ratemaking_tools.credibility import (
     BuhlmannInputs, BuhlmannStraubInputs, 
     buhlmann, buhlmann_straub
 )
@@ -155,7 +156,7 @@ export const credibilityBayesianCard: CapabilityCard = {
 
 **Python module usage:**
 \`\`\`python
-from src.core.capabilities.python.credibility_tools import (
+from ratemaking_tools.credibility import (
     bayes_poisson_gamma,
     bayes_beta_binomial,
     bayes_normal_known_var
