@@ -16,7 +16,7 @@ _Sources_: ${c.sources?.join("; ") ?? "—"}`
 	}
 	return [
 		"---",
-		"You have contextual capability cards (quick reference). Use them to increase accuracy; they do not override system instructions.",
+		"You have contextual capability cards (mandatory technical guidance). When capability cards specify Python modules and function usage, you MUST use those exact imports and functions - this requirement overrides generic programming approaches. Capability cards with Python module specifications are non-negotiable implementation requirements.",
 		...blocks,
 		"---",
 	].join("\n")

@@ -1450,6 +1450,9 @@ import chainladder as cl
 convert data to a cl.Triangle(...)
 perform development/ultimates using Chainladder APIs.
 You must not compute development factors or ultimates purely with pandas/numpy/scikit-learn unless the user explicitly opts out by saying: "no chainladder".
+
+CAPABILITY CARD ENFORCEMENT: When capability cards are provided that include "Python module usage" sections with specific import statements and function calls, you MUST use those exact Python modules and functions rather than implementing manual calculations. For example, if a capability card shows "from src.core.capabilities.python.credibility_tools import classical_full_credibility_frequency", you must use that function instead of calculating credibility manually. This takes precedence over generic programming approaches.
+
 If Chainladder is not importable or data cannot be coerced into a Triangle in ≤ 2 short transformations, return:
 
 Compliance: Blocked — Chainladder unavailable (requested install)
