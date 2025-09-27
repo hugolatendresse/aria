@@ -53,9 +53,32 @@ export const classicalLimitedFluctuationCredibilityCard: CapabilityCard = {
 - Ignoring severity variation when blending pure premiums.
 - Selecting complements that are not comparable or not adjusted for mix/trend. 
 
+**Python module usage:**
+\`\`\`python
+from src.core.capabilities.python.credibility_tools import (
+    classical_full_credibility_frequency,
+    classical_full_credibility_pure_premium, 
+    classical_partial_credibility
+)
+
+# Calculate full credibility standard
+n_full = classical_full_credibility_frequency(p=0.95, k=0.05)
+
+# For pure premium with severity variation
+# n_full = classical_full_credibility_pure_premium(cv_sev=0.3, p=0.95, k=0.05)
+
+# Calculate credibility factor  
+z = classical_partial_credibility(n=observed_claims, n_full=n_full)
+
+# Apply credibility blend
+estimate = z * observed_rate + (1 - z) * complement_rate
+\`\`\`
+
+**Implementation approach:** Write complete Python scripts using these functions rather than manual calculations.
+
 **Output template (embed in solution):**
 - Inputs: \(p, k, z, N, N_f\), complement description
-- Z: \`min(1, sqrt(N/Nf))\`
+- Z: \`min(1, sqrt(N/Nf))\` 
 - Estimate: \`Z*Observed + (1-Z)*Related\``,
 	sources: [
 		"Werner & Modlin, Basic Ratemaking, Ch. 12: Classical credibility definitions, full-credibility standards, square-root rule, complement guidance (pp. 217–220, 224).",
@@ -63,92 +86,112 @@ export const classicalLimitedFluctuationCredibilityCard: CapabilityCard = {
 	safetyTags: ["actuarial", "pricing", "credibility"],
 }
 
-/**
- * 2) Bühlmann (Least-Squares) Credibility
- */
-export const buhlmannCredibilityCard: CapabilityCard = {
-	id: "credibility-buhlmann",
+export const credibilityBuhlmannCard: CapabilityCard = {
+	id: "credibility-buhlmann-advanced",
 	version: "1.0.0",
-	title: "Bühlmann Credibility (Least Squares)",
+	title: "Credibility — Bühlmann / Bühlmann–Straub",
 	triggers: [
-		{ kind: "keyword", any: ["Bühlmann", "Buhlmann", "least squares credibility", "EVPV", "VHM", "K", "Bühlmann–Straub"] },
-		{ kind: "regex", pattern: "\\b(prior mean|K\\s*=\\s*EVPV\\s*/\\s*VHM|credibility parameter)\\b", flags: "i" },
+		{ kind: "keyword", any: ["Bühlmann", "Buhlmann", "Bühlmann-Straub", "structure parameter", "EPV", "VHM", "K"] },
+		{ kind: "regex", pattern: "\\b(prior|collective mean|hypothetical means)\\b", flags: "i" },
 	],
 	importance: 5,
-	short: "Use Z = N/(N+K) with K = EVPV/VHM; blend observed with prior mean. For varying weights, apply Bühlmann–Straub.",
-	long: `**Capability Card: Bühlmann Credibility (Least Squares)**
+	short: "Estimate μ, EPV, VHM ⇒ K, then Zᵢ = nᵢ/(nᵢ+K); blend each risk’s mean with the collective mean.",
+	long: `**Capability Card: Bühlmann Credibility v1.0**
 
-**Estimator form.** \`Estimate = Z × Observed + (1 − Z) × PriorMean\`.
+**Method guardrails:** Compute **μ** (collective mean), **EPV** (process variance), **VHM** (variance of hypothetical means), **K = EPV/VHM**, then per risk \`Z_i = n_i / (n_i + K)\` (or \`m_i\` exposures in Bühlmann–Straub). Estimate with nonparametric moments; data must be reasonably homogeneous/stationary. :contentReference[oaicite:3]{index=3}
 
-**Credibility factor.** 
-- \\(Z = \\dfrac{N}{N + K}\\), with \\(K = \\text{EVPV}/\\text{VHM}\\).
-  - EVPV = expected value of process variance (within‑risk variability).
-  - VHM = variance of hypothetical means (between‑risk variability).
-- Interpret K as “average risk variance vs. variance between risks.”
+**Required Steps:**
+1) **Define cells/risks** and the per‑period observations (and exposures when unequal).
+2) **Pick model**:
+   - Equal weights (Bühlmann): use \`buhlmann(BuhlmannInputs)\`.
+   - Unequal exposures (Bühlmann–Straub): use \`buhlmann_straub(BuhlmannStraubInputs)\`.
+3) **Compute components** (tool returns μ, EPV, VHM, K, Zᵢ, and estimates).
+4) **Final estimates**: \`Z_i * risk_mean_i + (1 - Z_i) * μ\`.
+5) **Diagnostics**: sanity check μ vs complement; EPV>0, VHM≥0; explain any shrinkage extremes (Z≈0 or 1).
 
-**When exposures/weights vary (Bühlmann–Straub).**
-- Replace \(N\) by a weight \(w\\) (e.g., earned exposure, expected claim count). Use:
-  \\(Z = w/(w + K)\\).
-- Prior mean is the complement.
+**Python module usage:**
+\`\`\`python
+from src.core.capabilities.python.credibility_tools import (
+    BuhlmannInputs, BuhlmannStraubInputs, 
+    buhlmann, buhlmann_straub
+)
 
-**Procedure:**
-1. **Inputs:** Observed statistic (e.g., pure premium), weight \(N\) or \(w\), prior mean \(m\), and \(K\).
-2. **Compute Z:** \`Z = N/(N+K)\` (or \(w/(w+K)\)).
-3. **Blend:** \`Estimate = Z*Observed + (1-Z)*m\`.
-4. **Disclose assumptions:** Stationarity (no structural shifts in risk or process), EVPV and VHM applicable to the context.
-5. **Document K source:** model‑based (subject to model error) or empirical (subject to sampling error).
+# For equal weights (classic Bühlmann)
+data = {"risk_1": [1.2, 1.5, 1.1], "risk_2": [2.1, 1.9, 2.3]}
+inputs = BuhlmannInputs(data=data)
+result = buhlmann(inputs)
 
-**Checks:**
-- If VHM = 0 ⇒ K → ∞ ⇒ Z → 0; the data carry no cross‑sectional signal under those assumptions.
-- Cap Z in [0,1]. Guard against negative or ill‑conditioned variance estimates.
+# For unequal weights (Bühlmann-Straub)
+# observations = [("risk_1", 1.2, 100), ("risk_1", 1.5, 120), ("risk_2", 2.1, 80)]
+# inputs = BuhlmannStraubInputs(observations=observations)
+# result = buhlmann_straub(inputs)
 
-**Reporting template:**
-- Inputs: Observed, \(N\)/\(w\), \(m\), EVPV, VHM, \(K\)
-- Z and final \`Estimate\`
-- Rationale for \(K\) and prior mean`,
-	sources: [
-		"Werner & Modlin, Basic Ratemaking, Ch. 12: Bühlmann credibility Z=N/(N+K), K=EVPV/VHM, assumptions & interpretation (pp. 221–223).",
-	],
-	safetyTags: ["actuarial", "pricing", "credibility"],
+# Access results
+print(f"Collective mean (μ): {result.mu}")
+print(f"K parameter: {result.K}")
+print(f"Credibility by risk: {result.Z_by_risk}")
+print(f"Final estimates: {result.estimate_by_risk}")
+\`\`\`
+
+**Implementation approach:** Import the module and use the dataclasses and functions for calculations.
+
+**Common pitfalls:**
+- Using wildly heterogeneous risks in a single pool (inflates EPV, deflates VHM, distorts K).
+- Forgetting that the **complement is the collective mean μ** in Bühlmann; document how μ is formed. :contentReference[oaicite:4]{index=4}`,
+	sources: ["Werner & Modlin, *Basic Ratemaking* — Chapter 12 (CAS)"],
+	safetyTags: ["actuarial", "credibility"],
 }
 
-/**
- * 3) Bayesian Credibility (Posterior Updating)
- */
-export const bayesianCredibilityCard: CapabilityCard = {
-	id: "credibility-bayesian",
+export const credibilityBayesianCard: CapabilityCard = {
+	id: "credibility-bayesian-advanced",
 	version: "1.0.0",
-	title: "Bayesian Credibility (Posterior Mean)",
+	title: "Credibility — Bayesian (Conjugate Families)",
 	triggers: [
-		{
-			kind: "keyword",
-			any: ["Bayesian", "Bayes", "posterior", "conjugate prior", "Gamma-Poisson", "Beta-Binomial", "Normal-Normal"],
-		},
-		{ kind: "regex", pattern: "\\b(posterior mean|prior hyperparameters|conjugate)\\b", flags: "i" },
+		{ kind: "keyword", any: ["Bayesian", "Gamma-Poisson", "Beta-Binomial", "Normal-Normal", "posterior", "prior"] },
+		{ kind: "regex", pattern: "\\b(prior mean|posterior mean|conjugate|hyperparameter)\\b", flags: "i" },
 	],
 	importance: 5,
-	short: "Specify likelihood + prior; compute posterior; use posterior mean as estimate. Often equivalent to least-squares credibility.",
-	long: `**Capability Card: Bayesian Credibility**
+	short: "Compute conjugate posteriors and credibility weights; report prior, data, posterior, and Z explicitly.",
+	long: `**Capability Card: Bayesian Credibility v1.0**
 
-**Core idea.** No explicit Z: update a prior distribution with observed data via Bayes’ Theorem and use the posterior mean (or other posterior functional) as the estimate.
+**Method guardrails:** Use a defensible conjugate prior and show the **posterior mean as a credibility blend** of the sample statistic and prior mean. Always disclose prior hyperparameters and their interpretation (e.g., 'prior β acts like prior exposure'). :contentReference[oaicite:5]{index=5}
 
-**Procedure (generic):**
-1. **Choose a likelihood** for the data (e.g., Poisson for frequency, Binomial for hit/miss, Normal for severity).
-2. **Choose a conjugate prior** for tractable updating (Gamma for Poisson rate, Beta for Binomial probability, Normal for Normal mean with known variance).
-3. **Update hyperparameters** with sufficient statistics (e.g., claims and exposure for Poisson; successes and trials for Binomial; sample mean/variance and n for Normal).
-4. **Estimate:** Use the **posterior mean** (or median if specified). In many conjugate cases, this can be written in a credibility form that mirrors least‑squares credibility: \`Estimate = Z*Observed + (1−Z)*PriorMean\`.
-5. **Report:** Prior choice and parameters, observed sufficient statistics, posterior parameters, posterior estimate. State model assumptions and sensitivity.
+**Python module usage:**
+\`\`\`python
+from src.core.capabilities.python.credibility_tools import (
+    bayes_poisson_gamma,
+    bayes_beta_binomial,
+    bayes_normal_known_var
+)
 
-**Examples (conjugate forms commonly used in actuarial work):**
-- **Poisson–Gamma** (frequency): prior \\(\\text{Gamma}(\\alpha,\\beta)\\) on rate; with total exposure \\(w\\) and claims \\(c\\), posterior \\(\\text{Gamma}(\\alpha+c,\\beta+w)\\); posterior mean \\(=(\\alpha+c)/(\\beta+w)\\).
-- **Beta–Binomial** (hit probability): prior \\(\\text{Beta}(a,b)\\); with successes \\(x\\) of \\(n\\), posterior \\(\\text{Beta}(a+x,b+n-x)\\); posterior mean \\(=(a+x)/(a+b+n)\\).
-- **Normal–Normal** (severity or pure premium with known variance): posterior mean is a precision‑weighted average of sample mean and prior mean.
+# Poisson-Gamma example (frequency modeling)
+result = bayes_poisson_gamma(
+    prior_alpha=2.0, prior_beta=100.0,
+    total_counts=15, total_exposure=120
+)
+print(f"Posterior mean: {result.mean}")
+print(f"Credibility weight: {result.credibility_Z}")
+print(f"Prior mean: {result.prior_mean}")
+print(f"Sample rate: {result.sample_rate}")
 
-**Notes:**
-- Hyperparameter selection is part of the modeling decision; document elicitation or reference‑based choices.
-- In special cases, the Bayesian posterior mean equals the least‑squares (Bühlmann) credibility estimate.`,
-	sources: [
-		"Werner & Modlin, Basic Ratemaking, Ch. 12: Bayesian analysis overview and equivalence to least-squares credibility in special cases (p. 223).",
-	],
-	safetyTags: ["actuarial", "pricing", "credibility"],
+# Beta-Binomial example (hit/miss modeling)
+# result = bayes_beta_binomial(prior_a=1, prior_b=1, successes=8, trials=20)
+
+# Normal-Normal example (severity with known variance)
+# result = bayes_normal_known_var(prior_mean=1000, prior_var=10000, 
+#                                sample_mean=1200, known_var=25000, n=50)
+\`\`\`
+
+**Implementation approach:** Use conjugate updating functions to compute Bayesian credibility estimates.
+
+**Procedure:**
+1) Specify a prior consistent with historical/industry knowledge; document it.
+2) Compute the posterior with the tool and **report: prior mean, sample statistic, Z, posterior mean**.
+3) If needed, map the posterior to pricing quantities (e.g., pure premium = freq × severity).
+
+**Common pitfalls:**
+- Hiding prior strength; always quantify (e.g., 'β=400 exposure equivalents').
+- Combining Bayesian updates with separate classical Z on the same target (double-shrinking).`,
+	sources: ["Werner & Modlin, *Basic Ratemaking* — Chapter 12 (CAS)"],
+	safetyTags: ["actuarial", "credibility"],
 }

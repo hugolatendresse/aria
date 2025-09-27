@@ -1,3 +1,4 @@
+import { classicalLimitedFluctuationCredibilityCard, credibilityBayesianCard, credibilityBuhlmannCard } from "./cards/credibility"
 import { triangleFirstChainladderCard } from "./cards/triangle-first-chainladder"
 import { ultimateCapeCodCard } from "./cards/ultimate-capecod"
 import { ultimateChainladderCard } from "./cards/ultimate-chainladder"
@@ -18,4 +19,11 @@ export type CapabilityCard = {
 
 export const CARD_BUDGET_TOKENS = 800 // tune via config
 
-export const cards: CapabilityCard[] = [triangleFirstChainladderCard, ultimateCapeCodCard, ultimateChainladderCard]
+export const cards: CapabilityCard[] = [
+	triangleFirstChainladderCard,
+	ultimateCapeCodCard,
+	ultimateChainladderCard,
+	classicalLimitedFluctuationCredibilityCard,
+	credibilityBuhlmannCard,
+	credibilityBayesianCard,
+]
