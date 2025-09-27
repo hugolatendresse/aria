@@ -13,8 +13,7 @@ export const ultimateChainladderCard: CapabilityCard = {
 		{ kind: "regex", pattern: "\\b(ldf|cdf|link[- ]?ratio|mack|tail|std|mse|sigma|reserve)s?\\b", flags: "i" },
 	],
 	importance: 5,
-	short: `Classical Chain Ladder using age‑to‑age factors to estimate ultimates and IBNR; supports tail selection and Mack variability diagnostics.`,
-	long: `**Capability Card: Chain Ladder (Link‑Ratio) v1.0**
+	content: `**Capability Card: Chain Ladder (Link‑Ratio) v1.0**
 
 **What it does:**
 Fits age‑to‑age link ratios (LDFs), derives CDFs and an optional tail factor, then projects ultimate losses by origin. Optionally applies Mack's distribution‑free variance model to get standard errors on reserves.

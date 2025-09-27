@@ -10,7 +10,7 @@ export const classicalLimitedFluctuationCredibilityCard: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["credibility", "limited fluctuation", "classical credibility", "full credibility", "square root rule"],
+			any: ["limited fluctuation", "classical credibility", "square root rule"],
 		},
 		{
 			kind: "regex",
@@ -19,8 +19,7 @@ export const classicalLimitedFluctuationCredibilityCard: CapabilityCard = {
 		},
 	],
 	importance: 5,
-	short: "Compute full-credibility standard from (p,k), apply square-root rule Z=min(1,√(N/Nf)), then blend with a vetted complement.",
-	long: `**Capability Card: Classical Credibility (Limited Fluctuation)**
+	content: `**Capability Card: Classical Credibility (Limited Fluctuation)**
 
 **Core idea.** Assign Z to the observed (subject) experience and (1−Z) to related experience:
 \`Estimate = Z × Observed + (1 − Z) × Related\`.
@@ -95,8 +94,7 @@ export const credibilityBuhlmannCard: CapabilityCard = {
 		{ kind: "regex", pattern: "\\b(prior|collective mean|hypothetical means)\\b", flags: "i" },
 	],
 	importance: 5,
-	short: "Estimate μ, EPV, VHM ⇒ K, then Zᵢ = nᵢ/(nᵢ+K); blend each risk’s mean with the collective mean.",
-	long: `**Capability Card: Bühlmann Credibility v1.0**
+	content: `**Capability Card: Bühlmann Credibility v1.0**
 
 **Method guardrails:** Compute **μ** (collective mean), **EPV** (process variance), **VHM** (variance of hypothetical means), **K = EPV/VHM**, then per risk \`Z_i = n_i / (n_i + K)\` (or \`m_i\` exposures in Bühlmann–Straub). Estimate with nonparametric moments; data must be reasonably homogeneous/stationary. :contentReference[oaicite:3]{index=3}
 
@@ -151,8 +149,7 @@ export const credibilityBayesianCard: CapabilityCard = {
 		{ kind: "regex", pattern: "\\b(prior mean|posterior mean|conjugate|hyperparameter)\\b", flags: "i" },
 	],
 	importance: 5,
-	short: "Compute conjugate posteriors and credibility weights; report prior, data, posterior, and Z explicitly.",
-	long: `**Capability Card: Bayesian Credibility v1.0**
+	content: `**Capability Card: Bayesian Credibility v1.0**
 
 **Method guardrails:** Use a defensible conjugate prior and show the **posterior mean as a credibility blend** of the sample statistic and prior mean. Always disclose prior hyperparameters and their interpretation (e.g., 'prior β acts like prior exposure'). :contentReference[oaicite:5]{index=5}
 

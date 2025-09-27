@@ -11,13 +11,10 @@ export type CapabilityCard = {
 		{ kind: "keyword"; any: string[]; all?: string[]; none?: string[] } | { kind: "regex"; pattern: string; flags?: string }
 	>
 	importance?: number
-	short: string
-	long: string
+	content: string
 	sources?: string[]
 	safetyTags?: string[]
 }
-
-export const CARD_BUDGET_TOKENS = 800 // tune via config
 
 export const cards: CapabilityCard[] = [
 	triangleFirstChainladderCard,

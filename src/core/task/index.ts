@@ -1424,7 +1424,7 @@ export class Task {
 			capabilityCardsDebugInfo.messageCount = recentMessages.length
 
 			if (recentMessages.length > 0) {
-				const cardResult = getRelevantCapabilityCards(recentMessages, 800)
+				const cardResult = getRelevantCapabilityCards(recentMessages)
 				capabilityCardsDebugInfo.cardsFound = cardResult.cardsFound
 				capabilityCardsDebugInfo.cardIds = cardResult.cardIds
 				capabilityCardsDebugInfo.signals = cardResult.signals

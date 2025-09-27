@@ -10,8 +10,7 @@ export const ultimateCapeCodCard: CapabilityCard = {
 		{ kind: "regex", pattern: "\\b(sample_weight|trend|decay|n_iters)", flags: "i" },
 	],
 	importance: 4,
-	short: `Cape Cod method: Expected-loss technique using exposure base (on-leveled premium) with development factors to produce ultimates less sensitive to late-year volatility.`,
-	long: `**Capability Card: Cape Cod (Expected-Loss) v1.0**
+	content: `**Capability Card: Cape Cod (Expected-Loss) v1.0**
 
 **What it does:**
 Applies the Cape Cod technique: builds an apriori from exposure (e.g., on‑leveled earned premium) and development factors, then produces ultimates and IBNR by origin. Supports trend/decay and iteration bridging toward Benktander.

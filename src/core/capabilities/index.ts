@@ -12,10 +12,10 @@ export interface CapabilityCardResult {
 /**
  * Main API: Check user messages and return relevant capability cards
  */
-export function getRelevantCapabilityCards(userMessages: string[], tokenBudget?: number): CapabilityCardResult {
+export function getRelevantCapabilityCards(userMessages: string[]): CapabilityCardResult {
 	const detections = detectCards(userMessages, CARD_REGISTRY)
 	const selected = detections.map((d) => d.card)
-	const cardsBlock = formatCardsForPrompt(selected, tokenBudget)
+	const cardsBlock = formatCardsForPrompt(selected)
 
 	return {
 		cardsFound: selected.length > 0,
@@ -28,8 +28,8 @@ export function getRelevantCapabilityCards(userMessages: string[], tokenBudget?:
 /**
  * Helper: Get cards for a single user message
  */
-export function getCapabilityCardsForMessage(message: string, tokenBudget?: number): CapabilityCardResult {
-	return getRelevantCapabilityCards([message], tokenBudget)
+export function getCapabilityCardsForMessage(message: string): CapabilityCardResult {
+	return getRelevantCapabilityCards([message])
 }
 
 export { cards } from "./card_registry"

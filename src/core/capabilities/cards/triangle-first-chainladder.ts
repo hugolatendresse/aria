@@ -13,8 +13,7 @@ export const triangleFirstChainladderCard: CapabilityCard = {
 		{ kind: "regex", pattern: "\\b(development|ultimate|reserve|factor)", flags: "i" },
 	],
 	importance: 5,
-	short: `Triangle‑First approach: Any actuarial task requires tidy data normalization, then cl.Triangle construction. No exceptions.`,
-	long: `**Capability Card: Triangle‑First (Chainladder) v1.1**
+	content: `**Capability Card: Triangle‑First (Chainladder) v1.1**
 
 **Trigger:** Any actuarial task (loss dev/reserving/pricing/AY vs PY/triangles/IBNR/BF/Mack/etc.)
 
