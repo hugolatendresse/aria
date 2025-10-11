@@ -1,4 +1,5 @@
 import { classicalLimitedFluctuationCredibilityCard, credibilityBayesianCard, credibilityBuhlmannCard } from "./cards/credibility"
+import { currentLevelPremiumCard } from "./cards/current_level_premium"
 import { firstDollarComplementsUmbrellaCard } from "./cards/first_dollar_complements"
 import { firstDollarTrendedPresentRatesCard } from "./cards/first_dollar_trended_present_rates"
 import { triangleFirstChainladderCard } from "./cards/triangle_first_chainladder"
@@ -24,6 +25,7 @@ export const cards: CapabilityCard[] = [
 	ultimateBornhuetterFergusonCard,
 	ultimateCapeCodCard,
 	ultimateChainladderCard,
+	currentLevelPremiumCard,
 	classicalLimitedFluctuationCredibilityCard,
 	credibilityBuhlmannCard,
 	credibilityBayesianCard,
