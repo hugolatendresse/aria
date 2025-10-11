@@ -68,7 +68,8 @@ ult2 = bf.ultimate_
 
 **Input / Output:**
 - **Input:** \`X\` cumulative loss Triangle; \`sample_weight\` Triangle (exposure or prior ultimates); dev/tail selection (e.g., \`Development\`, \`TailCurve\`) if you want explicit control of CDFs.
-- **Output:** \`ultimate_\`, \`ibnr_\` as Triangles. :contentReference[oaicite:5]{index=5}
+- **Output:** \`ultimate_\`, \`ibnr_\` as Triangles.
+- **Value extraction:** \`triangle.sum()\` returns a Triangle (NOT scalar). Use \`triangle.sum().sum()\` for total scalar, \`triangle.to_frame()\` for origin-level DataFrame, or \`triangle.values\` for raw numpy array. :contentReference[oaicite:5]{index=5}
 
 **Critical Points:**
 - Ensure \`sample_weight\` aligns with \`X\` (same origin index; broadcast across development if needed). Use Triangle ops or the estimator’s \`intersection\` helper to align indices. :contentReference[oaicite:6]{index=6}

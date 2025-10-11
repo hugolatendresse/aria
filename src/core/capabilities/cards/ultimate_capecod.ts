@@ -47,6 +47,7 @@ apriori = cc.apriori_       # (trended) apriori vector used by Cape Cod
 **Input/Output:**
 - **Input:** X: cl.Triangle (cumulative loss), sample_weight: cl.Triangle (exposure), trend/decay/n_iters parameters
 - **Output:** ultimate_, ibnr_, apriori_ Triangles
+- **Value extraction:** \`triangle.sum()\` may return a Triangle (not scalar). Use \`triangle.sum().sum()\` for total scalar, \`triangle.to_frame()\` for origin-level values
 
 **Critical Points:**
 - Exposure must be passed as Triangle via sample_weight and align on index/origin/development with X
