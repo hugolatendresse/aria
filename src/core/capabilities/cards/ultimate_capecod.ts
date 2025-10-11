@@ -49,48 +49,66 @@ import pandas as pd
 # X: cumulative loss Triangle (paid or reported)
 X = loss_tri
 
-# --- Exposure (sample_weight) by origin (e.g., Earned Premium) ---
-# If you already have a premium triangle that aligns with X:
-prem = premium_tri.latest_diagonal   # one value per origin
+# --- CRITICAL: On-level premium first (if rate changes exist) ---
+# Use the current_level_premium card guidance to on-level premium
+# Then pass the on-leveled premium as-is (do NOT manually trend it)
+onlevel_prem = premium_tri.latest_diagonal   # already on-leveled to current
 
-# Pipeline: select dev, optional tail, then CapeCod with trend/decay
+# Pipeline: Development → Tail → CapeCod (with trend parameter)
+# IMPORTANT: Use a Pipeline, do NOT fit separately
 pipe = cl.Pipeline(steps=[
     ('dev',  cl.Development(average='volume', n_periods=2)),
-    # ('tail', cl.TailCurve(curve='exponential')),  # optional tail
-    ('model', cl.CapeCod(trend=0.03, decay=0.9))
+    ('tail', cl.TailConstant(tail=1.05)),       # optional tail
+    ('model', cl.CapeCod(trend=0.025))          # trend handles loss trending internally
 ])
-pipe.set_fit_request(sample_weight=True)  # ensures sample_weight is routed to final step
+pipe.set_fit_request(sample_weight=True)
 
-# Fit with exposure passed via sample_weight (latest diagonal)
-pipe.fit(X, sample_weight=prem)
+# Fit with on-level premium (NOT manually trended)
+pipe.fit(X, sample_weight=onlevel_prem)
 
 ult  = pipe.named_steps.model.ultimate_
 ibnr = pipe.named_steps.model.ibnr_
 ap   = pipe.named_steps.model.apriori_            # trended-to-latest apriori
 ap_d = pipe.named_steps.model.detrended_apriori_  # detrended to each origin
 
-# Value extraction (be consistent with other cards):
+# Value extraction
 total_ult  = ult.sum().sum()
 total_ibnr = ibnr.sum().sum()
 \`\`\`
-- **Exposure goes in \`sample_weight\`**; pass **one value per origin** (use the **latest diagonal** of a premium/exposure triangle).
+- **Exposure goes in \`sample_weight\`**; pass **one value per origin** (on-leveled premium, NOT manually trended).
+- **The \`trend\` parameter is NOT for premium**; it adjusts the apriori estimation by detrending losses to a common basis.
 
-**On‑leveling & Trend options (recommended pattern):**
+**Tort Reform Example (Critical - shows correct direction):**
 \`\`\`python
-# Example following the docs gallery pattern:
-loss_onlevel_pipe = cl.Pipeline(steps=[
-    ('olf',  cl.ParallelogramOLF(loss_factor_df, change_col='rate_change', date_col='date', vertical_line=True)),
-    ('dev',  cl.Development(n_periods=2)),
-    ('model', cl.CapeCod(trend=0.034))
-])
-# On-level premium to latest level before passing as exposure
-prem_onlevel = cl.ParallelogramOLF(prem_factor_df, change_col='rate_change', date_col='date',
-                                   vertical_line=True).fit_transform(premium_tri.latest_diagonal)
+# Example: Tort reform reduced losses by 15% in 2005, 40% in 2006+
+# To adjust old years TO 2010 level (which has full -40% reform):
+tort_factors = {
+    # Years ≤2004: No reform, need to reduce by 40% to match 2010
+    2000: 0.600, 2001: 0.600, 2002: 0.600, 2003: 0.600, 2004: 0.600,
+    # 2005: Partial reform (-15%), bridge to full -40%: 0.85 * 0.706 ≈ 0.600
+    2005: 0.708,
+    # 2006+: Full reform (-40%), already at 2010 level
+    2006: 1.000, 2007: 1.000, 2008: 1.000, 2009: 1.000, 2010: 1.000
+}
 
-loss_onlevel_pipe.fit(X, sample_weight=prem_onlevel)
-ult_onlevel = loss_onlevel_pipe.named_steps.model.ultimate_
+# Create tort factor triangle (broadcast factors across development periods)
+import numpy as np
+tort_tri = X.copy()
+tort_tri.values = np.zeros_like(X.values)
+for i, origin in enumerate(X.origin):
+    year = int(str(origin)[:4])
+    tort_tri.values[0, 0, i, :] = tort_factors[year]
+
+# Adjust losses DOWN for old years
+X_adjusted = X * tort_tri
+
+# Run Cape Cod with PREMIUM as sample_weight (not tort factors!)
+pipe.fit(X_adjusted, sample_weight=onlevel_premium.latest_diagonal)
+
+# Adjust results back to original level
+ult_original = pipe.named_steps.model.ultimate_ / tort_tri.latest_diagonal
 \`\`\`
-This mirrors the official **CapeCod Onleveling** example (loss transformed in-pipeline; premium on‑leveled separately, then used as \`sample_weight\`).
+Remember: Reform that REDUCED new losses means REDUCE old losses to compare.
 
 **Understanding apriori outputs:**  
 With \`trend\` ≠ 0, \`apriori_\` is expressed at the latest origin basis, while \`detrended_apriori_\` maps back to each origin’s basis (the detrended vector is what the estimator actually uses).
@@ -100,11 +118,13 @@ With \`trend\` ≠ 0, \`apriori_\` is expressed at the latest origin basis, whil
 - **Output:** \`ultimate_\`, \`ibnr_\`, \`apriori_\`, \`detrended_apriori_\` as Triangles.
 
 **Critical Points:**
-- **Always provide exposure** via \`sample_weight=exposure.latest_diagonal\`. Do **not** pass the full exposure triangle to \`fit\`; the estimator expects one value per origin.
-- Use \`trend\` to common-base origins (latest); for more complex assumptions or rate changes, combine \`Trend\` and/or \`ParallelogramOLF\` with CapeCod in a Pipeline.
+- **Always provide exposure** via \`sample_weight=exposure.latest_diagonal\`. Do **not** pass the full exposure triangle to \`fit\`; the estimator expects one value per origin. IMPORTANT: When applying tort reform adjustments, the \`sample_weight\` should be the PREMIUM (on-level earned premium), NOT the tort reform factors. Tort factors adjust the loss triangle (X), not the sample_weight.
+- **DO NOT manually trend premium:** Cape Cod handles trending internally via the \`trend\` parameter. Pass on-level premium as-is; do NOT multiply it by \`(1 + trend) ** years\`. The \`trend\` parameter tells Cape Cod to common-base all origins to the latest year when estimating the apriori.
+- **Use Pipeline for proper workflow:** Chain Development → (optional Tail) → CapeCod in a Pipeline. Do NOT fit them separately and manually combine. Example: \`cl.Pipeline(steps=[('dev', cl.Development(n_periods=2)), ('tail', cl.TailConstant(tail=1.05)), ('model', cl.CapeCod(trend=0.025))])\`.
+- \`trend\` parameter: Annual trend rate (e.g., 0.025 for 2.5% per year) used to adjust apriori estimation, NOT for manually trending premium. Cape Cod detrends losses internally to estimate apriori consistently across origins.
 - \`decay < 1\` gives more weight to nearer origins when estimating apriori; default \`decay=1\` treats all origins equally.
 - If you want Cape Cod logic but a fixed/judgmental ELR, use **BF** instead (apriori chosen externally); Cape Cod's apriori is estimated from data.
-- **Tort reform adjustment:** (1) Adjust the loss triangle by multiplying by tort reform factors (e.g., 0.893 for -10.7%, 0.670 for -33.0%); (2) Run Cape Cod on the adjusted triangle with on-level premium; (3) Adjust results back to original level by dividing ultimates/IBNR by the tort reform factors. This ensures the apriori estimation sees consistent loss levels across origins.
+- **Tort reform adjustment (CRITICAL - direction matters):** If tort reform REDUCED losses in recent years (e.g., -40% starting 2006), then to compare old years to new: (1) REDUCE old year losses by multiplying the triangle by factors <1.0 (see full example above for proper factor calculation). (2) Create a tort factor triangle: \`tort_tri = X.copy(); tort_tri.values = X.values * 0; for i, factor in enumerate(factors_by_origin): tort_tri.values[0,0,i,:] = factor; X_adjusted = X * tort_tri\`. (3) Run Cape Cod on adjusted triangle with on-level premium. (4) Adjust results back: \`ultimate_original = ultimate_adjusted / tort_tri.latest_diagonal\`. The logic: reforms that reduced NEW losses require REDUCING OLD losses to match. Do NOT invert the direction.
 
 **Version:** Tested against chainladder 0.8.x/0.9.x APIs (\`fit(..., sample_weight=...)\`, \`ultimate_\`, \`ibnr_\`, \`apriori_\`, \`detrended_apriori_\`).`,
 	sources: [
