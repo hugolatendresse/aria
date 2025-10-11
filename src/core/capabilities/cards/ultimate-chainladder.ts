@@ -27,26 +27,23 @@ Fits age‑to‑age link ratios (LDFs), derives CDFs and an optional tail factor
 import chainladder as cl
 
 # X: cumulative loss Triangle (paid or reported)
-# loss_tri: cl.Triangle already aligned by origin/development
 X = loss_tri
 
-# Core Chain Ladder with (volume) average link ratios and a simple tail
-dev = cl.Development(average='volume')
-tail = cl.TailCurve(method='exponential')   # optional; can be None
+# Pipeline approach - chains development, tail, and model together
+pipe = cl.Pipeline(steps=[
+    ('dev', cl.Development(average='volume')),
+    ('tail', cl.TailCurve(curve='exponential')),  # or cl.TailConstant(tail=1.05)
+    ('model', cl.Chainladder())
+])
 
-# Deterministic chain ladder (ultimates + IBNR)
-clm = cl.Chainladder(development=dev, tail=tail)
-clm.fit(X)
+pipe.fit(X)
 
-ult  = clm.ultimate_   # Triangle of ultimates
-ibnr = clm.ibnr_       # Triangle of IBNR
-ldf  = clm.ldf_        # selected age-to-age factors
-cdf  = clm.cdf_        # cumulative-to-ultimate factors
+# Access results via named_steps
+ult  = pipe.named_steps.model.ultimate_   # Triangle of ultimates
+ibnr = pipe.named_steps.model.ibnr_       # Triangle of IBNR
+ldf  = pipe.named_steps.model.ldf_        # selected age-to-age factors
+cdf  = pipe.named_steps.model.cdf_        # cumulative-to-ultimate factors
 
-# Mack variability (standard errors by origin)
-mack = cl.MackChainladder(development=dev, tail=tail)
-mack.fit(X)
-mse_ult = mack.std_ultimate_  # or mack.std_reserve_ depending on need
 \`\`\`
 
 **Input/Output:**
@@ -55,12 +52,18 @@ mse_ult = mack.std_ultimate_  # or mack.std_reserve_ depending on need
 
 **Critical Points:**
 - Supply **cumulative** data; if you have incremental, cumulate first and validate triangles for structural zeros/outliers.
-- Apply any calendar‑year adjustments (e.g., on‑leveling, mix shifts) **before** fitting if they materially affect link ratios (parallelogram on‑level technique for premium/exposure adjustment is documented in CAS *Basic Ratemaking*). :contentReference[oaicite:0]{index=0}
+- **Use Pipeline:** Chains estimators into single object for reproducibility. Steps are named ('dev', 'tail', 'model') for easy access via \`pipe.named_steps.model.ultimate_\`.
+- Apply any calendar‑year adjustments (e.g., on‑leveling, mix shifts) **before** fitting if they materially affect link ratios (parallelogram on‑level technique for premium/exposure adjustment is documented in CAS *Basic Ratemaking*).
+- **Tail options:** Use \`TailConstant(tail=1.05)\` for fixed tail factor, \`TailCurve\` for fitted curves. TailConstant supports \`decay\` parameter for exponential decay over projection periods.
 - Choose averaging (volume vs. simple) consistently across ages; consider excluding erratic early/late ages and select a defensible tail.
 - Keep grain consistent (AY/PY, annual vs. quarterly) and align indexes; watch for sparse latest diagonals.
-- Document any manual overrides to LDFs/CDFs; preserve reproducibility with a parameterized pipeline.
 
-**Version:** Tested with chainladder 0.8.x. API: cl.Chainladder(...).fit(X) → attributes ultimate_/ibnr_/ldf_/cdf_; cl.MackChainladder adds std_ultimate_ / std_reserve_ diagnostics.`,
-	sources: ["chainladder-python docs v0.8.x", "Mack (1993)", "CAS Basic Ratemaking (parallelogram on-level)"],
+**Version:** Tested with chainladder 0.8.x. API: cl.Pipeline(steps=[...]).fit(X) → pipe.named_steps.model.ultimate_/ibnr_/ldf_/cdf_; use MackChainladder() for std_ultimate_ / std_reserve_ diagnostics.`,
+	sources: [
+		"chainladder-python docs v0.8.x",
+		"Mack (1993)",
+		"CAS Basic Ratemaking (parallelogram on-level)",
+		"https://chainladder-python.readthedocs.io/en/latest/user_guide/workflow.html",
+	],
 	safetyTags: ["actuarial", "IBNR", "triangle-based"],
 }

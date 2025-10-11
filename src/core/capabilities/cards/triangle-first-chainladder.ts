@@ -21,14 +21,24 @@ export const triangleFirstChainladderCard: CapabilityCard = {
 
 1. **Normalize data to tidy long form**
    - Columns: origin (Period), development or valuation (Timestamp/Period), metric columns (paid, reported, etc.).
+   - **Wide triangles with integer ages:** Melt to long format using \`df.melt(id_vars=['Accident Year'], var_name='age', value_name='paid')\`, then convert ages to valuation dates in step 2.
 
-2. **If you have numeric ages: derive valuation:**
+2. **Date handling and Triangle setup:**
+   
+   **Date Inference:** Origin/development can be column name (str) or list: \`origin='Acc Year'\` or \`development=['Cal Year', 'Cal Month']\`. Uses \`pd.to_datetime()\` for inference. Force with \`origin_format='%Y/%m/%d'\` if needed. If origin is accident years, development should be valuation years. If integers (age), convert: origin=2000 + age=1 → development=2001.
+   
+   **If you have numeric ages: derive valuation:**
    \`\`\`python
-   # For monthly development ages - age calculated from earliest date of origin
-   df['origin_period'] = pd.PeriodIndex(df['origin'].astype(str) + '-01', freq='M')
-   df['valuation'] = (df['origin_period'] + df['age'] - 1).dt.to_timestamp(how='end')
+   # For annual origins with monthly ages (e.g., ages 12, 24, 36)
+   # Convert to int first to handle float years (2000.0 → 2000)
+   df['origin_period'] = pd.PeriodIndex(df['Accident Year'].astype(int).astype(str), freq='Y')
+   df['valuation'] = (df['origin_period'] + (df['age'].astype(int) // 12) - 1).dt.to_timestamp(how='end')
+   
+   # For monthly origins with monthly ages
+   df['origin_period'] = pd.PeriodIndex(df['origin'].astype(int).astype(str) + '-01', freq='M')
+   df['valuation'] = (df['origin_period'] + df['age'].astype(int) - 1).dt.to_timestamp(how='end')
    \`\`\`
-   **CRITICAL:** Development age is calculated from the earliest date of the origin period. Age 12 means "12 months from start of origin", but valuation should be end of that development period. Use Period arithmetic as shown above. Do NOT use \`origin.to_timestamp() + DateOffset(months=dev_period)\` which gives beginning of next period. Example: origin 2015 + dev age 12 = 2015-12-31, not 2016-01-01.
+   **CRITICAL:** Always convert numeric columns to int before string conversion to avoid "2000.0" float formatting errors. Development age is calculated from the earliest date of the origin period. Age 12 means "12 months from start of origin", but valuation should be end of that development period. For annual origins with monthly ages, divide by 12 to convert to years. Example: origin 2000 + age 12 → valuation 2000-12-31.
 
 3. **Build Triangle**
    \`\`\`python
