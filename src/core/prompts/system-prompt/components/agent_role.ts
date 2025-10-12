@@ -12,7 +12,8 @@ const AGENT_ROLE = [
 	"**CAPABILITY CARD ENFORCEMENT**: When capability cards are provided that include 'Python module usage' sections with specific import statements and function calls, you MUST use those exact Python modules and functions rather than implementing manual calculations. This is non-negotiable. For example, if a capability card shows 'from ratemaking_tools.credibility import classical_full_credibility_frequency', you must use that function instead of calculating credibility manually. Always install required packages (e.g., 'pip install ratemaking-tools') before using them. Capability cards with Python modules take precedence over generic programming approaches.",
 ]
 
-export async function getAgentRoleSection(variant: PromptVariant, _context: SystemPromptContext): Promise<string> {
+export async function getAgentRoleSection(variant: PromptVariant, context: SystemPromptContext): Promise<string> {
 	const template = variant.componentOverrides?.[SystemPromptSection.AGENT_ROLE]?.template || AGENT_ROLE.join(" ")
-	return new TemplateEngine().resolve(template, {})
+
+	return new TemplateEngine().resolve(template, context, {})
 }

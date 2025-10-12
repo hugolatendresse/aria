@@ -4,6 +4,7 @@ import type { HistoryItem } from "@/shared/HistoryItem"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { getCwd, getDesktopDir } from "@/utils/path"
 import { StateManager } from "../storage/StateManager"
+import { isMultiRootEnabled } from "./multi-root-utils"
 import type { WorkspaceRoot } from "./WorkspaceRoot"
 import { WorkspaceRootManager } from "./WorkspaceRootManager"
 
@@ -24,12 +25,11 @@ export async function setupWorkspaceManager({
 	detectRoots: DetectRoots
 }): Promise<WorkspaceRootManager> {
 	const cwd = await getCwd(getDesktopDir())
-	const multiRootEnabled = stateManager.getGlobalStateKey("multiRootEnabled")
 	const startTime = performance.now()
-
+	const multiRootEnabled = isMultiRootEnabled(stateManager)
 	try {
 		let manager: WorkspaceRootManager
-		// Multi-root mode condition which is always false for now as isMultiRootEnabled is hardcoded to false
+		// Multi-root mode condition - requires both feature flag and user setting to be enabled
 		if (multiRootEnabled) {
 			// Multi-root: detect workspace folders
 			const roots = await detectRoots()

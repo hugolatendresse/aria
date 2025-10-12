@@ -2,7 +2,8 @@ import type { ClineMessage } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { VirtuosoHandle } from "react-virtuoso"
 import { ButtonActionType, getButtonConfig } from "../../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../../types/chatTypes"
 
@@ -16,6 +17,7 @@ interface ActionButtonsProps {
 		scrollToBottomSmooth: () => void
 		disableAutoScrollRef: React.MutableRefObject<boolean>
 		showScrollToBottom: boolean
+		virtuosoRef: React.RefObject<VirtuosoHandle>
 	}
 }
 
@@ -31,7 +33,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	scrollBehavior,
 }) => {
 	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
-	const isProcessingRef = useRef(false)
+	const [isProcessing, setIsProcessing] = useState(false)
 
 	// Memoize last messages to avoid unnecessary recalculations
 	const [lastMessage, secondLastMessage] = useMemo(() => {
@@ -47,7 +49,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	// Single effect to handle all configuration updates
 	useEffect(() => {
 		setSendingDisabled(buttonConfig.sendingDisabled)
-		isProcessingRef.current = false
+		setIsProcessing(false)
 	}, [buttonConfig, setSendingDisabled])
 
 	// Clear input when transitioning from command_output to api_req
@@ -60,16 +62,15 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 		}
 	}, [lastMessage?.type, lastMessage?.say, secondLastMessage?.ask, chatState])
 
-	// Optimized action handler with ref to avoid processing state updates
 	const handleActionClick = useCallback(
 		(action: ButtonActionType, text?: string, images?: string[], files?: string[]) => {
-			if (isProcessingRef.current) {
+			if (isProcessing) {
 				return
 			}
-			isProcessingRef.current = true
+			setIsProcessing(true)
 			messageHandlers.executeButtonAction(action, text, images, files)
 		},
-		[messageHandlers],
+		[messageHandlers, isProcessing],
 	)
 
 	// Keyboard event handler
@@ -95,39 +96,51 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 
 	const { showScrollToBottom, scrollToBottomSmooth, disableAutoScrollRef } = scrollBehavior
 
+	const { primaryText, secondaryText, primaryAction, secondaryAction, enableButtons } = buttonConfig
+	const hasButtons = primaryText || secondaryText
+	const isStreaming = task.partial === true
+	const canInteract = enableButtons && !isProcessing
+
 	// Early return for scroll button to avoid unnecessary computation
-	if (showScrollToBottom) {
+	if (showScrollToBottom || !hasButtons) {
 		const handleScrollToBottom = () => {
 			scrollToBottomSmooth()
 			disableAutoScrollRef.current = false
+		}
+		// Show scroll to top button when there are no action buttons
+		const handleScrollToTop = () => {
+			scrollBehavior.virtuosoRef.current?.scrollTo({
+				top: 0,
+				behavior: "smooth",
+			})
+			disableAutoScrollRef.current = true
 		}
 
 		return (
 			<div className="flex px-[15px]">
 				<VSCodeButton
 					appearance="icon"
-					aria-label="Scroll to bottom"
+					aria-label={showScrollToBottom ? "Scroll to bottom" : "Scroll to top"}
 					className="text-lg text-[var(--vscode-primaryButton-foreground)] bg-[color-mix(in_srgb,var(--vscode-toolbar-hoverBackground)_55%,transparent)] rounded-[3px] overflow-hidden cursor-pointer flex justify-center items-center flex-1 h-[25px] hover:bg-[color-mix(in_srgb,var(--vscode-toolbar-hoverBackground)_90%,transparent)] active:bg-[color-mix(in_srgb,var(--vscode-toolbar-hoverBackground)_70%,transparent)] border-0"
-					onClick={handleScrollToBottom}
+					onClick={showScrollToBottom ? handleScrollToBottom : handleScrollToTop}
 					onKeyDown={(e) => {
 						if (e.key === "Enter" || e.key === " ") {
 							e.preventDefault()
-							handleScrollToBottom()
+							if (showScrollToBottom) {
+								handleScrollToBottom()
+							} else {
+								handleScrollToTop()
+							}
 						}
 					}}>
-					<span className="codicon codicon-chevron-down" />
+					{showScrollToBottom ? (
+						<span className="codicon codicon-chevron-down" />
+					) : (
+						<span className="codicon codicon-chevron-up" />
+					)}
 				</VSCodeButton>
 			</div>
 		)
-	}
-
-	const { primaryText, secondaryText, primaryAction, secondaryAction, enableButtons } = buttonConfig
-	const hasButtons = primaryText || secondaryText
-	const isStreaming = task.partial === true
-	const canInteract = enableButtons && !isProcessingRef.current
-
-	if (!hasButtons) {
-		return null
 	}
 
 	const opacity = canInteract || isStreaming ? 1 : 0.5
@@ -146,7 +159,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 			{secondaryText && secondaryAction && (
 				<VSCodeButton
 					appearance="secondary"
-					className={primaryText ? "flex-1 mr-[6px]" : "flex-[2]"}
+					className={primaryText ? "flex-1" : "flex-[2]"}
 					disabled={!canInteract}
 					onClick={() => handleActionClick(secondaryAction, inputValue, selectedImages, selectedFiles)}>
 					{secondaryText}
