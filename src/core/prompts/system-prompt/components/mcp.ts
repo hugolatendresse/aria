@@ -15,10 +15,6 @@ When a server is connected, you can use the server's tools via the \`use_mcp_too
 
 export async function getMcp(variant: PromptVariant, context: SystemPromptContext): Promise<string | undefined> {
 	const servers = context.mcpHub?.getServers() || []
-	// Skip the section if there are no servers connected / available
-	if (servers.length === 0) {
-		return undefined
-	}
 	return await getMcpServers(servers, variant)
 }
 

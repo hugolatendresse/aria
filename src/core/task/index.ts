@@ -946,6 +946,10 @@ export class Task {
 	}
 
 	private async initiateTaskLoop(userContent: UserContent): Promise<void> {
+		// Reset debug run ID for new task loop (new user message)
+		this.taskState.debugRunId = undefined
+		this.taskState.debugAttemptCount = 0
+
 		let nextUserContent = userContent
 		let includeFileDetails = true
 		while (!this.taskState.abort) {
@@ -1385,7 +1389,144 @@ export class Task {
 			workspaceRoots,
 		}
 
-		const systemPrompt = await getSystemPrompt(promptContext)
+		// Check for relevant capability cards based on recent conversation context
+		let capabilityCardsBlock = ""
+		const capabilityCardsDebugInfo = {
+			cardsFound: false,
+			cardIds: [] as string[],
+			signals: [] as string[],
+			messageCount: 0,
+			error: null as string | null,
+		}
+
+		try {
+			const { getRelevantCapabilityCards } = await import("../capabilities")
+			const conversationHistory = this.messageStateHandler.getApiConversationHistory()
+
+			// Extract recent messages from both user and assistant (last 5 messages total)
+			const recentMessages = conversationHistory
+				.filter((msg) => msg.role === "user" || msg.role === "assistant")
+				.slice(-5)
+				.map((msg) => {
+					// Handle different content types
+					if (typeof msg.content === "string") {
+						return msg.content
+					} else if (Array.isArray(msg.content)) {
+						return msg.content
+							.filter((block) => block.type === "text")
+							.map((block) => (block as any).text)
+							.join(" ")
+					}
+					return ""
+				})
+				.filter((text) => text.length > 0)
+
+			capabilityCardsDebugInfo.messageCount = recentMessages.length
+
+			if (recentMessages.length > 0) {
+				const cardResult = getRelevantCapabilityCards(recentMessages, 800)
+				capabilityCardsDebugInfo.cardsFound = cardResult.cardsFound
+				capabilityCardsDebugInfo.cardIds = cardResult.cardIds
+				capabilityCardsDebugInfo.signals = cardResult.signals
+
+				if (cardResult.cardsFound) {
+					capabilityCardsBlock = cardResult.cardsBlock
+					console.log(
+						`[CAPABILITY CARDS] Injected ${cardResult.cardIds.length} cards: ${cardResult.cardIds.join(", ")} (detected from conversation context)`,
+					)
+				}
+			}
+		} catch (error) {
+			capabilityCardsDebugInfo.error = error instanceof Error ? error.message : String(error)
+			console.warn("[CAPABILITY CARDS] Failed to load capability cards:", error)
+		}
+
+		let systemPrompt = await getSystemPrompt(promptContext)
+
+		// Prepend capability cards to system prompt if found
+		if (capabilityCardsBlock) {
+			systemPrompt = `${capabilityCardsBlock}\n\n${systemPrompt}`
+		}
+
+		// DEBUG: Log system prompt to file for debugging
+		try {
+			const fs = await import("fs")
+			const path = await import("path")
+
+			const now = new Date()
+			const readableTime = now
+				.toLocaleString("en-US", {
+					year: "numeric",
+					month: "2-digit",
+					day: "2-digit",
+					hour: "2-digit",
+					minute: "2-digit",
+					second: "2-digit",
+					hour12: false,
+				})
+				.replace(/[/,\s:]/g, "-")
+
+			// Initialize run ID for this task if not exists (groups all attempts from same user message)
+			if (!this.taskState.debugRunId) {
+				this.taskState.debugRunId = `${readableTime}_run-${Math.random().toString(36).substr(2, 4)}`
+			}
+
+			// Create run-specific subfolder
+			const baseDebugDir = path.join(this.cwd, ".cline-debug")
+			const runDebugDir = path.join(baseDebugDir, this.taskState.debugRunId)
+			if (!fs.existsSync(runDebugDir)) {
+				fs.mkdirSync(runDebugDir, { recursive: true })
+			}
+
+			// Track attempts properly - count this specific API call within the run
+			if (!this.taskState.debugAttemptCount) {
+				this.taskState.debugAttemptCount = 0
+			}
+			this.taskState.debugAttemptCount++
+
+			// Determine if this is a retry (previousApiReqIndex >= 0) or new attempt
+			let attemptLabel: string
+			if (previousApiReqIndex >= 0) {
+				attemptLabel = `retry-${previousApiReqIndex + 1}`
+			} else {
+				attemptLabel = `attempt-${this.taskState.debugAttemptCount}`
+			}
+
+			const debugFile = path.join(runDebugDir, `${attemptLabel}_system-prompt.txt`)
+
+			// Capability cards info for debug header
+			const capabilityCardsInfo = capabilityCardsDebugInfo.cardsFound
+				? `Cards Found: ${capabilityCardsDebugInfo.cardIds.join(", ")}
+Signals Detected: ${capabilityCardsDebugInfo.signals.join(", ")}
+Cards Block Length: ${capabilityCardsBlock.length} characters`
+				: capabilityCardsDebugInfo.error
+					? `Cards Error: ${capabilityCardsDebugInfo.error}`
+					: `No Cards Found (${capabilityCardsDebugInfo.messageCount} messages analyzed)`
+
+			// Include metadata header in the debug file
+			const debugContent = `=== SYSTEM PROMPT DEBUG ===
+Timestamp: ${now.toLocaleString("en-US")}
+Run ID: ${this.taskState.debugRunId}
+Attempt: ${attemptLabel}
+API Request Count: ${this.taskState.apiRequestCount || 0}
+Previous API Request Index: ${previousApiReqIndex}
+System Prompt Length: ${systemPrompt.length} characters
+Model: ${promptContext.providerInfo.model.id}
+Provider: ${promptContext.providerInfo.providerId}
+
+=== CAPABILITY CARDS ===
+${capabilityCardsInfo}
+
+=== PROMPT CONTENT ===
+${systemPrompt}
+
+=== END DEBUG ===`
+
+			fs.writeFileSync(debugFile, debugContent, "utf8")
+			console.log(`[PROMPT DEBUG] System prompt saved to: ${debugFile} (${systemPrompt.length} chars, ${attemptLabel})`)
+		} catch (error) {
+			console.warn("[PROMPT DEBUG] Failed to save system prompt:", error)
+		}
 
 		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(
 			this.messageStateHandler.getApiConversationHistory(),

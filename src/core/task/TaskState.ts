@@ -62,4 +62,8 @@ export class TaskState {
 	// Auto-context summarization
 	currentlySummarizing: boolean = false
 	lastAutoCompactTriggerIndex?: number
+
+	// Debug tracking for system prompt logging
+	debugRunId?: string
+	debugAttemptCount: number = 0
 }

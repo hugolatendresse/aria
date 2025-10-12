@@ -3,7 +3,7 @@ import { ClineDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
 import { validateVariant } from "../variant-validator"
-import { baseTemplate, mcp_template } from "./template"
+import { baseTemplate } from "./template"
 
 export const config = createVariant(ModelFamily.GENERIC)
 	.description("The fallback prompt for generic use cases and models.")
@@ -18,7 +18,7 @@ export const config = createVariant(ModelFamily.GENERIC)
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TASK_PROGRESS,
-		SystemPromptSection.MCP,
+		// SystemPromptSection.MCP,  // ← REMOVED FOR CHAINLADDER TESTING
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.ACT_VS_PLAN,
 		SystemPromptSection.TODO,
@@ -37,23 +37,20 @@ export const config = createVariant(ModelFamily.GENERIC)
 		ClineDefaultTool.LIST_FILES,
 		ClineDefaultTool.LIST_CODE_DEF,
 		ClineDefaultTool.BROWSER,
-		ClineDefaultTool.MCP_USE,
-		ClineDefaultTool.MCP_ACCESS,
+		// ClineDefaultTool.MCP_USE,     // ← REMOVED FOR CHAINLADDER TESTING
+		// ClineDefaultTool.MCP_ACCESS,  // ← REMOVED FOR CHAINLADDER TESTING
 		ClineDefaultTool.ASK,
 		ClineDefaultTool.ATTEMPT,
 		ClineDefaultTool.NEW_TASK,
 		ClineDefaultTool.PLAN_MODE,
-		ClineDefaultTool.MCP_DOCS,
+		// ClineDefaultTool.MCP_DOCS,    // ← REMOVED FOR CHAINLADDER TESTING
 		ClineDefaultTool.TODO,
 	)
 	.placeholders({
 		MODEL_FAMILY: "generic",
 	})
 	.config({})
-	// Override the MCP component with actuarial-enhanced template
-	.overrideComponent(SystemPromptSection.MCP, {
-		template: mcp_template,
-	})
+	// MCP component and template removed for chainladder testing
 	.build()
 
 // Compile-time validation
