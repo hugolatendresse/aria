@@ -9,7 +9,6 @@ tmp
 .cursor/
 .env
 venv/
-.aider*
 
 .DS_Store
 .idea
