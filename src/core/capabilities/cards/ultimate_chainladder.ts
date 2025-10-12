@@ -44,8 +44,8 @@ ibnr = pipe.named_steps.model.ibnr_       # Triangle of IBNR
 ldf  = pipe.named_steps.model.ldf_        # selected age-to-age factors
 cdf  = pipe.named_steps.model.cdf_        # cumulative-to-ultimate factors
 
-# Extract values (Triangle.sum() returns scalar, not Triangle)
-total_ult = float(ult.sum())              # Total across all origins
+# Extract values
+total_ult = ult.sum().sum()               # Total across all origins (may need double .sum())
 ult_df = ult.to_frame()                   # Convert to DataFrame
 ult_array = ult.values                    # Get numpy array (shape: 1,1,n_origins,1)
 \`\`\`
@@ -57,7 +57,7 @@ ult_array = ult.values                    # Get numpy array (shape: 1,1,n_origin
 **Critical Points:**
 - Supply **cumulative** data; if you have incremental, cumulate first and validate triangles for structural zeros/outliers.
 - **Use Pipeline:** Chains estimators into single object for reproducibility. Steps are named ('dev', 'tail', 'model') for easy access via \`pipe.named_steps.model.ultimate_\`.
-- **Value extraction:** \`triangle.sum()\` returns a scalar (np.float64), NOT a Triangle. Use \`float(triangle.sum())\` directly. Do NOT use \`.sum().values[0,0,0,0]\` which will fail.
+- **Value extraction:** \`triangle.sum()\` may return a Triangle (not scalar) when multiple indices/columns exist. Use \`triangle.sum().sum()\` for total scalar, \`triangle.to_frame()\` for origin-level DataFrame, or \`triangle.values\` for raw numpy array.
 - Apply any calendar‑year adjustments (e.g., on‑leveling, mix shifts) **before** fitting if they materially affect link ratios (parallelogram on‑level technique for premium/exposure adjustment is documented in CAS *Basic Ratemaking*).
 - **Tail options:** Use \`TailConstant(tail=1.05)\` for fixed tail factor, \`TailCurve\` for fitted curves. TailConstant supports \`decay\` parameter for exponential decay over projection periods.
 - Choose averaging (volume vs. simple) consistently across ages; consider excluding erratic early/late ages and select a defensible tail.

@@ -97,7 +97,7 @@ export const credibilityBuhlmannCard: CapabilityCard = {
 	importance: 5,
 	content: `**Capability Card: Bühlmann Credibility v1.0**
 
-**Method guardrails:** Compute **μ** (collective mean), **EPV** (process variance), **VHM** (variance of hypothetical means), **K = EPV/VHM**, then per risk \`Z_i = n_i / (n_i + K)\` (or \`m_i\` exposures in Bühlmann–Straub). Estimate with nonparametric moments; data must be reasonably homogeneous/stationary. :contentReference[oaicite:3]{index=3}
+**Method guardrails:** Compute **μ** (collective mean), **EPV** (process variance), **VHM** (variance of hypothetical means), **K = EPV/VHM**, then per risk \`Z_i = n_i / (n_i + K)\` (or \`m_i\` exposures in Bühlmann–Straub). Estimate with nonparametric moments; data must be reasonably homogeneous/stationary.
 
 **Required Steps:**
 1) **Define cells/risks** and the per‑period observations (and exposures when unequal).
@@ -136,7 +136,7 @@ print(f"Final estimates: {result.estimate_by_risk}")
 
 **Common pitfalls:**
 - Using wildly heterogeneous risks in a single pool (inflates EPV, deflates VHM, distorts K).
-- Forgetting that the **complement is the collective mean μ** in Bühlmann; document how μ is formed. :contentReference[oaicite:4]{index=4}`,
+- Forgetting that the **complement is the collective mean μ** in Bühlmann; document how μ is formed.`,
 	sources: ["Werner & Modlin, *Basic Ratemaking* — Chapter 12 (CAS)"],
 	safetyTags: ["actuarial", "credibility"],
 }
@@ -152,7 +152,7 @@ export const credibilityBayesianCard: CapabilityCard = {
 	importance: 5,
 	content: `**Capability Card: Bayesian Credibility v1.0**
 
-**Method guardrails:** Use a defensible conjugate prior and show the **posterior mean as a credibility blend** of the sample statistic and prior mean. Always disclose prior hyperparameters and their interpretation (e.g., 'prior β acts like prior exposure'). :contentReference[oaicite:5]{index=5}
+**Method guardrails:** Use a defensible conjugate prior and show the **posterior mean as a credibility blend** of the sample statistic and prior mean. Always disclose prior hyperparameters and their interpretation (e.g., 'prior β acts like prior exposure').
 
 **Python module usage:**
 \`\`\`python

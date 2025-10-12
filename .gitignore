@@ -45,3 +45,5 @@ test-results
 
 ## Test harness ##
 tests/ide_results/
+
+temp/*
