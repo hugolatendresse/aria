@@ -5,6 +5,10 @@ node_modules
 tmp
 .vscode-test/
 *.vsix
+**__pycache__/
+.cursor/
+.env
+venv/
 
 .DS_Store
 .idea
@@ -17,6 +21,8 @@ pnpm-lock.yaml
 
 webview-ui/src/**/*.js
 webview-ui/src/**/*.js.map
+
+*.db
 
 # Ignore coverage directories and files
 coverage
@@ -35,3 +41,11 @@ webview-ui/src/services/grpc-client.ts
 
 # E2E Tests
 test-results
+
+## CLI pre-release  ##
+/cli 
+
+## Test harness ##
+tests/ide_results/
+
+temp/*

@@ -1,0 +1,28 @@
+
+activate the venv
+
+mkdir rag
+cd rag
+pip install 'mcp[cli]' langchain langchain-community langchain-ollama chromadb sentence-transformers sqlite-vss  langchain-core langchain-text-splitters langgraph 
+ollama pull nomic-embed-text:latest
+ollama pull qwen2.5
+
+To edit cline_mcp_settings, can launch Aria with F5, click on MCP settings...
+then add this:
+
+{
+  "mcpServers": {
+    "RAG": {
+      "command": "../aria/venv/bin/python3",
+      "args": [
+        "../aria/rag/server.py"
+      ]
+    }
+  }
+}
+
+In the same debug VS code windows (not sure if that matters), run this in the terminal:
+../aria/venv/bin/python3 ../aria/rag/server.py
+
+You can now have Cline answer a prompt like this:
+Using the RAG MCP service, please give me the name of Hugo's dog

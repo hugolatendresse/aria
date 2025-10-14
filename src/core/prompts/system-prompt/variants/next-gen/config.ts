@@ -20,7 +20,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TODO,
-		SystemPromptSection.MCP,
+		// SystemPromptSection.MCP,  // ← REMOVED FOR CHAINLADDER TESTING
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.ACT_VS_PLAN,
 		SystemPromptSection.TASK_PROGRESS,
@@ -41,13 +41,13 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		ClineDefaultTool.LIST_CODE_DEF,
 		ClineDefaultTool.BROWSER,
 		ClineDefaultTool.WEB_FETCH,
-		ClineDefaultTool.MCP_USE,
-		ClineDefaultTool.MCP_ACCESS,
+		// ClineDefaultTool.MCP_USE,  // ← REMOVED FOR CHAINLADDER TESTING
+		// ClineDefaultTool.MCP_ACCESS,  // ← REMOVED FOR CHAINLADDER TESTING
 		ClineDefaultTool.ASK,
 		ClineDefaultTool.ATTEMPT,
 		ClineDefaultTool.NEW_TASK,
 		ClineDefaultTool.PLAN_MODE,
-		ClineDefaultTool.MCP_DOCS,
+		// ClineDefaultTool.MCP_DOCS,  // ← REMOVED FOR CHAINLADDER TESTING
 		ClineDefaultTool.TODO,
 	)
 	.placeholders({
@@ -58,6 +58,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 	.overrideComponent(SystemPromptSection.RULES, {
 		template: rules_template,
 	})
+	// MCP component and template removed for chainladder testing
 	.build()
 
 // Compile-time validation

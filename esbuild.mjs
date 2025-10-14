@@ -96,6 +96,12 @@ const copyWasmFiles = {
 			// Copy tree-sitter.wasm
 			fs.copyFileSync(path.join(sourceDir, "tree-sitter.wasm"), path.join(targetDir, "tree-sitter.wasm"))
 
+			// Copy chainladder cards JSON file
+			const chainladderJsonPath = path.join(__dirname, "chainladder_cards.json")
+			if (fs.existsSync(chainladderJsonPath)) {
+				fs.copyFileSync(chainladderJsonPath, path.join(targetDir, "chainladder_cards.json"))
+			}
+
 			// Copy language-specific WASM files
 			const languageWasmDir = path.join(__dirname, "node_modules", "tree-sitter-wasms", "out")
 			const languages = [
