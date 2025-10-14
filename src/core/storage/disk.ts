@@ -4,6 +4,7 @@ import { execa } from "@packages/execa"
 import { ClineMessage } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { RemoteConfig } from "@shared/remote-config/schema"
+import { GlobalState, Settings } from "@shared/storage/state-keys"
 import { fileExistsAtPath, isDirectory } from "@utils/fs"
 import fs from "fs/promises"
 import os from "os"
@@ -11,7 +12,6 @@ import * as path from "path"
 import { HostProvider } from "@/hosts/host-provider"
 import { McpMarketplaceCatalog } from "@/shared/mcp"
 import { StateManager } from "./StateManager"
-import { GlobalState, Settings } from "./state-keys"
 
 export const GlobalFileNames = {
 	apiConversationHistory: "api_conversation_history.json",
@@ -312,6 +312,18 @@ export async function writeRemoteConfigToCache(organizationId: string, config: R
 		await fs.writeFile(remoteConfigFilePath, JSON.stringify(config))
 	} catch (error) {
 		console.error("Failed to write remote config to cache:", error)
+	}
+}
+
+export async function deleteRemoteConfigFromCache(organizationId: string): Promise<void> {
+	try {
+		const remoteConfigFilePath = path.join(await ensureCacheDirectoryExists(), GlobalFileNames.remoteConfig(organizationId))
+		const fileExists = await fileExistsAtPath(remoteConfigFilePath)
+		if (fileExists) {
+			await fs.unlink(remoteConfigFilePath)
+		}
+	} catch (error) {
+		console.error("Failed to delete remote config from cache:", error)
 	}
 }
 
