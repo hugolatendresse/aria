@@ -7,7 +7,7 @@ export const ultimateFreqSev1Card: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["frequency severity", "freq sev", "claim count", "closed with payment", "CWP"],
+			any: ["frequency severity", "freq sev", "claim count", "closed with payment", "CWP", "ultimate", "develop"],
 		},
 		{ kind: "keyword", any: ["frequency", "severity", "count"], all: ["triangle"] },
 	],

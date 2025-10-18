@@ -5,7 +5,7 @@ export const ultimateFreqSev2Card: CapabilityCard = {
 	version: "1.0.0",
 	title: "Ultimates: Frequency–Severity (Approach 2 – Exposure-Based for Recent AYs)",
 	triggers: [
-		{ kind: "keyword", any: ["frequency severity", "freq-sev", "FS method 2", "approach 2"] },
+		{ kind: "keyword", any: ["frequency severity", "freq-sev", "FS method 2", "approach 2", "ultimate", "develop"] },
 		{ kind: "keyword", any: ["exposure", "on-level", "earned premium"], all: ["frequency"] },
 		{ kind: "keyword", any: ["recent AY", "latest two years", "high leverage", "uncertain LDFs"] },
 	],
