@@ -6,6 +6,7 @@ import { triangleFirstChainladderCard } from "./cards/triangle_first_chainladder
 import { ultimateBornhuetterFergusonCard } from "./cards/ultimate_bornhuetter_ferguson"
 import { ultimateCapeCodCard } from "./cards/ultimate_capecod"
 import { ultimateChainladderCard } from "./cards/ultimate_chainladder"
+import { ultimateFreqSev1Card } from "./cards/ultimate_frequency_severity_1"
 
 export type CapabilityCard = {
 	id: string
@@ -25,6 +26,7 @@ export const cards: CapabilityCard[] = [
 	ultimateBornhuetterFergusonCard,
 	ultimateCapeCodCard,
 	ultimateChainladderCard,
+	ultimateFreqSev1Card,
 	currentLevelPremiumCard,
 	classicalLimitedFluctuationCredibilityCard,
 	credibilityBuhlmannCard,
