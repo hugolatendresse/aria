@@ -7,25 +7,9 @@ export const ultimateCapeCodCard: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: [
-				"cape cod",
-				"capecod",
-				"stanard",
-				"bühlmann",
-				"buhlmann",
-				"expected loss",
-				"ELR",
-				"apriori",
-				"ultimate",
-				"IBNR",
-			],
+			any: ["cape cod", "capecod", "cape-cod", "stanard", "bühlmann", "buhlmann", "stanard-bühlmann", "stanard buhlmann"],
 		},
-		{ kind: "keyword", any: ["ultimate", "IBNR"], all: ["triangle"] },
-		{
-			kind: "regex",
-			pattern: "\\b(apriori|expected\\s*loss\\s*ratio|exposure|premium|trend|decay|groupby)\\b",
-			flags: "i",
-		},
+		{ kind: "regex", pattern: "\\b(cape[\\s-]?cod|stanard|b[üu]hlmann)\\b", flags: "i" },
 	],
 	importance: 5,
 	content: `**Capability Card: Cape Cod v1.0**

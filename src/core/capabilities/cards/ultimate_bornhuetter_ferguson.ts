@@ -7,14 +7,17 @@ export const ultimateBornhuetterFergusonCard: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["bornhuetter", "bf", "bornhuetter-ferguson", "expected loss", "ELR", "apriori", "prior", "ultimate", "IBNR"],
+			any: [
+				"bornhuetter",
+				"bf method",
+				"bornhuetter-ferguson",
+				"bornhuetter ferguson",
+				"born-huetter",
+				"expected loss ratio",
+				"ELR method",
+			],
 		},
-		{ kind: "keyword", any: ["ultimate", "IBNR"], all: ["triangle"] },
-		{
-			kind: "regex",
-			pattern: "\\b(apriori|expected\\s*loss\\s*ratio|exposure|premium|percent\\s*(un)?reported|cdf)\\b",
-			flags: "i",
-		},
+		{ kind: "regex", pattern: "\\b(bornhuetter|bf[\\s-]?method|expected[\\s-]?loss[\\s-]?ratio)\\b", flags: "i" },
 	],
 	importance: 5,
 	content: `**Capability Card: Bornhuetter–Ferguson v1.0**
