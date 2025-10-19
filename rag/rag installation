@@ -13,16 +13,26 @@ then add this:
 {
   "mcpServers": {
     "RAG": {
+<<<<<<< HEAD
       "command": "../aria/venv/bin/python3",
       "args": [
         "../aria/rag/server.py"
+=======
+      "command": "/home/hugo/code/aria/.venv/bin/python3",
+      "args": [
+        "/home/hugo/code/aria/rag/server.py"
+>>>>>>> dev
       ]
     }
   }
 }
 
 In the same debug VS code windows (not sure if that matters), run this in the terminal:
+<<<<<<< HEAD
 ../aria/venv/bin/python3 ../aria/rag/server.py
+=======
+/home/hugo/code/aria/.venv/bin/python3 /home/hugo/code/aria/rag/server.py
+>>>>>>> dev
 
 You can now have Cline answer a prompt like this:
 Using the RAG MCP service, please give me the name of Hugo's dog

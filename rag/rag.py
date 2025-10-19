@@ -19,7 +19,11 @@ from dotenv import load_dotenv
 ############################### Configuration ################################# 
 # - Set to True: Load/update documents in vector database (first run or when adding new docs)
 # - Set to False: Skip document loading and use existing vector database (for testing)
+<<<<<<< HEAD
 REBUILD_VECTOR_DB = True  # Skip rebuilding to test improved prompts and questions
+=======
+REBUILD_VECTOR_DB = False  # Skip rebuilding to test improved prompts and questions
+>>>>>>> dev
 
 EMBEDDING_MODEL = "ollama" # "ollama" or "gemini"
 ###############################################################################
