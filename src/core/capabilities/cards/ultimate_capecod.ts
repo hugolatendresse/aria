@@ -62,37 +62,8 @@ total_ibnr = ibnr.sum().sum()
 - **Exposure goes in \`sample_weight\`**; pass **one value per origin** (on-leveled premium, NOT manually trended).
 - **The \`trend\` parameter is NOT for premium**; it adjusts the apriori estimation by detrending losses to a common basis.
 
-**Tort Reform Example (Critical - shows correct direction):**
-\`\`\`python
-# Example: Tort reform reduced losses by 15% in 2005, 40% in 2006+
-# To adjust old years TO 2010 level (which has full -40% reform):
-tort_factors = {
-    # Years ≤2004: No reform, need to reduce by 40% to match 2010
-    2000: 0.600, 2001: 0.600, 2002: 0.600, 2003: 0.600, 2004: 0.600,
-    # 2005: Partial reform (-15%), bridge to full -40%: 0.85 * 0.706 ≈ 0.600
-    2005: 0.708,
-    # 2006+: Full reform (-40%), already at 2010 level
-    2006: 1.000, 2007: 1.000, 2008: 1.000, 2009: 1.000, 2010: 1.000
-}
-
-# Create tort factor triangle (broadcast factors across development periods)
-import numpy as np
-tort_tri = X.copy()
-tort_tri.values = np.zeros_like(X.values)
-for i, origin in enumerate(X.origin):
-    year = int(str(origin)[:4])
-    tort_tri.values[0, 0, i, :] = tort_factors[year]
-
-# Adjust losses DOWN for old years
-X_adjusted = X * tort_tri
-
-# Run Cape Cod with PREMIUM as sample_weight (not tort factors!)
-pipe.fit(X_adjusted, sample_weight=onlevel_premium.latest_diagonal)
-
-# Adjust results back to original level
-ult_original = pipe.named_steps.model.ultimate_ / tort_tri.latest_diagonal
-\`\`\`
-Remember: Reform that REDUCED new losses means REDUCE old losses to compare.
+**Tort Reform (Triangle Adjustment Approach):**
+When tort reform or claims environment changes require adjustment, apply factors to the triangle before fitting, then adjust results back. Factor direction logic: see **Special Adjustments: Tort Reform** card. Implementation: (1) Create factor triangle with appropriate factors by origin; (2) Adjust input triangle: \`X_adjusted = X * tort_tri\`; (3) Fit Cape Cod with premium as sample_weight; (4) Adjust results back: \`ult_original = model.ultimate_ / tort_tri.latest_diagonal\`. Example: Reform reduced losses 40% starting 2006 → old years get factor 0.60, reformed years get 1.0 (already at current level).
 
 **Understanding apriori outputs:**  
 With \`trend\` ≠ 0, \`apriori_\` is expressed at the latest origin basis, while \`detrended_apriori_\` maps back to each origin’s basis (the detrended vector is what the estimator actually uses).
@@ -108,7 +79,7 @@ With \`trend\` ≠ 0, \`apriori_\` is expressed at the latest origin basis, whil
 - \`trend\` parameter: Annual trend rate (e.g., 0.025 for 2.5% per year) used to adjust apriori estimation, NOT for manually trending premium. Cape Cod detrends losses internally to estimate apriori consistently across origins.
 - \`decay < 1\` gives more weight to nearer origins when estimating apriori; default \`decay=1\` treats all origins equally.
 - If you want Cape Cod logic but a fixed/judgmental ELR, use **BF** instead (apriori chosen externally); Cape Cod's apriori is estimated from data.
-- **Tort reform adjustment (CRITICAL - direction matters):** If tort reform REDUCED losses in recent years (e.g., -40% starting 2006), then to compare old years to new: (1) REDUCE old year losses by multiplying the triangle by factors <1.0 (see full example above for proper factor calculation). (2) Create a tort factor triangle: \`tort_tri = X.copy(); tort_tri.values = X.values * 0; for i, factor in enumerate(factors_by_origin): tort_tri.values[0,0,i,:] = factor; X_adjusted = X * tort_tri\`. (3) Run Cape Cod on adjusted triangle with on-level premium. (4) Adjust results back: \`ultimate_original = ultimate_adjusted / tort_tri.latest_diagonal\`. The logic: reforms that reduced NEW losses require REDUCING OLD losses to match. Do NOT invert the direction.
+- **Tort reform adjustment:** When applying special adjustments, create factor triangle and adjust input losses before fitting (see example above). For factor direction and calculation logic, refer to **Special Adjustments: Tort Reform** card. Always adjust results back after fitting: \`ultimate_original = ultimate_adjusted / tort_tri.latest_diagonal\`.
 
 **Version:** Tested against chainladder 0.8.x/0.9.x APIs (\`fit(..., sample_weight=...)\`, \`ultimate_\`, \`ibnr_\`, \`apriori_\`, \`detrended_apriori_\`).`,
 	sources: [

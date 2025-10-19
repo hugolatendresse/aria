@@ -102,20 +102,9 @@ Frequency is a rate: **claims per unit of exposure**. The exposure measure depen
 
 \`Ultimate[AY] = Projected_Count[AY] × AY_Severity[AY]\`
 
----
-
 ### Handling Special Adjustments (Tort Reform, Claims Changes)
 
-**When told:** "Reform effective date X reduced expected losses by A% in first affected year and B% in subsequent years, compared to pre-reform."
-
-**How to apply:**
-- **Years being projected** (latest N AYs): Already at current level → **DO NOT ADD TO ADJUSTED LIST**
-- **Years before change**: At old level → adjust to bring to current basis (multiply by factor to bring to post-reform level)
-- **Transition year**: Partial effect → adjust proportionally to bring to current basis
-
-**Apply these factors ONLY to:**
-- **Developed ultimate severities** (not the raw triangle)
-- **Historical years being used for selection** (not the years being projected)
+When claims environment changes affect comparability (tort reform, regulatory changes, etc.), apply special factors to adjust developed historical severities. See the **Special Adjustments: Tort Reform** capability card for complete logic, factor direction, and implementation patterns. Key points: (1) Apply factors to developed ultimate severities, not raw triangles; (2) Adjust ONLY historical years used for selection, NOT projection years; (3) Factor direction depends on whether change increased or decreased losses.
 
 ---
 
