@@ -6,8 +6,10 @@ REBUILD_VECTOR_DB = True  # Set to False after first run to test queries
 EMBEDDING_MODEL = "ollama"  # "ollama" or "gemini"
 
 SQLITE_TABLE_NAME = "friedland_two_chapters"
+PDF_ENGLISH_NAME = "Friedland Two Chapter"
 
-PDF_FILENAME = "5_Friedland_stripped_EX_appendices.pdf"
+# PDF_FILENAME = "5_Friedland_stripped_EX_appendices.pdf"
+PDF_FILENAME = "5_Friedland_two_chapters.pdf"
 
 """
 EXISTING TABLES
@@ -129,7 +131,7 @@ if REBUILD_VECTOR_DB:
     pdf_configs = [
         {
             "path": os.path.join(assets_dir, PDF_FILENAME),
-            "name": "Friedland",
+            "name": "PDF_ENGLISH_NAME",
         },
     ]
 
