@@ -57,9 +57,7 @@ Convert paid and closed triangles to incremental, then:
 
 \`Adjusted_Sev = Incremental_Sev × (1 + trend)^(target_year - ay) × tort_reform_factor\`
 
-Tort reform factor direction:
-- If reform **reduced** losses by X% in later years → multiply earlier years by (1 - X)
-- Partial reform year: multiply by ratio (e.g., (1-0.33)/(1-0.107) for transitional year)
+If tort reform or other special adjustments are needed, see the **Special Adjustments: Tort Reform** card for complete logic, factor direction, and implementation patterns.
 
 **6-8. Select and Extend Severities**
 
@@ -96,18 +94,13 @@ For historical: use actual incremental paid values.
    - Must use disposal rate at the **latest observed age** for that AY
    - Each AY may have different latest observed age (diagonal varies)
 
-4. **Tort reform adjustment direction**:
-   - To adjust TO reformed level: multiply by (1 - reduction%)
-   - To adjust FROM reformed level: divide by (1 - reduction%)
-   - Adjust in Step 5 (TO target), back out in Step 9 (FROM target)
-
-5. **Mixing cumulative and incremental**:
+4. **Mixing cumulative and incremental**:
    - Disposal rates: cumulative percentages
    - Projected counts: incremental values
    - Severities: per incremental period
    - Final amounts: sum of incremental products
 
-6. **Triangle construction**: Follow Triangle-First card (use original integer year column as origin)
+5. **Triangle construction**: Follow Triangle-First card (use original integer year column as origin)
 
 ---
 
