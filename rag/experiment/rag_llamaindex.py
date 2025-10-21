@@ -4,6 +4,17 @@
 REBUILD_VECTOR_DB = True  # Set to False after first run to test queries
 
 EMBEDDING_MODEL = "ollama"  # "ollama" or "gemini"
+
+SQLITE_TABLE_NAME = "friedland_two_chapters"
+
+PDF_FILENAME = "5_Friedland_stripped_EX_appendices.pdf"
+
+"""
+EXISTING TABLES
+friedland_splits -> all of friedland
+friedland_two_chapters -> BF and CapeCod chapters only 
+"""
+
 ###############################################################################
 
 import os
@@ -75,7 +86,7 @@ child_splitter = RecursiveCharacterTextSplitter(chunk_size=512)
 # The vector store for the small child chunks
 connection = SQLiteVec.create_connection(db_file=db_path)
 vectorstore = SQLiteVec(
-    table="friedland_splits",
+    table=SQLITE_TABLE_NAME,
     embedding=embedding_function,
     db_file=db_path,
     connection=connection,
@@ -104,7 +115,7 @@ if REBUILD_VECTOR_DB:
     # --- Re-initialize empty stores ---
     # This is necessary after deleting the files
     vectorstore = SQLiteVec(
-        table="friedland_splits",
+        table=SQLITE_TABLE_NAME,
         embedding=embedding_function,
         db_file=db_path,
         connection=connection,
@@ -117,7 +128,7 @@ if REBUILD_VECTOR_DB:
     assets_dir = os.path.join(repo_root, "assets", "actuarial")
     pdf_configs = [
         {
-            "path": os.path.join(assets_dir, "5_Friedland_stripped_EX_appendices.pdf"),
+            "path": os.path.join(assets_dir, PDF_FILENAME),
             "name": "Friedland",
         },
     ]
