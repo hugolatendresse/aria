@@ -33,7 +33,7 @@ from langchain_community.vectorstores import SQLiteVec
 from langchain_ollama import OllamaEmbeddings
 from langchain.chat_models import init_chat_model
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain.storage import LocalFileStore
+from langchain.storage import LocalFileStore, create_kv_docstore
 from langchain.retrievers import ParentDocumentRetriever
 
 from dotenv import load_dotenv
@@ -52,7 +52,7 @@ if not os.environ.get("GOOGLE_API_KEY"):
     #     raise ValueError('no GOOGLE_API_KEY!')
 
 
-llm = init_chat_model("gemini-1.5-flash", model_provider="google_genai")
+llm = init_chat_model("gemini-2.0-flash-exp", model_provider="google_genai")
 
 # Path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -85,25 +85,22 @@ parent_splitter = RecursiveCharacterTextSplitter(chunk_size=2048)
 # These smaller chunks are ideal for embedding and vector search
 child_splitter = RecursiveCharacterTextSplitter(chunk_size=512)
 
-# The vector store for the small child chunks
-connection = SQLiteVec.create_connection(db_file=db_path)
-vectorstore = SQLiteVec(
-    table=SQLITE_TABLE_NAME,
-    embedding=embedding_function,
-    db_file=db_path,
-    connection=connection,
-)
-
 # The file system store for the large parent chunks
-store = LocalFileStore(root_path=docstore_path)
+# Need to wrap LocalFileStore with create_kv_docstore to handle Document objects
+fs_store = LocalFileStore(root_path=docstore_path)
+store = create_kv_docstore(fs_store)
 
-# Initialize the retriever
-retriever = ParentDocumentRetriever(
-    vectorstore=vectorstore,
-    docstore=store,
-    child_splitter=child_splitter,
-    parent_splitter=parent_splitter,
-)
+# Create a thread-safe SQLite connection with sqlite_vec extension
+def create_thread_safe_connection(db_file: str):
+    import sqlite3
+    import sqlite_vec
+    
+    connection = sqlite3.connect(db_file, check_same_thread=False)
+    connection.row_factory = sqlite3.Row
+    connection.enable_load_extension(True)
+    sqlite_vec.load(connection)
+    connection.enable_load_extension(False)
+    return connection
 
 if REBUILD_VECTOR_DB:
     print(f"Rebuilding vector database: {db_path}")
@@ -115,16 +112,25 @@ if REBUILD_VECTOR_DB:
         os.remove(db_path)
 
     # --- Re-initialize empty stores ---
-    # This is necessary after deleting the files
+    # Create a thread-safe connection with sqlite_vec extension
+    connection = create_thread_safe_connection(db_path)
     vectorstore = SQLiteVec(
         table=SQLITE_TABLE_NAME,
         embedding=embedding_function,
         db_file=db_path,
         connection=connection,
     )
-    store = LocalFileStore(root_path=docstore_path)
-    retriever.vectorstore = vectorstore
-    retriever.docstore = store
+    # Recreate the document store wrapper
+    fs_store = LocalFileStore(root_path=docstore_path)
+    store = create_kv_docstore(fs_store)
+    
+    # Initialize the retriever with fresh stores
+    retriever = ParentDocumentRetriever(
+        vectorstore=vectorstore,
+        docstore=store,
+        child_splitter=child_splitter,
+        parent_splitter=parent_splitter,
+    )
 
     # --- Load and Process Documents ---
     assets_dir = os.path.join(repo_root, "assets", "actuarial")
@@ -160,9 +166,25 @@ if REBUILD_VECTOR_DB:
         retriever.add_documents(docs, ids=None)
         
     print("\nVector database rebuild complete.\n")
-
 else:
-    print(f"Skipping vector database rebuild, using existing data from: {db_path}\n")
+    # When not rebuilding, use existing database with thread-safe connection
+    connection = create_thread_safe_connection(db_path)
+    vectorstore = SQLiteVec(
+        table=SQLITE_TABLE_NAME,
+        embedding=embedding_function,
+        db_file=db_path,
+        connection=connection,
+    )
+    
+    # Initialize the retriever with existing stores
+    retriever = ParentDocumentRetriever(
+        vectorstore=vectorstore,
+        docstore=store,
+        child_splitter=child_splitter,
+        parent_splitter=parent_splitter,
+    )
+    
+    print(f"Using existing vector database: {db_path}\n")
 
 # Define prompt for question-answering
 prompt = ChatPromptTemplate.from_template("""
