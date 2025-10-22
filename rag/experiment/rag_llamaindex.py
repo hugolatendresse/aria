@@ -1,7 +1,7 @@
 ############################### Configuration #################################
 # - Set to True: Load/update documents in vector database (first run or when adding new docs)
 # - Set to False: Skip document loading and use existing vector database (for testing)
-REBUILD_VECTOR_DB = True  # Set to False after first run to test queries
+REBUILD_VECTOR_DB = False  # Set to False after first run to test queries
 
 EMBEDDING_MODEL = "ollama"  # "ollama" or "gemini"
 
