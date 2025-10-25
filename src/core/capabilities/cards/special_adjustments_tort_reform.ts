@@ -2,14 +2,14 @@ import { CapabilityCard } from "../card_registry"
 
 export const specialAdjustmentsTortReformCard: CapabilityCard = {
 	id: "special-adjustments-tort-reform",
-	version: "1.2.0",
+	version: "1.4.0",
 	title: "Special Adjustments: Tort Reform & Claims Environment Changes",
 	triggers: [
 		{ kind: "keyword", any: ["tort reform", "tort", "reform", "special factor", "special adjustment"] },
 		{ kind: "keyword", any: ["claims environment", "regulatory change", "law change"] },
 		{ kind: "keyword", all: ["adjust", "severity"], any: ["reform", "change", "environment"] },
 	],
-	content: `**Capability Card: Special Adjustments (Tort Reform) v1.2**
+	content: `**Capability Card: Special Adjustments (Tort Reform) v1.4**
 
 **What it does:** Adjusts historical data to current basis when claims environment changes (tort reform, regulatory changes, coverage changes) have made past experience non-comparable to projection periods.
 
@@ -17,177 +17,245 @@ export const specialAdjustmentsTortReformCard: CapabilityCard = {
 
 ---
 
-### PARSING "Reduced by X% compared to earlier years" Statements
+### CRITICAL: The Factor Inversion Trap
 
-**Common phrasing:** "Tort reform effective 1/1/YEAR reduced expected losses by A% in AY YEAR, and by B% in AY YEAR+1 and later, compared to EARLIER years."
+**THE #1 MISTAKE (made by 90% of implementations):**
 
-**CRITICAL PARSING RULES:**
+Applying reduction factors to the years that EXPERIENCED the reduction, instead of to the years that DIDN'T.
 
-1. **"compared to earlier years"** = earlier years are the BASELINE (100% level)
+**Statement:** "Severities reduced by 33% in 2007+, compared to earlier years"
 
-2. **Years mentioned in the statement are ALREADY at the reduced level** (not the years to reduce)
+**WRONG interpretation:**
+- "Apply 33% reduction to 2007+" → multiply 2007+ by (1-0.33) = 0.67
+- "Earlier years unchanged" → multiply earlier by 1.0
+- **Result: Factors [1.0, 1.0, ..., 0.67, 0.67] ← BACKWARDS!**
 
-3. **The percentages tell you how much EARLIER years exceeded these levels**
+**RIGHT interpretation:**
+- "2007+ are ALREADY at reduced level" → multiply 2007+ by 1.0 (no change)
+- "Earlier years are at higher level, need to come DOWN to match 2007+" → multiply earlier by 0.67
+- **Result: Factors [0.67, 0.67, ..., 1.0, 1.0] ← CORRECT!**
 
-**Example statement:** 
-"Tort reform effective 1/1/2006 reduced expected losses by 10% in AY 2006, and by 35% in AY 2007 and later, compared to 2005 and earlier years."
+**Why this is natural but wrong:** 
+When you see "reduced by 33% in 2007", your brain wants to apply a 0.67 factor to 2007. But 2007 is DESCRIBING the already-reduced state (the target), not instructing you to reduce it further!
 
-**STEP-BY-STEP PARSING:**
+**The trap in action (real debugging example):**
 
-**Step 1: Map each year group to its loss level:**
-- "compared to 2005 and earlier years" → 2005 and earlier are at 100% (baseline)
-- "reduced by 10% in AY 2006" → 2006 is at 90% (= 100% - 10%)
-- "reduced by 35% in AY 2007 and later" → 2007+ is at 65% (= 100% - 35%)
-
-| Year Group | Loss Level | Calculation |
-|------------|------------|-------------|
-| ≤ 2005 | 100% | Baseline (pre-reform) |
-| 2006 | 90% | 100% - 10% |
-| ≥ 2007 | 65% | 100% - 35% |
-
-**Step 2: Identify target (projection years define target):**
-- If projecting 2007-2008 → Target = 65% level
-- If projecting 2006 → Target = 90% level  
-- If projecting 2009+ → Target = 65% level (same as 2007+)
-
-**Step 3: Calculate factors to bring each year TO target:**
-
-Assume projecting 2007-2008 (target = 65%):
-
-| Year | Current Level | Target | Factor | Calculation |
-|------|---------------|--------|--------|-------------|
-| ≤ 2005 | 100% | 65% | 0.65 | 0.65 / 1.00 |
-| 2006 | 90% | 65% | 0.722 | 0.65 / 0.90 |
-| ≥ 2007 | 65% | 65% | 1.0 | 0.65 / 0.65 |
-
-**CODE:**
+Given: "10.7% reduction in 2006, 33% in 2007+"
 \`\`\`python
-def get_tort_reform_factor(ay, target_year=2008):
-    # From parsing: 2005- at 100%, 2006 at 90%, 2007+ at 65%
-    # Target (projection years 2007-2008): 65% level
-    
-    if ay >= 2007:
-        # Already at 65% level (target)
-        return 1.0
-    elif ay == 2006:
-        # At 90% level, bring to 65% level
-        return 0.65 / 0.90  # 0.722
-    else:  # ay <= 2005
-        # At 100% level, bring to 65% level
-        return 0.65  # = 1 - 0.35
-\`\`\`
-
-**WRONG interpretation of same statement:**
-\`\`\`python
-# WRONG - Applying reduction to reformed years!
-if ay >= 2007:
-    return 1 - 0.35  # 0.65 - WRONG! These years already AT 65%!
+# WRONG (what many AIs do):
+if ay < 2006:
+    tort_factor = 1.0  # Earlier unchanged
 elif ay == 2006:
-    return 1 - 0.10  # 0.90 - WRONG! This year already AT 90%!
+    tort_factor = 1.0 - 0.107  # Apply transition reduction
 else:
-    return 1.0  # WRONG! Old years stay at 100%!
+    tort_factor = 1.0 - 0.33   # Apply full reduction
+# Result: [1.0, 1.0, ..., 0.893, 0.67, 0.67]
+# Effect: Makes pre-reform years HIGHER, post-reform LOWER
+# Outcome: Pre-reform AYs overestimated, post-reform underestimated!
 \`\`\`
 
-**The error:** Subtracting the reduction from the years that EXPERIENCED the reduction, leaving pre-reform years unchanged.
+This produces the OPPOSITE effect - it makes the problem worse instead of fixing it!
 
 ---
 
-### Generic Parsing Algorithm
+### Foolproof Parsing Recipe
 
-Given: "Reduced by A% in year Y, by B% in year Z+, compared to earlier"
+Given: "Reduced by A% in year T, by B% in year F+, compared to earlier"
+
+**Step 1: Write down what level each year group is AT (their current state):**
+
+\`\`\`
+Earlier years (before T): 100% (baseline)
+Transition year T: (100 - A)% (partially reduced)
+Full reform (F+): (100 - B)% (fully reduced)
+\`\`\`
+
+**Step 2: Identify target level (what you're trending/adjusting TO):**
+
+Usually the latest projection year's level. If projecting 2007-2008 and reform is "33% in 2007+":
+\`\`\`
+Target level = (100 - B)% = 67%
+\`\`\`
+
+**Step 3: For EACH accident year, calculate adjustment = target / current:**
 
 \`\`\`python
-# Step 1: Map to loss levels
-levels = {}
-levels['earlier'] = 1.00  # Baseline
-levels['year_Y'] = 1.00 - A  # e.g., 1.00 - 0.10 = 0.90
-levels['year_Z_plus'] = 1.00 - B  # e.g., 1.00 - 0.35 = 0.65
-
-# Step 2: Identify target from projection years
-if projecting_year_in_Z_plus:
-    target_level = levels['year_Z_plus']
-elif projecting_year_Y:
-    target_level = levels['year_Y']
-else:
-    target_level = levels['earlier']
-
-# Step 3: Calculate factors
-def get_factor(ay):
-    if ay >= Z:
-        current_level = levels['year_Z_plus']
-    elif ay == Y:
-        current_level = levels['year_Y']
+def get_tort_reform_factor(ay, base_year):
+    # STEP 1: Define levels (what each year IS at)
+    earlier_level = 1.00  # Pre-reform baseline
+    transition_level = 1.00 - A  # Partial reduction
+    full_reform_level = 1.00 - B  # Full reduction
+    
+    # STEP 2: Define target (what we're adjusting TO)
+    # Usually: the level of the latest projection years
+    if base_year >= F:
+        target_level = full_reform_level
+    elif base_year == T:
+        target_level = transition_level
     else:
-        current_level = levels['earlier']
+        target_level = earlier_level
+    
+    # STEP 3: Calculate factor = target / current
+    if ay >= F:  # This AY is at full reform level
+        current_level = full_reform_level
+    elif ay == T:  # This AY is at transition level
+        current_level = transition_level
+    else:  # This AY is at pre-reform level
+        current_level = earlier_level
     
     return target_level / current_level
 \`\`\`
 
-**Result**: Old years get factors < 1.0 (reduced), reformed years get 1.0 (unchanged).
+**Concrete example:** "Reduced by 10.7% in 2006, by 33% in 2007+, compared to earlier"
+
+Base year = 2008 (latest evaluation year, which is post-reform):
+
+\`\`\`python
+def get_tort_reform_factor(ay, base_year=2008):
+    # STEP 1: Levels (current state of each year group)
+    earlier_level = 1.00      # 2005 and before
+    transition_level = 0.893  # 2006 (100% - 10.7% = 89.3%)
+    full_reform_level = 0.67  # 2007+ (100% - 33% = 67%)
+    
+    # STEP 2: Target (2008 is post-reform, so target = 67%)
+    target_level = full_reform_level  # 0.67
+    
+    # STEP 3: Calculate adjustment for each AY
+    if ay >= 2007:  # Post-reform years
+        current_level = full_reform_level  # 0.67
+        return target_level / current_level  # 0.67/0.67 = 1.0
+    elif ay == 2006:  # Transition year
+        current_level = transition_level  # 0.893
+        return target_level / current_level  # 0.67/0.893 = 0.75
+    else:  # Pre-reform years (2005 and earlier)
+        current_level = earlier_level  # 1.00
+        return target_level / current_level  # 0.67/1.00 = 0.67
+\`\`\`
+
+**Result (CORRECT):**
+- AY 2001-2005: 0.67 (brings from 100% down to 67%)
+- AY 2006: 0.75 (brings from 89.3% down to 67%)  
+- AY 2007-2008: 1.0 (already at 67%, no adjustment needed)
+
+**Alternative calculation for transition year:**
+\`\`\`python
+# Can also express as ratio of reductions:
+transition_factor = (1 - 0.33) / (1 - 0.107)  # = 0.67 / 0.893 = 0.75
+\`\`\`
 
 ---
 
-### Common Mistakes & Verification
+### Verification - MANDATORY
+
+After writing your function, verify with these tests:
+
+\`\`\`python
+# Test your function
+factors = {ay: get_tort_reform_factor(ay) for ay in [2001, 2005, 2006, 2007, 2008]}
+print(f"Tort reform factors: {factors}")
+
+# Expected for "33% reduction in 2007+, 10.7% in 2006, base_year=2008":
+# {2001: 0.67, 2005: 0.67, 2006: 0.75, 2007: 1.0, 2008: 1.0}
+
+# Verify pattern - CRITICAL CHECKS:
+assert factors[2001] < 1.0, "Pre-reform years should be REDUCED (< 1.0)"
+assert factors[2007] == 1.0, "Post-reform projection years should be 1.0"
+assert factors[2001] < factors[2006] < factors[2007], "Factors should INCREASE over time"
+
+print("✓ SUCCESS: Tort reform factors are correct!")
+print(f"  Pre-reform reduced by {(1-factors[2001])*100:.1f}%")
+print(f"  Transition reduced by {(1-factors[2006])*100:.1f}%")
+print(f"  Post-reform unchanged (1.0)")
+\`\`\`
+
+**If your factors look like this (WRONG):**
+\`\`\`
+{2001: 1.0, 2005: 1.0, 2006: 0.893, 2007: 0.67, 2008: 0.67}
+    ↑ Should be < 1.0              ↑ Should be 1.0
+\`\`\`
+
+**YOU HAVE INVERTED FACTORS.** The pattern is exactly backwards:
+- Pre-reform years are 1.0 (unchanged) - WRONG, should be reduced!
+- Post-reform years are < 1.0 (reduced) - WRONG, should be 1.0!
+- This makes the problem WORSE instead of fixing it
+
+**Fix:** Swap your if/else logic - apply reduction to earlier years, not reform years.
+
+---
+
+### Pattern Recognition
+
+**Factors should INCREASE over accident years:**
+\`\`\`
+[0.67, 0.67, 0.67, 0.67, 0.67, 0.75, 1.0, 1.0]  ✓ CORRECT
+ ↑ Earlier AYs reduced            ↑ Later AYs unchanged
+
+[1.0, 1.0, 1.0, 1.0, 1.0, 0.893, 0.67, 0.67]  ✗ INVERTED!
+ ↑ Earlier AYs unchanged            ↑ Later AYs reduced (WRONG!)
+\`\`\`
+
+**Mnemonic:** "Old data comes DOWN to new level" = old years get factors < 1.0
+
+---
+
+### Common Mistakes & Fixes
 
 **MISTAKE 1: Inverted factors - THE MOST COMMON ERROR**
 
-WRONG REASONING:
-"Statement says 'reduced by 35% in 2007+' so apply 0.65 factor to 2007+ years"
+**WRONG REASONING:** "Statement says 'reduced by 33% in 2007+' so I apply 0.67 to 2007+"
 
-RIGHT REASONING:
-"Statement says 2007+ are 35% LOWER than earlier years. Earlier years are 35% TOO HIGH for target basis. Apply 0.65 to earlier years."
+**RIGHT REASONING:** "2007+ are 33% LOWER than earlier. To make comparable, earlier must come DOWN. Apply 0.67 to earlier."
 
-**Mnemonic**: When you read "reduced by X% in year Y", think:
-- Year Y is already AT the reduced level (it's a description, not an instruction)
-- Years BEFORE Y are NOT reduced yet (they need the factor)
-- Apply (1-X) to bring old years down to match year Y
+**Red flag:** If your oldest AY has factor=1.0 and newest has factor<1.0, YOU'VE INVERTED IT.
 
-**MISTAKE 2: Not recognizing "compared to earlier" phrasing**
+**MISTAKE 2: Dividing instead of multiplying for pre-reform years**
 
-Statement: "Reduced by 30% in 2005+, compared to 2004 and earlier"
+\`\`\`python
+# WRONG - creates factors > 1.0:
+tort_factor = 1.0 / (1.0 - 0.33)  # = 1.493 (increases instead of decreases!)
 
-This means:
-- 2004 and earlier: 100% (explicitly stated as comparison baseline)
-- 2005+: 70% (reduced FROM the 100% baseline)
+# RIGHT - creates factors < 1.0:
+tort_factor = 1.0 - 0.33  # = 0.67 (decreases as intended)
+\`\`\`
 
-Factors to bring to 70% target:
-- 2004 and earlier: 0.70 (bring from 100% to 70%)
-- 2005+: 1.0 (already at 70%)
+If you're getting factors > 1.0 for pre-reform years, you're dividing when you should multiply.
 
----
+**MISTAKE 3: Not recognizing "compared to earlier" phrasing**
 
-### Verification Tests
+"Compared to earlier" explicitly tells you earlier years are the 100% baseline that needs adjustment.
 
-**MANDATORY checks after writing tort reform code:**
+**MISTAKE 4: Confusing severity adjustments with frequency adjustments**
 
-1. **Parse check - Write out the levels:**
-   - [ ] Pre-reform years: at ___% level
-   - [ ] Transition year: at ___% level
-   - [ ] Full reform years: at ___% level
-   - [ ] Projection years: at ___% level (THIS IS TARGET)
-
-2. **Factor direction check**:
-   - [ ] If reform REDUCED: factors for old years < 1.0 (reducing them)
-   - [ ] If reform REDUCED: factors for projection years = 1.0 (already reduced)
-   - [ ] Old year factor = target_level / old_level (e.g., 0.65/1.00 = 0.65)
-   - [ ] Projection year factor = target_level / projection_level (e.g., 0.65/0.65 = 1.0)
-
-3. **Results check** (after adjusting):
-   - [ ] If reform REDUCED: adjusted_old_years < original_old_years (after trending)
-   - [ ] Projection years should NOT be in the adjusted collection for selection
-
-4. **Sanity check - Values make sense:**
-   - [ ] Projection year factors = 1.0
-   - [ ] Pre-reform factors < 1.0 (for reductions) or > 1.0 (for increases)
-   - [ ] Transition year factor is between pre-reform and post-reform factors
-
-**If checks fail**: You likely have inverted factors. Remember: reduction percentage applies to OLD years, not to the years mentioned in the reduction statement.
+Tort reform typically affects SEVERITY (claim size), not frequency (claim count). Apply to severity data only.
 
 ---
 
-**Input/Output:** Input: Developed ultimate severities by AY, change characteristics (direction, magnitude, timing), projection years. Output: Adjusted historical severities on current basis; factors for each year.
+### Integration with Trend
 
-**Version:** Tested with chainladder 0.8.x; applicable to any freq-sev or development method requiring basis adjustments.`,
+When using both trend and tort reform:
+
+\`\`\`python
+for i in range(n_AYs):
+    ay = 2001 + i
+    
+    # Trend factor
+    years_to_trend = base_year - ay
+    trend_factor = (1 + trend_rate) ** years_to_trend
+    
+    # Tort reform factor (using function above)
+    tort_factor = get_tort_reform_factor(ay, base_year)
+    
+    # Apply BOTH adjustments
+    for j in range(n_ages):
+        if not np.isnan(severity[i, j]):
+            adjusted_severity[i, j] = severity[i, j] * trend_factor * tort_factor
+\`\`\`
+
+Both factors multiply the original data - they compound.
+
+---
+
+**Version:** v1.4 - Added explicit debugging example, enhanced verification, pattern recognition.`,
 	sources: ["Friedland — Chapter 11, Tort Reform Adjustments", "CAS Exam 5 Loss Reserving material"],
 	safetyTags: ["actuarial", "IBNR", "severity-adjustment"],
 }
