@@ -11,7 +11,6 @@ export const ultimateChainladderCard: CapabilityCard = {
 		},
 		{ kind: "regex", pattern: "\\b(chain[\\s-]?ladder|link[\\s-]?ratio|ldf|cdf|mack)\\b", flags: "i" },
 	],
-	importance: 5,
 	content: `**Capability Card: Chain Ladder (Link‑Ratio) v1.0**
 
 **What it does:**

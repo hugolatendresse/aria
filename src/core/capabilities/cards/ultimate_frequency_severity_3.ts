@@ -23,7 +23,6 @@ export const ultimateFreqSev3Card: CapabilityCard = {
 		{ kind: "keyword", any: ["claim count", "closed with payment", "CWP"], all: ["frequency", "severity"] },
 		{ kind: "regex", pattern: "\\b(freq(uency)?[\\s-]sev(erity)?)\\b", flags: "i" },
 	],
-	importance: 5,
 	content: `**Capability Card: Frequency–Severity 3 (Disposal Rate Method) v1.0**
 
 **Key Concept:**  

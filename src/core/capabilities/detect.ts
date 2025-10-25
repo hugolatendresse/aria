@@ -32,17 +32,12 @@ export function detectCards(userTurns: string[], registry: CapabilityCard[]): De
 		}
 
 		if (matched) {
-			let score = card.importance ?? 3
-			score += Math.min(2, signals.length)
-
-			// Boost if mentioned in most recent turn
+			// Score based on recency only
 			const inLastTurn = signals.some((sig) => {
 				const pattern = sig.startsWith("regex:") ? sig.substring(6) : sig.toLowerCase()
 				return lastTurn.includes(pattern)
 			})
-			if (inLastTurn) {
-				score += 3
-			}
+			const score = inLastTurn ? 1 : 0
 
 			hits.push({ card, signals, score })
 		}

@@ -12,7 +12,6 @@ export const triangleFirstChainladderCard: CapabilityCard = {
 		{ kind: "keyword", any: ["actuarial", "claims", "premium", "exposure"], all: ["data"] },
 		{ kind: "regex", pattern: "\\b(development|ultimate|reserve|factor)", flags: "i" },
 	],
-	importance: 5,
 	content: `**Capability Card: Triangle‑First (Chainladder) v1.2**
 
 **Trigger:** Any actuarial task (loss dev/reserving/pricing/triangles/IBNR/BF/Mack/etc.)

@@ -18,7 +18,6 @@ export const classicalLimitedFluctuationCredibilityCard: CapabilityCard = {
 			flags: "i",
 		},
 	],
-	importance: 5,
 	content: `**Capability Card: Classical Credibility (Limited Fluctuation)**
 
 **Core idea.** Assign Z to the observed (subject) experience and (1−Z) to related experience:
@@ -94,7 +93,6 @@ export const credibilityBuhlmannCard: CapabilityCard = {
 		{ kind: "keyword", any: ["Bühlmann", "Buhlmann", "Bühlmann-Straub", "structure parameter", "EPV", "VHM"] },
 		{ kind: "regex", pattern: "\\b(prior|collective mean|hypothetical means)\\b", flags: "i" },
 	],
-	importance: 5,
 	content: `**Capability Card: Bühlmann Credibility v1.0**
 
 **Method guardrails:** Compute **μ** (collective mean), **EPV** (process variance), **VHM** (variance of hypothetical means), **K = EPV/VHM**, then per risk \`Z_i = n_i / (n_i + K)\` (or \`m_i\` exposures in Bühlmann–Straub). Estimate with nonparametric moments; data must be reasonably homogeneous/stationary.
@@ -149,7 +147,6 @@ export const credibilityBayesianCard: CapabilityCard = {
 		{ kind: "keyword", any: ["Bayesian", "Gamma-Poisson", "Beta-Binomial", "Normal-Normal", "posterior", "prior"] },
 		{ kind: "regex", pattern: "\\b(prior mean|posterior mean|conjugate|hyperparameter)\\b", flags: "i" },
 	],
-	importance: 5,
 	content: `**Capability Card: Bayesian Credibility v1.0**
 
 **Method guardrails:** Use a defensible conjugate prior and show the **posterior mean as a credibility blend** of the sample statistic and prior mean. Always disclose prior hyperparameters and their interpretation (e.g., 'prior β acts like prior exposure').

@@ -18,7 +18,6 @@ export type CapabilityCard = {
 	triggers: Array<
 		{ kind: "keyword"; any: string[]; all?: string[]; none?: string[] } | { kind: "regex"; pattern: string; flags?: string }
 	>
-	importance?: number
 	content: string
 	sources?: string[]
 	safetyTags?: string[]
