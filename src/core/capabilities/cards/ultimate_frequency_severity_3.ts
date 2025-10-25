@@ -7,10 +7,21 @@ export const ultimateFreqSev3Card: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["disposal rate", "disposal rates", "closed claim count", "settlement rate"],
+			any: [
+				"frequency severity",
+				"freq sev",
+				"freq-sev",
+				"frequency-severity",
+				"freqsev",
+				"frequency and severity",
+				"disposal rate",
+				"disposal rates",
+				"closed claim count",
+				"settlement rate",
+			],
 		},
-		{ kind: "keyword", any: ["frequency severity", "freq sev"], all: ["disposal"] },
-		{ kind: "regex", pattern: "\\b(disposal[\\s-]rate)\\b", flags: "i" },
+		{ kind: "keyword", any: ["claim count", "closed with payment", "CWP"], all: ["frequency", "severity"] },
+		{ kind: "regex", pattern: "\\b(freq(uency)?[\\s-]sev(erity)?)\\b", flags: "i" },
 	],
 	importance: 5,
 	content: `**Capability Card: Frequency–Severity 3 (Disposal Rate Method) v1.0**
@@ -23,6 +34,18 @@ Projects **incremental closed claim counts** using disposal rates (% of ultimate
 
 ---
 
+### KEY DIFFERENCE from Frequency-Severity Method #2
+
+**FS Method #2**: Adjusts ONLY historical years (excludes projection years from adjusted collection)  
+**FS Method #3**: Adjusts ALL years including projection years
+
+In FS#3:
+- ALL accident years get adjusted in Step 5 (including projection/latest years)
+- ALL accident years are used for severity selection in Step 6
+- Do NOT exclude projection years from the selection pool
+
+---
+
 ### Critical Steps
 
 **1. Build Disposal Rate Triangle**
@@ -30,11 +53,13 @@ Projects **incremental closed claim counts** using disposal rates (% of ultimate
 \`Disposal_Rate[AY, age] = Cumulative_Closed_Count[AY, age] / Ultimate_Reported_Count[AY]\`
 
 - Develop reported count triangle to ultimate first (use specified method)
-- Disposal rates are cumulative percentages (e.g., 0.24 at 12mo, 0.58 at 24mo, → 1.00 at tail)
+- Disposal rates are cumulative percentages (starting low, increasing to 1.00 at tail)
 
 **2. Select Disposal Rates by Age**
 
 Apply selection method to each age column (e.g., simple average of latest N periods, tail 1.00).
+
+**CRITICAL**: Do NOT use chainladder's Development method on disposal rate triangles. Manually select by extracting array values and averaging.
 
 **3. Project Incremental Closed Claim Counts**
 
@@ -43,35 +68,79 @@ Apply selection method to each age column (e.g., simple average of latest N peri
 \`Base = (Ultimate_Reported - Latest_Closed) / (1 - Selected_DR[latest_age])\`  
 \`Incremental[age] = Base × (Selected_DR[age] - Selected_DR[age-1])\`
 
-For historical: use actual observed incremental counts.
-
-**Why:** Unclosed claims will close according to selected disposal pattern. Base represents total remaining closures; distribute using disposal rate differences.
-
 **4. Calculate Incremental Paid Severity**
-
-Convert paid and closed triangles to incremental, then:
 
 \`Incremental_Severity = Δ Cumulative_Paid / Δ Cumulative_Closed_Count\`
 
-**5. Adjust Severities to Target Year**
+This is the **original unadjusted** severity triangle.
 
-\`Adjusted_Sev = Incremental_Sev × (1 + trend)^(target_year - ay) × tort_reform_factor\`
+**5. Adjust Severities to Target Year - FOR ALL ACCIDENT YEARS**
 
-If tort reform or other special adjustments are needed, see the **Special Adjustments: Tort Reform** card for complete logic, factor direction, and implementation patterns.
+\`\`\`python
+# CRITICAL: Adjust ALL accident years, not just historical
+adjusted_severity = np.copy(original_severity)
 
-**6-8. Select and Extend Severities**
+for i in range(n_accident_years):  # ALL years, including projection years
+    ay = start_year + i
+    trend_factor = (1 + trend) ** (target_year - ay)
+    special_factor = get_special_factor(ay)
+    
+    for j in range(n_ages):
+        if not np.isnan(original_severity[i, j]):
+            adjusted_severity[i, j] = original_severity[i, j] * trend_factor * special_factor
+\`\`\`
 
-- Select adjusted severities for main ages (e.g., latest 2 simple average)
-- Calculate tail severities: \`Σ(Adjusted_Paid[age≥tail]) / Σ(Closed_Count[age≥tail])\`
-- Extend selected severity array through tail ages
+**WRONG - Excluding projection years**:
+\`\`\`python
+# DON'T do this in FS Method #3!
+for i in range(n_accident_years):
+    ay = start_year + i
+    if ay <= 2006:  # WRONG! Don't exclude 2007-2008!
+        adjusted_severity[i, j] = original_severity[i, j] * trend * factor
+\`\`\`
+
+**6. Select Main Age Severities FROM ADJUSTED TRIANGLE - USE ALL YEARS**
+
+\`\`\`python
+# CRITICAL: Use ALL accident years for selection, not just "historical"
+selected_severities = []
+for age_col in range(n_main_ages):
+    age_values = []
+    for ay_idx in range(n_accident_years):  # ALL years
+        if not np.isnan(adjusted_severity[ay_idx, age_col]):
+            age_values.append(adjusted_severity[ay_idx, age_col])
+    
+    # Latest N average from ALL years
+    selected_severities.append(np.mean(age_values[-n:]))
+\`\`\`
+
+**WRONG - Filtering out projection years**:
+\`\`\`python
+# DON'T do this in FS Method #3!
+for ay_idx in range(n_accident_years):
+    ay = start_year + ay_idx
+    if ay <= 2006:  # WRONG! Excludes 2007-2008 from selection
+        age_values.append(adjusted_severity[ay_idx, age_col])
+
+# Result: Selects from 2005-2006 instead of 2007-2008
+# Produces wrong selected severities (e.g., 8757 instead of 11807)
+\`\`\`
+
+**Why FS#3 is different**: In FS#2, projection years don't have developed ultimates to adjust, so you only adjust historical. In FS#3, ALL years have incremental severity data from the triangle, so ALL get adjusted and ALL are used for selection.
+
+**7. Calculate Tail Severities (ADJUSTED) - Aggregate Across Multiple Ages**
+
+Aggregate across ALL AYs (including projection years).
+
+**8. Combine Severities**
+
+\`full_selected_severities = selected_main + [tail_72+, tail_84+, tail_84+, ...]\`
+
+**ALL VALUES ARE ADJUSTED TO TARGET YEAR.**
 
 **9. Project Unadjusted Incremental Paid**
 
-For projection cells:
-- Back out adjustments from selected severity: \`/ ((1+trend)^years) / tort_reform_factor\`
-- Multiply by projected count: \`Unadjusted_Sev × Incremental_Count / 1000\` (if in thousands)
-
-For historical: use actual incremental paid values.
+**CRITICAL TWO-STEP PROCESS**: Create 2D unadjusted severity array with AY-specific de-trending, THEN multiply by counts.
 
 **10. Sum to Ultimate**
 
@@ -85,30 +154,48 @@ For historical: use actual incremental paid values.
    - WRONG: Dividing by reported count triangle (varies by age)
    - RIGHT: Dividing by ultimate reported count (constant for each AY)
 
-2. **Wrong projection formula**:
-   - WRONG: \`Incremental = Disposal_Rate_Diff × (Ultimate - Latest)\`
-   - RIGHT: \`Incremental = (Ultimate - Latest) / (1 - DR[latest_age]) × DR_Diff\`
-   - The division by (1 - DR[latest_age]) is essential
+2. **Using np.zeros_like() in Step 5**:
+   - WRONG: Creates 0.0 for missing data
+   - RIGHT: Use np.copy() or np.full_like(..., np.nan)
 
-3. **Using wrong age for base calculation**:
-   - Must use disposal rate at the **latest observed age** for that AY
-   - Each AY may have different latest observed age (diagonal varies)
+3. **Excluding projection years from adjustment in Step 5**:
+   - WRONG: Only adjusting "historical" years (e.g., 2001-2006)
+   - RIGHT: Adjust ALL accident years including projection years (2001-2008)
+   - FS#3 adjusts all years; FS#2 adjusts only historical
 
-4. **Mixing cumulative and incremental**:
-   - Disposal rates: cumulative percentages
-   - Projected counts: incremental values
-   - Severities: per incremental period
-   - Final amounts: sum of incremental products
+4. **Excluding projection years from selection in Step 6**:
+   - WRONG: \`if ay <= 2006: age_values.append(...)\` excludes 2007-2008
+   - RIGHT: Use ALL accident years for selection
+   - If you exclude projection years, you'll select from wrong AYs (e.g., 2005-2006 instead of 2007-2008)
+   - Results in severely wrong selected severities (~25% off)
 
-5. **Triangle construction**: Follow Triangle-First card (use original integer year column as origin)
+5. **Calculating separate tail severity per age**:
+   - WRONG: One value per tail age [72, 84, 96]
+   - RIGHT: TWO aggregate buckets (ages >= 72, ages >= 84)
+
+6. **SKIPPING intermediate 2D array in Step 9**:
+   - WRONG: Direct multiplication
+   - RIGHT: Create projected_unadjusted_severity first
+
+7. **RE-SELECTING in Step 9**:
+   - WRONG: Averaging original severity values
+   - RIGHT: Divide full_selected_severities by adjustment factors
+
+8. **Using ADJUSTED severities directly**:
+   - WRONG: \`paid = count * full_selected_severities\`
+   - RIGHT: Back out adjustments per AY first
+
+9. **Missing /1000 scale factor**
+
+10. **Triangle construction**: Follow Triangle-First card
 
 ---
 
 **When to use:**  
-Have reliable closed claim count history; claim closure patterns are meaningful; want to explicitly model settlement behavior; combining frequency and severity at granular (incremental) level.
+Have reliable closed claim count history; claim closure patterns meaningful; want to model settlement behavior explicitly.
 
 **When NOT to use:**  
-Closed claim counts unreliable; insufficient closure history; claim settlement patterns erratic.
+Closed claim counts unreliable; insufficient closure history; erratic patterns.
 
 `,
 	sources: ["Friedland — Chapter 11, Frequency–Severity Techniques (Disposal Rate Method)."],

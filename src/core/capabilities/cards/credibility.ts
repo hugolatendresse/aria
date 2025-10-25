@@ -14,7 +14,7 @@ export const classicalLimitedFluctuationCredibilityCard: CapabilityCard = {
 		},
 		{
 			kind: "regex",
-			pattern: "\\b(complement of credibility|ASOP\\s*25|Nf|p-value|confidence|tolerable error|k)\\b",
+			pattern: "\\b(complement of credibility|ASOP\\s*25|Nf|p-value|confidence|tolerable error)\\b",
 			flags: "i",
 		},
 	],
@@ -91,7 +91,7 @@ export const credibilityBuhlmannCard: CapabilityCard = {
 	version: "1.0.0",
 	title: "Credibility — Bühlmann / Bühlmann–Straub",
 	triggers: [
-		{ kind: "keyword", any: ["Bühlmann", "Buhlmann", "Bühlmann-Straub", "structure parameter", "EPV", "VHM", "K"] },
+		{ kind: "keyword", any: ["Bühlmann", "Buhlmann", "Bühlmann-Straub", "structure parameter", "EPV", "VHM"] },
 		{ kind: "regex", pattern: "\\b(prior|collective mean|hypothetical means)\\b", flags: "i" },
 	],
 	importance: 5,

@@ -2,7 +2,7 @@ import { CapabilityCard } from "../card_registry"
 
 export const specialAdjustmentsTortReformCard: CapabilityCard = {
 	id: "special-adjustments-tort-reform",
-	version: "1.1.0",
+	version: "1.2.0",
 	title: "Special Adjustments: Tort Reform & Claims Environment Changes",
 	triggers: [
 		{ kind: "keyword", any: ["tort reform", "tort", "reform", "special factor", "special adjustment"] },
@@ -10,126 +10,181 @@ export const specialAdjustmentsTortReformCard: CapabilityCard = {
 		{ kind: "keyword", all: ["adjust", "severity"], any: ["reform", "change", "environment"] },
 	],
 	importance: 4,
-	content: `**Capability Card: Special Adjustments (Tort Reform) v1.1**
+	content: `**Capability Card: Special Adjustments (Tort Reform) v1.2**
 
 **What it does:** Adjusts historical data to current basis when claims environment changes (tort reform, regulatory changes, coverage changes) have made past experience non-comparable to projection periods.
 
 **When to use:** Structural changes affecting comparability: tort reform, regulatory changes, coverage changes, claims handling changes, benefit level changes.
 
-### Step 0: Identify the Target Basis: The target basis is ALWAYS the projection year level, NOT the transition year.
+---
 
-**Problem Setup Example:**
-"Tort reform effective 1/1/2004 reduced losses by 18% in AY 2004, and by 50% in AY 2005 onward. Project ultimate losses for AY 2009-2010."
+### PARSING "Reduced by X% compared to earlier years" Statements
 
-**Mapping Exercise (DO THIS FIRST):**
+**Common phrasing:** "Tort reform effective 1/1/YEAR reduced expected losses by A% in AY YEAR, and by B% in AY YEAR+1 and later, compared to EARLIER years."
 
-1. **What years are you projecting?** 
-   → 2009-2010
+**CRITICAL PARSING RULES:**
 
-2. **What is the reform level for projection years?**
-   → 50% reduction (they're in the "AY 2005 onward" category)
+1. **"compared to earlier years"** = earlier years are the BASELINE (100% level)
 
-3. **This IS your TARGET BASIS.**
-   → All historical severities must be adjusted to "50% reduction" level
+2. **Years mentioned in the statement are ALREADY at the reduced level** (not the years to reduce)
 
-4. **What was the reform level for each historical period?**
-   - Years ≤2003: 0% reduction (pre-reform, "old basis")
-   - Year 2004: 18% reduction (transition year)
-   - Years 2005+: 50% reduction (full reform, "current basis")
+3. **The percentages tell you how much EARLIER years exceeded these levels**
 
-5. **Calculate the gap to TARGET for each period:**
-   - Years ≤2003: Need to bring DOWN by 50% → Factor = 0.50
-   - Year 2004: Need to bring from 18% to 50% → Factor = 0.50/0.82 = 0.6098
-   - Years 2005+: Already at target → Factor = 1.0
+**Example statement:** 
+"Tort reform effective 1/1/2006 reduced expected losses by 10% in AY 2006, and by 35% in AY 2007 and later, compared to 2005 and earlier years."
 
-**Key Insight:** Projection years define the target. If they're at "50% reduction," that's what you're projecting to, NOT to the transition year's "18% reduction."
+**STEP-BY-STEP PARSING:**
 
-### Adjustment Direction
+**Step 1: Map each year group to its loss level:**
+- "compared to 2005 and earlier years" → 2005 and earlier are at 100% (baseline)
+- "reduced by 10% in AY 2006" → 2006 is at 90% (= 100% - 10%)
+- "reduced by 35% in AY 2007 and later" → 2007+ is at 65% (= 100% - 35%)
 
-**Pattern 1: Change REDUCED expected losses** (*Example:* Tort reform in 2004 reduced expected losses by 50%)
-- Post-reform (2005+): LOWER severity (current basis); Pre-reform (before 2004): HIGHER severity (old basis)
-- Action: Multiply historical by \`(1 - reduction%)\` to bring DOWN; Factor: \`0.50 = 1 - 0.50\` (factor < 1.0)
+| Year Group | Loss Level | Calculation |
+|------------|------------|-------------|
+| ≤ 2005 | 100% | Baseline (pre-reform) |
+| 2006 | 90% | 100% - 10% |
+| ≥ 2007 | 65% | 100% - 35% |
+
+**Step 2: Identify target (projection years define target):**
+- If projecting 2007-2008 → Target = 65% level
+- If projecting 2006 → Target = 90% level  
+- If projecting 2009+ → Target = 65% level (same as 2007+)
+
+**Step 3: Calculate factors to bring each year TO target:**
+
+Assume projecting 2007-2008 (target = 65%):
+
+| Year | Current Level | Target | Factor | Calculation |
+|------|---------------|--------|--------|-------------|
+| ≤ 2005 | 100% | 65% | 0.65 | 0.65 / 1.00 |
+| 2006 | 90% | 65% | 0.722 | 0.65 / 0.90 |
+| ≥ 2007 | 65% | 65% | 1.0 | 0.65 / 0.65 |
+
+**CODE:**
+\`\`\`python
+def get_tort_reform_factor(ay, target_year=2008):
+    # From parsing: 2005- at 100%, 2006 at 90%, 2007+ at 65%
+    # Target (projection years 2007-2008): 65% level
+    
+    if ay >= 2007:
+        # Already at 65% level (target)
+        return 1.0
+    elif ay == 2006:
+        # At 90% level, bring to 65% level
+        return 0.65 / 0.90  # 0.722
+    else:  # ay <= 2005
+        # At 100% level, bring to 65% level
+        return 0.65  # = 1 - 0.35
+\`\`\`
+
+**WRONG interpretation of same statement:**
+\`\`\`python
+# WRONG - Applying reduction to reformed years!
+if ay >= 2007:
+    return 1 - 0.35  # 0.65 - WRONG! These years already AT 65%!
+elif ay == 2006:
+    return 1 - 0.10  # 0.90 - WRONG! This year already AT 90%!
+else:
+    return 1.0  # WRONG! Old years stay at 100%!
+\`\`\`
+
+**The error:** Subtracting the reduction from the years that EXPERIENCED the reduction, leaving pre-reform years unchanged.
+
+---
+
+### Generic Parsing Algorithm
+
+Given: "Reduced by A% in year Y, by B% in year Z+, compared to earlier"
 
 \`\`\`python
-def calculate_reform_factor(year, reform_year=2004, reduction_pct=0.50):
-    if year < reform_year:
-        return 1 - reduction_pct  # Factor < 1.0 to bring DOWN
+# Step 1: Map to loss levels
+levels = {}
+levels['earlier'] = 1.00  # Baseline
+levels['year_Y'] = 1.00 - A  # e.g., 1.00 - 0.10 = 0.90
+levels['year_Z_plus'] = 1.00 - B  # e.g., 1.00 - 0.35 = 0.65
+
+# Step 2: Identify target from projection years
+if projecting_year_in_Z_plus:
+    target_level = levels['year_Z_plus']
+elif projecting_year_Y:
+    target_level = levels['year_Y']
+else:
+    target_level = levels['earlier']
+
+# Step 3: Calculate factors
+def get_factor(ay):
+    if ay >= Z:
+        current_level = levels['year_Z_plus']
+    elif ay == Y:
+        current_level = levels['year_Y']
     else:
-        return 1.0  # Already at current level
+        current_level = levels['earlier']
+    
+    return target_level / current_level
 \`\`\`
 
-**Pattern 2: Change INCREASED expected losses** (*Example:* Benefit increase in 2004 raised expected losses by 22%)
-- Post-change (2004+): HIGHER severity (current basis); Pre-change (before 2004): LOWER severity (old basis)
-- Action: Multiply historical by \`(1 + increase%)\` to bring UP; Factor: \`1.22 = 1 + 0.22\` (factor > 1.0)
+**Result**: Old years get factors < 1.0 (reduced), reformed years get 1.0 (unchanged).
 
-\`\`\`python
-def calculate_benefit_factor(year, change_year=2004, increase_pct=0.22):
-    if year < change_year:
-        return 1 + increase_pct  # Factor > 1.0 to bring UP
-    else:
-        return 1.0  # Already at current level
-\`\`\`
+---
 
-**Pattern 3: Transition Years with Partial Effect** (*Example:* 18% reduction in 2004, full 50% reduction by 2005)
-- Logic: Bring transition year the REST OF THE WAY to full reform level
-- Critical: Full reform level is determined by projection years, not by first year of change
+### Common Mistakes & Verification
 
-\`\`\`python
-def calculate_reform_factor_transition(year, reform_year=2005, transition_year=2004,
-                                      full_reduction=0.50, transition_reduction=0.18):
-    """
-    full_reduction: The reduction level at projection years (target basis)
-    transition_reduction: The reduction level at transition year
-    """
-    if year < transition_year:
-        return 1 - full_reduction  # e.g., 0.50
-    elif year == transition_year:
-        transition_level = 1 - transition_reduction  # 0.82
-        full_reform_level = 1 - full_reduction       # 0.50
-        return full_reform_level / transition_level  # 0.50/0.82 = 0.6098
-    else:
-        return 1.0  # Already at full reform level
-\`\`\`
+**MISTAKE 1: Inverted factors - THE MOST COMMON ERROR**
 
-### Decision Tree for Mapping the Problem
+WRONG REASONING:
+"Statement says 'reduced by 35% in 2007+' so apply 0.65 factor to 2007+ years"
 
-\`\`\`
-Step 1: What years are you projecting?
-   ↓
-Step 2: What reform level applies to THOSE projection years?
-   ↓
-Step 3: THAT level is your TARGET BASIS
-   ↓
-Step 4: For each historical year, calculate:
-   ├─ What reform level applies to this historical year?
-   ├─ What's the gap between historical level and TARGET level?
-   └─ Apply factor to close that gap
+RIGHT REASONING:
+"Statement says 2007+ are 35% LOWER than earlier years. Earlier years are 35% TOO HIGH for target basis. Apply 0.65 to earlier years."
 
-Direction Check:
-├─ Reform REDUCED losses? → Historical TOO HIGH → Factor < 1.0
-└─ Reform INCREASED losses? → Historical TOO LOW → Factor > 1.0
-\`\`\`
+**Mnemonic**: When you read "reduced by X% in year Y", think:
+- Year Y is already AT the reduced level (it's a description, not an instruction)
+- Years BEFORE Y are NOT reduced yet (they need the factor)
+- Apply (1-X) to bring old years down to match year Y
 
-**Critical workflow rules:**
-1. Develop FIRST, adjust AFTER - never adjust raw triangles
-2. Identify TARGET BASIS from projection years - not from transition year
-3. Adjust HISTORICAL years only - projection years already at current basis
-4. Store ONLY adjusted historical - exclude projection years from selection list
-5. De-trend WITHOUT special factors - projection years already at reform level
+**MISTAKE 2: Not recognizing "compared to earlier" phrasing**
 
-### Verification Checklist
+Statement: "Reduced by 30% in 2005+, compared to 2004 and earlier"
 
-**Before coding:**
-- [ ] Identified projection years
-- [ ] Identified what reform level applies to projection years (this is TARGET)
-- [ ] Mapped each historical year's reform level vs TARGET
-- [ ] Determined factor direction (reduce or increase historical data?)
+This means:
+- 2004 and earlier: 100% (explicitly stated as comparison baseline)
+- 2005+: 70% (reduced FROM the 100% baseline)
 
-**After coding:**
-- [ ] Reform reduced losses → adjusted historical < unadjusted (after trending)
-- [ ] Reform increased losses → adjusted historical > unadjusted (after trending)
-- [ ] Projection years get factor = 1.0
-- [ ] Transition year factor between pre-reform and full reform factors
+Factors to bring to 70% target:
+- 2004 and earlier: 0.70 (bring from 100% to 70%)
+- 2005+: 1.0 (already at 70%)
+
+---
+
+### Verification Tests
+
+**MANDATORY checks after writing tort reform code:**
+
+1. **Parse check - Write out the levels:**
+   - [ ] Pre-reform years: at ___% level
+   - [ ] Transition year: at ___% level
+   - [ ] Full reform years: at ___% level
+   - [ ] Projection years: at ___% level (THIS IS TARGET)
+
+2. **Factor direction check**:
+   - [ ] If reform REDUCED: factors for old years < 1.0 (reducing them)
+   - [ ] If reform REDUCED: factors for projection years = 1.0 (already reduced)
+   - [ ] Old year factor = target_level / old_level (e.g., 0.65/1.00 = 0.65)
+   - [ ] Projection year factor = target_level / projection_level (e.g., 0.65/0.65 = 1.0)
+
+3. **Results check** (after adjusting):
+   - [ ] If reform REDUCED: adjusted_old_years < original_old_years (after trending)
+   - [ ] Projection years should NOT be in the adjusted collection for selection
+
+4. **Sanity check - Values make sense:**
+   - [ ] Projection year factors = 1.0
+   - [ ] Pre-reform factors < 1.0 (for reductions) or > 1.0 (for increases)
+   - [ ] Transition year factor is between pre-reform and post-reform factors
+
+**If checks fail**: You likely have inverted factors. Remember: reduction percentage applies to OLD years, not to the years mentioned in the reduction statement.
+
+---
 
 **Input/Output:** Input: Developed ultimate severities by AY, change characteristics (direction, magnitude, timing), projection years. Output: Adjusted historical severities on current basis; factors for each year.
 
