@@ -2,50 +2,144 @@ import { CapabilityCard } from "../card_registry"
 
 export const lossTrendingFrequencySeverityCard: CapabilityCard = {
 	id: "ratemaking-loss-trending-freqsev",
-	version: "1.0.0",
+	version: "1.1.0",
 	title: "Ratemaking: Loss Trending via Frequency-Severity (Two-Step)",
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["frequency trend", "severity trend", "pure premium trend", "frequency severity", "two-step loss trend"],
+			any: [
+				"frequency trend",
+				"severity trend",
+				"pure premium trend",
+				"frequency severity",
+				"two-step loss trend",
+				"loss trend",
+			],
 		},
 		{ kind: "regex", pattern: "\\b(frequency[\\s-]?severity|freq[\\s-]?sev|loss[\\s-]?trend)\\b", flags: "i" },
 	],
-	content: `**Capability Card: Loss Trending (Frequency-Severity) v1.0**
+	content: `**Capability Card: Loss Trending (Frequency-Severity) v1.1**
 
 **What it does:**
 Trends historical ultimate losses to future policy periods by separately analyzing claim frequency and severity components, then applying Two-Step trending to project from historical accident years to future average accident date.
 
+**CRITICAL DATA REQUIREMENTS:**
+
+Loss trending uses **QUARTERLY REGIONAL/STATE LOSS TREND DATA**, with frequency and severity calculated as:
+
+\`\`\`python
+# Load quarterly loss trend data
+qtrly_loss_trend_df = pd.read_csv('qtrly_regional_loss_trend_data.csv')
+
+# Calculate frequency and severity
+qtrly_loss_trend_df['Frequency'] = (
+    qtrly_loss_trend_df['Closed Claim Count'] / 
+    qtrly_loss_trend_df['Earned Exposure']
+)
+
+qtrly_loss_trend_df['Severity'] = (
+    qtrly_loss_trend_df['Paid Losses'] / 
+    qtrly_loss_trend_df['Closed Claim Count']
+)
+
+# These are the series to fit trends to
+frequency_series = qtrly_loss_trend_df['Frequency']
+severity_series = qtrly_loss_trend_df['Severity']
+\`\`\`
+
 **Part 1: Frequency-Severity Analysis**
 
-Decompose loss trend into component drivers:
+**MANDATORY METHODOLOGY - LOGEST Regression (NOT Geometric Means):**
+
+Decompose loss trend into component drivers using exponential regression:
+
 \`\`\`python
 import numpy as np
 
-# From quarterly regional/state data
-df['Frequency'] = df['Closed Claim Count'] / df['Earned Exposure']
-df['Severity'] = df['Paid Losses'] / df['Closed Claim Count']
+def exponential_trend_fit(data_series, n_points):
+    """
+    Fit exponential trend using least squares (Excel LOGEST method).
+    
+    CRITICAL: This is LINEAR REGRESSION on LOG-TRANSFORMED data,
+    NOT geometric mean of period-to-period changes.
+    """
+    if len(data_series) < n_points:
+        raise ValueError(f"Data series has {len(data_series)} points but {n_points} requested")
+    
+    if hasattr(data_series, 'values'):
+        recent_data = data_series[-n_points:].values
+    else:
+        recent_data = data_series[-n_points:]
+    
+    x = np.arange(n_points)  # 0, 1, 2, ..., n-1
+    log_y = np.log(recent_data)
+    
+    # Linear regression on log-transformed data
+    coeffs = np.polyfit(x, log_y, 1)
+    slope = coeffs[0]
+    
+    # Convert back from log space
+    trend_rate = np.exp(slope) - 1
+    
+    return trend_rate
 
-# Fit exponential trends separately (using exponential_trend_fit from premium card)
-freq_trend_qtrly = exponential_trend_fit(df['Frequency'], n_points=8)
-sev_trend_qtrly = exponential_trend_fit(df['Severity'], n_points=8)
+# CORRECT: Fit to frequency/severity SERIES
+frequency_trend_8pt = exponential_trend_fit(frequency_series, n_points=8)
+severity_trend_8pt = exponential_trend_fit(severity_series, n_points=8)
 
-# Convert quarterly to annual
-freq_annual = (1 + freq_trend_qtrly) ** 4 - 1
-sev_annual = (1 + sev_trend_qtrly) ** 4 - 1
+# WRONG APPROACH - DO NOT USE:
+# freq_changes = frequency_series.pct_change().dropna()
+# freq_trend = ((1 + freq_changes).prod() ** (1/len(freq_changes))) - 1
+# This geometric mean of changes gives DIFFERENT results than LOGEST!
+
+# Convert quarterly trends to annual
+frequency_annual_8pt = (1 + frequency_trend_8pt) ** 4 - 1
+severity_annual_8pt = (1 + severity_trend_8pt) ** 4 - 1
 
 # Combine multiplicatively (pure premium = frequency × severity)
-combined_loss_trend = (1 + freq_annual) * (1 + sev_annual) - 1
+combined_loss_trend_current = (1 + frequency_annual_8pt) * (1 + severity_annual_8pt) - 1
+\`\`\`
+
+**Different Trend Rates for Current vs Projected:**
+
+CRITICAL: Use DIFFERENT n_points for current (8-point) vs projected (4-point):
+
+\`\`\`python
+# CURRENT loss trend (8-point for historical/stable)
+frequency_trend_8pt = exponential_trend_fit(frequency_series, n_points=8)
+severity_trend_8pt = exponential_trend_fit(severity_series, n_points=8)
+
+frequency_annual_8pt = (1 + frequency_trend_8pt) ** 4 - 1
+severity_annual_8pt = (1 + severity_trend_8pt) ** 4 - 1
+
+step_6_current_loss_trend = (1 + frequency_annual_8pt) * (1 + severity_annual_8pt) - 1
+
+# PROJECTED loss trend (4-point for recent/responsive)
+frequency_trend_4pt = exponential_trend_fit(frequency_series, n_points=4)
+severity_trend_4pt = exponential_trend_fit(severity_series, n_points=4)
+
+frequency_annual_4pt = (1 + frequency_trend_4pt) ** 4 - 1
+severity_annual_4pt = (1 + severity_trend_4pt) ** 4 - 1
+
+step_7_projected_loss_trend = (1 + frequency_annual_4pt) * (1 + severity_annual_4pt) - 1
+
+# These will be DIFFERENT values!
+# Example: current = -0.1%, projected = 1.9%
 \`\`\`
 
 **Selection Strategy:**
-- **8-point for current/historical**: Stable estimate of recent experience
-- **4-point for prospective**: More responsive to changing patterns
-- If fit to QUARTERLY data, compound to annual if needed
+
+- **8-point for current/historical**: Stable estimate of recent experience (last 8 quarters = 2 years)
+- **4-point for prospective**: More responsive to changing patterns (last 4 quarters = 1 year)
+- Always fit to QUARTERLY data, then compound to annual
+- Do NOT use the same trend rate for both current and projected
 
 **Part 2: Two-Step Trending for Losses**
 
-Apply trend from historical accident year midpoints to future:
+MANDATORY when "Two-Step trending" is specified. Do NOT use simple trending.
+
+Apply trend from historical accident year midpoints to future, using DIFFERENT rates for current vs projected:
+
 \`\`\`python
 from datetime import datetime
 from ratemaking.trending import future_average_accident_date
@@ -67,46 +161,97 @@ future_avg_accident = future_average_accident_date(
 )
 # Returns: datetime.date(2027, 10, 1)
 
-# Calculate trend period in years
+# Calculate projected period (same for all accident years)
 def calculate_trend_period_years(from_date, to_date):
     delta_days = (to_date - from_date).days
     return delta_days / 365.25
 
-# For each accident year
+projected_loss_trend_period = calculate_trend_period_years(current_ay_date, future_avg_accident)
+
+# Build trend factors array
+loss_trend_factors = []
+
 for ay in accident_years:
     ay_midpoint = datetime(ay, 7, 1).date()
     
-    # Component 1: Current period (AY midpoint to latest AY midpoint)
+    # Component A: Current period (AY midpoint to latest AY midpoint)
+    # Uses CURRENT loss trend (8-point)
     current_period = calculate_trend_period_years(ay_midpoint, current_ay_date)
-    current_factor = (1 + current_loss_trend) ** current_period
+    current_loss_trend_factor = (1 + step_6_current_loss_trend) ** current_period
     
-    # Component 2: Projected period (latest AY midpoint to future)
-    projected_period = calculate_trend_period_years(current_ay_date, future_avg_accident)
-    projected_factor = (1 + projected_loss_trend) ** projected_period
+    # Component B: Projected period (latest AY midpoint to future)
+    # Uses PROJECTED loss trend (4-point)
+    projected_loss_trend_factor = (1 + step_7_projected_loss_trend) ** projected_loss_trend_period
     
-    # Total trend factor
-    total_loss_trend_factor = current_factor * projected_factor
+    # Total trend factor (VARIES BY ACCIDENT YEAR)
+    total_loss_trend_factor = current_loss_trend_factor * projected_loss_trend_factor
+    loss_trend_factors.append(total_loss_trend_factor)
+
+total_loss_trend_factors = np.array(loss_trend_factors)
 
 # Apply to ultimate losses
-projected_ultimate_losses = ultimate_losses * total_loss_trend_factors
+ultimate_losses_2021_2025 = ultimate_losses[ay_start_idx:]
+projected_ultimate_losses = ultimate_losses_2021_2025 * total_loss_trend_factors
+\`\`\`
+
+**WRONG APPROACH - Do NOT use simple trending:**
+
+\`\`\`python
+# WRONG: Do not use a single trend rate and fixed period
+loss_trend_factor = (1 + loss_trend_projected) ** 2.5
+trended_losses = ultimate_losses * loss_trend_factor
+
+# This ignores:
+# 1. Different trend rates for current vs projected
+# 2. Varying trend factors by accident year
+# 3. Proper Two-Step methodology
 \`\`\`
 
 **Frequency Definition:**
+
 - Claims per unit exposure: \`Claim Count / Earned Exposure\`
+- Use consistent exposure base (earned exposures)
 
 **Severity Definition:**
+
 - Average cost per claim: \`Paid Losses / Closed Claim Count\`
-- Use closed or reported count depending on what is available or based on the user's preference
+- Use closed or reported count depending on availability or user preference
+- Must match numerator (paid with closed, incurred with reported)
 
 **When to use:**
+
 - Frequency and severity have different trend patterns
 - Need component-level analysis for pricing decisions
+- Werner-Modlin and similar methods that separate frequency/severity
 
 **Critical Points:**
-- Multiplicative combination: \`(1+f)×(1+s)-1\`, not additive
-- Two-step: Current brings AYs to common point; projected goes to future
-- Midpoint convention: July 1 for calendar/accident years
-- \`future_average_accident_date\` needs policy term; written date doesn't`,
+
+- **METHODOLOGY**: Use LOGEST exponential regression (np.polyfit on log data), NOT geometric mean of changes
+- **DATA**: Fit to frequency/severity SERIES, not to period-to-period changes
+- **ANNUALIZATION**: Quarterly to annual = \`(1+q)^4-1\`, NOT \`q*4\`
+- **COMBINATION**: Multiplicative combination: \`(1+f)×(1+s)-1\`, NOT additive \`f+s\`
+- **TWO RATES**: Current (8-point) and Projected (4-point) use DIFFERENT trend rates
+- **TWO-STEP STRUCTURE**: 
+  - Component A (current): Uses 8-point trend, varies by AY
+  - Component B (projected): Uses 4-point trend, same for all AYs
+  - Total factor varies by accident year
+- **DATE FUNCTIONS**: \`future_average_accident_date\` needs policy term; written date doesn't
+- **MIDPOINT CONVENTION**: July 1 for calendar/accident years
+- Always use 365.25 for year conversion (accounts for leap years)
+- **ULAE FACTOR**: Applied after trending, as multiplier on loss ratio
+
+**Common Mistakes to Avoid:**
+
+1. Using geometric mean of period-to-period changes instead of LOGEST regression
+2. Fitting trend to changes (pct_change()) instead of to the actual series
+3. Using the same trend rate for both current and projected (must use 8-point and 4-point separately)
+4. Using simple trending (trend^years) instead of Two-Step when specified
+5. Not compounding quarterly trends to annual: must use (1+q)^4-1
+6. Adding frequency and severity trends instead of multiplying: (1+f)×(1+s)-1
+7. Using fixed trend factor for all accident years (Two-Step produces different factors per AY)
+8. Not properly annualizing quarterly trends before combining
+9. Using \`future_average_written_date\` instead of \`future_average_accident_date\` for losses
+10. Applying trends before calculating ultimate losses (develop first, then trend)`,
 	sources: ["Werner & Modlin - Basic Ratemaking", "ratemaking package - trending module"],
 	safetyTags: ["actuarial", "ratemaking", "loss", "trending"],
 }

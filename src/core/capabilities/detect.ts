@@ -1,6 +1,6 @@
 import type { CapabilityCard } from "./card_registry"
 
-const MAX_CARDS = 5
+const MAX_CARDS = 10
 
 export type Detection = { card: CapabilityCard; signals: string[]; score: number }
 

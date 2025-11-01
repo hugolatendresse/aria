@@ -5,12 +5,12 @@ import { CapabilityCard } from "../card_registry"
  */
 export const classicalLimitedFluctuationCredibilityCard: CapabilityCard = {
 	id: "credibility-classical-limited-fluctuation",
-	version: "1.0.0",
+	version: "1.1.0",
 	title: "Classical Credibility (Limited Fluctuation)",
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["limited fluctuation", "classical credibility", "square root rule"],
+			any: ["limited fluctuation", "classical credibility", "square root rule", "credibility"],
 		},
 		{
 			kind: "regex",
@@ -20,65 +20,166 @@ export const classicalLimitedFluctuationCredibilityCard: CapabilityCard = {
 	],
 	content: `**Capability Card: Classical Credibility (Limited Fluctuation)**
 
-**Core idea.** Assign Z to the observed (subject) experience and (1−Z) to related experience:
-\`Estimate = Z × Observed + (1 − Z) × Related\`.
+**Formula:** \`Estimate = Z × Observed + (1 − Z) × Related\`
 
-**Required Steps:**
-1. **Specify confidence and precision.** Select confidence \(p\) and tolerable relative error \(k\). Obtain \(z = z_{(p+1)/2}\) from the Standard Normal.
-2. **Full-credibility standard.**
-   - **Claim count** (Poisson, homogeneous exposures, constant severity): 
-     \\(N_f = (z/k)^2\\).
-   - **Pure premium with variable severity**: adjust for severity variation using the severity coefficient of variation (CV):
-     \\(N_f = (z/k)^2\\,\\big(1 + \\text{CV}_S^2\\big)\\).
-   - **Full-credibility exposures**: \\(\\text{Exposures}_f = N_f / \\text{expected frequency}\\).
-3. **Credibility assignment (square–root rule).** For observed claims/exposure‑weighted counts \(N\):  
-   \\[
-   Z = \\min\\Big(1, \\sqrt{N / N_f}\\Big).
-   \\]
-   Cap Z in [0,1].
-4. **Select the complement of credibility** (the “related” component).
-   - Must be explainable, adjustably similar to subject experience (jurisdiction, peril, class mix, trend).
-   - Examples: all‑territory/industry mean, GLM indicated by broader data, prior rate level, larger geographic group, or multi‑year aggregate.
-5. **Blend.** Report: (i) \(p,k,z,N_f,N,Z\); (ii) complement definition & adjustments; (iii) final estimate.
+**Credibility Factor:** \\(Z = \\min\\big(1, \\sqrt{N / N_f}\\big)\\)
 
-**Implementation notes:**
-- Make all assumptions explicit: homogeneity, Poisson frequency, (optionally) constant severity. If constant severity is rejected, use the severity‑adjusted \(N_f\).
-- If the problem supplies a credibility table (e.g., 90%/±5%), respect it.
-- Do not allow negative Z or Z > 1; apply capping.
+where:
+- \`N\` = observed number of claims  
+- \`N_f\` = full credibility standard (claims needed for full credibility)
+- Cap Z at 1.0 (never > 1.0)
 
-**Common pitfalls & checks:**
-- Using exposures directly as \(N\) without translating via expected frequency.
-- Ignoring severity variation when blending pure premiums.
-- Selecting complements that are not comparable or not adjusted for mix/trend. 
+---
 
-**Python module usage:**
+## Implementation - Two Scenarios
+
+### SCENARIO A: Problem Provides N_f Directly
+
+**When problem states:** "Total claims: 700, Claims for full credibility: 1082"
+
 \`\`\`python
-# Install: pip install ratemaking==0.3.0
+import numpy as np
+
+total_claims = 700
+claims_for_full_credibility = 1082
+
+# Calculate Z directly - DO NOT call credibility functions
+z = np.sqrt(total_claims / claims_for_full_credibility)
+z = min(z, 1.0)  # Cap at 1.0
+
+# Apply blend
+credibility_weighted_estimate = z * observed_value + (1 - z) * complement_value
+\`\`\`
+
+### SCENARIO B: Problem Provides p (Confidence) and k (Error)
+
+**SCENARIO B1: Frequency-Only (Constant Severity)**
+
+**When problem states:** "90% confidence, ±5% tolerable error" for claim counts/frequency
+
+\`\`\`python
 from ratemaking.credibility import (
     classical_full_credibility_frequency,
-    classical_full_credibility_pure_premium, 
     classical_partial_credibility
 )
 
-# Calculate full credibility standard
-n_full = classical_full_credibility_frequency(p=0.95, k=0.05)
+# Step 1: Calculate N_f for frequency-only
+n_full = classical_full_credibility_frequency(p=0.90, k=0.05)
+# p = confidence level (MUST be > 0.5, like 0.80, 0.90, 0.95)
+# k = tolerable relative error (e.g., 0.05 for ±5%)
 
-# For pure premium with severity variation
-# n_full = classical_full_credibility_pure_premium(cv_sev=0.3, p=0.95, k=0.05)
+# Step 2: Calculate Z
+total_claims = 700
+z = classical_partial_credibility(n=total_claims, n_full=n_full)
+# Use parameter name 'n', not 'observed_claims'
 
-# Calculate credibility factor  
-z = classical_partial_credibility(n=observed_claims, n_full=n_full)
-
-# Apply credibility blend
-estimate = z * observed_rate + (1 - z) * complement_rate
+# Step 3: Apply blend
+credibility_weighted_estimate = z * observed_value + (1 - z) * complement_value
 \`\`\`
 
-**Implementation approach:** Write complete Python scripts using these functions rather than manual calculations.
+**SCENARIO B2: Pure Premium with Severity Variation**
 
-**Output template (embed in solution):**
-- Inputs: \(p, k, z, N, N_f\), complement description
-- Z: \`min(1, sqrt(N/Nf))\` 
-- Estimate: \`Z*Observed + (1-Z)*Related\``,
+**When problem states:** "90% confidence, ±5% tolerable error, severity CV = 0.30"
+
+\`\`\`python
+from ratemaking.credibility import (
+    classical_full_credibility_pure_premium,
+    classical_partial_credibility
+)
+
+# Step 1: Calculate N_f adjusted for severity variation
+severity_cv = 0.30  # Coefficient of variation of severity
+n_full = classical_full_credibility_pure_premium(
+    cv_sev=severity_cv,
+    p=0.90,
+    k=0.05
+)
+# Formula: N_f = (z/k)^2 * (1 + CV_S^2)
+# Adjusts for variable severity
+
+# Step 2: Calculate Z
+total_claims = 700
+z = classical_partial_credibility(n=total_claims, n_full=n_full)
+
+# Step 3: Apply blend to pure premium
+credibility_weighted_pure_premium = z * observed_pp + (1 - z) * complement_pp
+\`\`\`
+
+---
+
+## Parameter Requirements
+
+**classical_full_credibility_frequency(p, k):**
+- Use for: Frequency/claim count credibility (constant severity assumption)
+- \`p\`: Confidence - MUST be in (0.5, 0.999999)
+  - CORRECT: 0.90, 0.95
+  - WRONG: 0.05, 0.10, 0.50
+- \`k\`: Tolerable error (e.g., 0.05)
+- Returns: N_f for frequency
+
+**classical_full_credibility_pure_premium(cv_sev, p, k):**
+- Use for: Pure premium credibility (variable severity)
+- \`cv_sev\`: Coefficient of variation of severity (e.g., 0.30)
+- \`p\`: Confidence - MUST be in (0.5, 0.999999)
+- \`k\`: Tolerable error
+- Returns: N_f adjusted for severity variation
+- Formula: \\(N_f = (z/k)^2 \\times (1 + \\text{CV}_S^2)\\)
+
+**classical_partial_credibility(n, n_full):**
+- \`n\`: Observed claims (use 'n', not 'observed_claims')
+- \`n_full\`: Full credibility standard from above
+- Returns: Z between 0 and 1
+
+---
+
+## Common Errors
+
+**ERROR 1: Using functions when N_f is provided**
+\`\`\`python
+# GIVEN: "Claims for full credibility: 1082"
+# WRONG - N_f is already provided!
+n_full = classical_full_credibility_frequency(p=0.90, k=0.05)
+
+# CORRECT - Use it directly
+z = np.sqrt(700 / 1082)
+\`\`\`
+
+**ERROR 2: Using p < 0.5**
+\`\`\`python
+# WRONG - p=0.05 means 5% confidence (fails validation)
+n_full = classical_full_credibility_frequency(p=0.05, k=0.05)
+
+# CORRECT - p=0.90 means 90% confidence
+n_full = classical_full_credibility_frequency(p=0.90, k=0.05)
+\`\`\`
+
+**ERROR 3: Wrong parameter name**
+\`\`\`python
+# WRONG
+z = classical_partial_credibility(observed_claims=700, n_full=1082)
+
+# CORRECT - parameter is 'n'
+z = classical_partial_credibility(n=700, n_full=1082)
+\`\`\`
+
+---
+
+## Decision Tree
+
+\`\`\`
+Is "claims for full credibility" (N_f) provided?
+  ├─ YES → Use np.sqrt(n / nf) directly
+  └─ NO → Is confidence (p) and error (k) provided?
+       ├─ YES → Choose based on what's being blended:
+       │        ├─ Frequency/claim counts → classical_full_credibility_frequency(p, k)
+       │        └─ Pure premium (freq × sev) → classical_full_credibility_pure_premium(cv_sev, p, k)
+       │        Then: classical_partial_credibility(n, n_full)
+       └─ NO → Ask for clarification or assume p=0.90, k=0.05
+\`\`\`
+
+**When to use which function:**
+- **Frequency-only**: Use \`classical_full_credibility_frequency\` when blending claim counts or frequencies (assumes constant severity)
+- **Pure premium**: Use \`classical_full_credibility_pure_premium\` when blending pure premiums (frequency × severity, accounts for severity variation)`,
 	sources: [
 		"Werner & Modlin, Basic Ratemaking, Ch. 12: Classical credibility definitions, full-credibility standards, square-root rule, complement guidance (pp. 217–220, 224).",
 	],

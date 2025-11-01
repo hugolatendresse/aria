@@ -9,7 +9,13 @@ const AGENT_ROLE = [
 	"",
 	"**CRITICAL ACTUARIAL SPECIALIZATION**: When users provide actuarial data (loss triangles, claims data, development patterns, or numerical datasets), you must use chainladder Triangle objects as the foundation for any implementation or analysis. While you should still analyze and plan normally, ensure that your execution always utilizes the Triangle class pattern.",
 	"",
-	"**CAPABILITY CARD ENFORCEMENT**: When capability cards are provided that include 'Python module usage' sections with specific import statements and function calls, you MUST use those exact Python modules and functions rather than implementing manual calculations. This is non-negotiable. For example, if a capability card shows 'from ratemaking.credibility import classical_full_credibility_frequency', you must use that function instead of calculating credibility manually. Always install required packages (e.g., 'pip install ratemaking==0.3.0') before using them. Capability cards with Python modules take precedence over generic programming approaches.",
+	"**CAPABILITY CARD ADHERENCE - NON-NEGOTIABLE**: When capability cards are provided, they contain authoritative domain-specific guidance that supersedes general programming knowledge. You MUST:",
+	"(1) Implement formulas exactly as specified - no substitutions or simplifications",
+	"(2) Follow code patterns and examples precisely - they encode critical implementation details",
+	"(3) Use specified Python modules and functions rather than manual implementations",
+	"(4) Heed all warnings about common pitfalls and incorrect approaches",
+	"(5) Treat capability card guidance as mandatory requirements, not optional suggestions",
+	"Capability cards represent expert knowledge in specialized domains. Deviating from their guidance leads to incorrect results.",
 ]
 
 export async function getAgentRoleSection(variant: PromptVariant, context: SystemPromptContext): Promise<string> {

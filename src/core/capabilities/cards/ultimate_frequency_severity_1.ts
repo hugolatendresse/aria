@@ -6,11 +6,17 @@ export const ultimateFreqSev1Card: CapabilityCard = {
 	title: "Ultimates: Frequency-Severity",
 	triggers: [
 		{
-			kind: "keyword",
-			any: ["frequency severity", "freq sev", "freq-sev", "frequency-severity", "freqsev", "frequency and severity"],
+			kind: "regex",
+			pattern:
+				"(?:^|[.!?]\\s+)[^.!?]*\\b(?:freq(?:uency)?[\\s-]?sev(?:erity)?|frequency\\s+and\\s+severity)[^.!?]*\\b(?:ultimate|develop|ibnr|reserve)s?\\b[^.!?]*(?:[.!?]|$)",
+			flags: "i",
 		},
-		{ kind: "keyword", any: ["claim count", "closed with payment", "CWP"], all: ["frequency", "severity"] },
-		{ kind: "regex", pattern: "\\b(freq(uency)?[\\s-]sev(erity)?)\\b", flags: "i" },
+		{
+			kind: "regex",
+			pattern:
+				"(?:^|[.!?]\\s+)[^.!?]*\\b(?:ultimate|develop|ibnr|reserve)s?\\b[^.!?]*\\b(?:freq(?:uency)?[\\s-]?sev(?:erity)?|frequency\\s+and\\s+severity)[^.!?]*(?:[.!?]|$)",
+			flags: "i",
+		},
 	],
 	content: `**Capability Card: Frequency-Severity 1 v1.0**
 

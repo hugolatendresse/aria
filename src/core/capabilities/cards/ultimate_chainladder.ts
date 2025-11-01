@@ -25,6 +25,7 @@ Fits age-to-age link ratios (LDFs), derives CDFs and an optional tail factor, th
 import chainladder as cl
 
 # X: cumulative loss Triangle (paid or reported)
+# CRITICAL: Load ALL available years, even if you only need some for final analysis
 X = loss_tri
 
 # Pipeline approach - chains development, tail, and model together
@@ -37,7 +38,7 @@ pipe = cl.Pipeline(steps=[
 pipe.fit(X)
 
 # Access results via named_steps
-ult  = pipe.named_steps.model.ultimate_   # Triangle of ultimates
+ult  = pipe.named_steps.model.ultimate_   # Triangle of ultimates for ALL origins
 ibnr = pipe.named_steps.model.ibnr_       # Triangle of IBNR
 ldf  = pipe.named_steps.model.ldf_        # selected age-to-age factors
 cdf  = pipe.named_steps.model.cdf_        # cumulative-to-ultimate factors
@@ -46,6 +47,12 @@ cdf  = pipe.named_steps.model.cdf_        # cumulative-to-ultimate factors
 total_ult = ult.sum().sum()               # Total across all origins (may need double .sum())
 ult_df = ult.to_frame()                   # Convert to DataFrame
 ult_array = ult.values                    # Get numpy array (shape: 1,1,n_origins,1)
+
+# If you only need specific years (e.g., 2011-2015), filter AFTER fitting:
+target_years = [2011, 2012, 2013, 2014, 2015]
+origin_years = [int(str(origin).split('-')[0]) for origin in X.origin]
+target_indices = [i for i, year in enumerate(origin_years) if year in target_years]
+ultimates_for_target_years = ult_array[0, 0, target_indices, 0]
 \`\`\`
 
 **Averaging methods (Development.average):**
@@ -57,6 +64,9 @@ Additional controls & patterns:
 - **Per-age selections:** Pass a list the same length as the number of age-to-age periods to mix methods by age (e.g., early ages volume-weighted, later ages simple).
 - **Latest-N origins:** \`n_periods=k\` uses only the latest \(k\) origin periods for factor selection (default \`-1\` = all).
 - **Exclusions:** Use \`drop\` (cell indices), \`drop_high\` / \`drop_low\` (booleans or counts by age), \`drop_valuation\` (exclude valuation diagonals), and \`drop_above\` / \`drop_below\` (threshold filters) to omit outlier link ratios before averaging.
+  - **SIMPLE BOOLEAN**: \`drop_high=True\` excludes the highest value from EACH age-to-age period uniformly
+  - **LIST OF BOOLEANS**: \`drop_high=[True, True, False, False]\` gives per-age control (must match number of age-to-age transitions)
+  - **DEFAULT**: Use simple boolean unless you need different exclusions at different ages
 - **Grouping:** \`groupby='LOB'\` (or any axis label) fits patterns at an aggregate grain and applies them back to detailed triangles—useful inside a \`Pipeline\`.
 
 Examples:
@@ -68,12 +78,20 @@ ldf_vol = cl.Development(average='volume').fit(tri).ldf_
 ldf_sim = cl.Development(average='simple').fit(tri).ldf_
 ldf_reg = cl.Development(average='regression').fit(tri).ldf_
 
+# MOST COMMON: Simple boolean excludes high/low uniformly across all ages
+ldf_excl = cl.Development(
+    average='simple',
+    drop_high=True,  # Exclude highest value from each age-to-age period
+    drop_low=True    # Exclude lowest value from each age-to-age period
+).fit(tri).ldf_
+
 # Mix methods by age: volume, simple, regression, then repeat
 ldf_mixed = cl.Development(
     average=['volume','simple','regression'] * 3
 ).fit(tri).ldf_
 
-# Use latest 5 origins and trim highs/lows in early ages
+# ADVANCED: Per-age control of exclusions (rarely needed)
+# Only use list format if you need different exclusions at different ages
 ldf_latest5 = cl.Development(
     average='volume',
     n_periods=5,
@@ -92,6 +110,7 @@ ldf_lob = cl.Development(groupby='LOB', average='volume').fit_transform(
 - **Output:** ultimate_, ibnr_, ldf_, cdf_; with Mack: std_ultimate_ / std_reserve_
 
 **Critical Points:**
+- **CRITICAL: DO NOT FILTER TRIANGLE DATA BEFORE CALCULATING LDFs!** When you need ultimates for specific years (e.g., 2011-2015 for your analysis), you MUST load the FULL triangle with ALL available historical years (e.g., 2009-2015) to calculate stable development factors. Filter/extract specific years' ultimates AFTER the model is fit, NOT before. Pre-filtering reduces the number of origins and produces different/less stable LDFs, giving materially wrong results.
 - DO NOT define hardcoded target years - simply use the available years in the triangle data
 - Supply **cumulative** data; if you have incremental, cumulate first and validate triangles for structural zeros/outliers.
 - **Use Pipeline:** Chains estimators into single object for reproducibility. Steps are named ('dev', 'tail', 'model') for easy access via \`pipe.named_steps.model.ultimate_\`.
@@ -131,6 +150,7 @@ pipe.fit(loss_tri)
 
 # Manual extraction to avoid NaN issues
 dev_obj = pipe.named_steps.dev
+cdf_values = dev_obj.cdf_.values[0, 0, 0, :]
 ultimates = []
 
 for i, origin in enumerate(loss_tri.origin):
@@ -141,8 +161,13 @@ for i, origin in enumerate(loss_tri.origin):
     last_non_nan_idx = np.where(~np.isnan(row_data))[0][-1]
     last_value = row_data[last_non_nan_idx]
     
-    # Get CDF at that development period
-    cdf_at_period = dev_obj.cdf_.values[0, 0, 0, last_non_nan_idx]
+    # Handle case where CDF array may be shorter than triangle
+    # (happens when using drop_high/drop_low or other exclusions)
+    if last_non_nan_idx >= len(cdf_values):
+        # Origin is at terminal age, no further development needed
+        cdf_at_period = 1.0
+    else:
+        cdf_at_period = cdf_values[last_non_nan_idx]
     
     # Calculate ultimate = last_observed * CDF
     ultimate = last_value * cdf_at_period
@@ -153,9 +178,18 @@ step_5_ultimate_losses = np.array(ultimates)
 total_ultimate = step_5_ultimate_losses.sum()  # Valid total, no NaN
 \`\`\`
 
+**Why the CDF length check is critical:**
+When using exclusions like \`drop_high\` or \`drop_low\`, chainladder may reduce the number of development factors it produces. For example:
+- Triangle with 5 development ages creates 4 age-to-age transitions
+- The CDF array has 4 elements (one for each transition age)
+- If your triangle has a terminal age (index 4), there's no CDF[4] because no further development is possible
+- Trying to access \`cdf_.values[0, 0, 0, 4]\` raises IndexError
+- Solution: Check if \`last_non_nan_idx >= len(cdf_values)\` and use CDF=1.0 for terminal ages
+
 **When to use workaround:**
 - Always check for NaN values in \`model.ultimate_\` output
 - If any NaN values exist despite valid triangle data, use manual extraction
+- REQUIRED when using \`drop_high\`/\`drop_low\` or other exclusions that reduce CDF array size
 - Particularly important when working with triangles where some origins have reached terminal development
 
 **Version:** Tested with chainladder 0.8.x. API: cl.Pipeline(steps=[...]).fit(X) → pipe.named_steps.model.ultimate_/ibnr_/ldf_/cdf_; use MackChainladder() for std_ultimate_ / std_reserve_ diagnostics.`,
