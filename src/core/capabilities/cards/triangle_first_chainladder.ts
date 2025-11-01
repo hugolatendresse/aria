@@ -103,6 +103,7 @@ tri = load_triangle_from_csv('path/to/file.csv', target_years)
 - ✗ Filter after Triangle() construction
 - ✗ Assume filtering happened elsewhere
 - ✗ Forget dropna() after melt
+- ✗ DO NOT define hardcoded target years - simply use the available years in the triangle data
 
 ---
 

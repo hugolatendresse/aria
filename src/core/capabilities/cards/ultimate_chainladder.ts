@@ -3,18 +3,18 @@ import { CapabilityCard } from "../card_registry"
 export const ultimateChainladderCard: CapabilityCard = {
 	id: "ultimate-chainladder",
 	version: "1.0.0",
-	title: "Ultimates: Chain Ladder (LDF / link‑ratio)",
+	title: "Ultimates: Chain Ladder (LDF / link-ratio)",
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["chain ladder", "chainladder", "chain-ladder", "link ratio", "link-ratio", "ldf", "cdf", "mack", "mack method"],
+			any: ["chain ladder", "chainladder", "chain-ladder", "link ratio", "link-ratio", "ldf", "cdf", "ultimate", "develop"],
 		},
 		{ kind: "regex", pattern: "\\b(chain[\\s-]?ladder|link[\\s-]?ratio|ldf|cdf|mack)\\b", flags: "i" },
 	],
-	content: `**Capability Card: Chain Ladder (Link‑Ratio) v1.0**
+	content: `**Capability Card: Chain Ladder (Link-Ratio) v1.0**
 
 **What it does:**
-Fits age‑to‑age link ratios (LDFs), derives CDFs and an optional tail factor, then projects ultimate losses by origin. Optionally applies Mack's distribution‑free variance model to get standard errors on reserves.
+Fits age-to-age link ratios (LDFs), derives CDFs and an optional tail factor, then projects ultimate losses by origin. Optionally applies Mack's distribution-free variance model to get standard errors on reserves.
 
 **When to use:**
 - You have a cumulative loss Triangle (paid or reported) with credible development history
@@ -48,18 +48,115 @@ ult_df = ult.to_frame()                   # Convert to DataFrame
 ult_array = ult.values                    # Get numpy array (shape: 1,1,n_origins,1)
 \`\`\`
 
+**Averaging methods (Development.average):**
+- \`'volume'\` — **Volume-weighted mean** of link ratios (i.e., weighted regression through the origin with weights proportional to the denominator). This reproduces the traditional dollar-weighted chain ladder factors.
+- \`'simple'\` — **Arithmetic mean** of link ratios across origins (each origin contributes equally regardless of size).
+- \`'regression'\` — **OLS through the origin** \(Y = mX + 0\) using equal weights; the slope \(m\) is the selected factor for that age.
+
+Additional controls & patterns:
+- **Per-age selections:** Pass a list the same length as the number of age-to-age periods to mix methods by age (e.g., early ages volume-weighted, later ages simple).
+- **Latest-N origins:** \`n_periods=k\` uses only the latest \(k\) origin periods for factor selection (default \`-1\` = all).
+- **Exclusions:** Use \`drop\` (cell indices), \`drop_high\` / \`drop_low\` (booleans or counts by age), \`drop_valuation\` (exclude valuation diagonals), and \`drop_above\` / \`drop_below\` (threshold filters) to omit outlier link ratios before averaging.
+- **Grouping:** \`groupby='LOB'\` (or any axis label) fits patterns at an aggregate grain and applies them back to detailed triangles—useful inside a \`Pipeline\`.
+
+Examples:
+\`\`\`python
+tri = cl.load_sample('genins')
+
+# Compare standard selections
+ldf_vol = cl.Development(average='volume').fit(tri).ldf_
+ldf_sim = cl.Development(average='simple').fit(tri).ldf_
+ldf_reg = cl.Development(average='regression').fit(tri).ldf_
+
+# Mix methods by age: volume, simple, regression, then repeat
+ldf_mixed = cl.Development(
+    average=['volume','simple','regression'] * 3
+).fit(tri).ldf_
+
+# Use latest 5 origins and trim highs/lows in early ages
+ldf_latest5 = cl.Development(
+    average='volume',
+    n_periods=5,
+    drop_high=[True, True, False, False, False, False, False, False, False],
+    drop_low=[True, False, False, False, False, False, False, False, False],
+).fit(tri).ldf_
+
+# Group patterns by LOB, then apply back to company-level triangle
+ldf_lob = cl.Development(groupby='LOB', average='volume').fit_transform(
+    cl.load_sample('clrd')['CumPaidLoss']
+).ldf_
+\`\`\`
+
 **Input/Output:**
-- **Input:** X: cl.Triangle (cumulative loss), options for averaging (volume/simple), tail selection, exclusions
+- **Input:** X: cl.Triangle (cumulative loss), options for averaging (volume/simple/regression), tail selection, exclusions
 - **Output:** ultimate_, ibnr_, ldf_, cdf_; with Mack: std_ultimate_ / std_reserve_
 
 **Critical Points:**
+- DO NOT define hardcoded target years - simply use the available years in the triangle data
 - Supply **cumulative** data; if you have incremental, cumulate first and validate triangles for structural zeros/outliers.
 - **Use Pipeline:** Chains estimators into single object for reproducibility. Steps are named ('dev', 'tail', 'model') for easy access via \`pipe.named_steps.model.ultimate_\`.
 - **Value extraction:** \`triangle.sum()\` may return a Triangle (not scalar) when multiple indices/columns exist. Use \`triangle.sum().sum()\` for total scalar, \`triangle.to_frame()\` for origin-level DataFrame, or \`triangle.values\` for raw numpy array.
-- Apply any calendar‑year adjustments (e.g., on‑leveling, mix shifts) **before** fitting if they materially affect link ratios (parallelogram on‑level technique for premium/exposure adjustment is documented in CAS *Basic Ratemaking*).
+- Apply any calendar-year adjustments (e.g., on-leveling, mix shifts) **before** fitting if they materially affect link ratios (parallelogram on-level technique for premium/exposure adjustment is documented in CAS *Basic Ratemaking*).
 - **Tail options:** Use \`TailConstant(tail=1.05)\` for fixed tail factor, \`TailCurve\` for fitted curves. TailConstant supports \`decay\` parameter for exponential decay over projection periods.
-- Choose averaging (volume vs. simple) consistently across ages; consider excluding erratic early/late ages and select a defensible tail.
+- Choose averaging (volume vs. simple vs. regression) consistently across ages; consider excluding erratic early/late ages and select a defensible tail.
 - Keep grain consistent (AY/PY, annual vs. quarterly) and align indexes; watch for sparse latest diagonals.
+
+**KNOWN ISSUE: NaN Ultimates for Fully Developed Origins**
+
+**Problem:** In some cases, \`model.ultimate_\` produces NaN values for origin periods that have reached the terminal development age of the triangle. This occurs because chainladder's \`latest_diagonal\` property incorrectly returns NaN for these mature origins, even though they have valid observed values.
+
+**Symptoms:**
+- Some origin years show NaN in \`pipe.named_steps.model.ultimate_.values\`
+- These are typically the oldest origin periods that have data at or near the final development age
+- The triangle itself shows valid data for these origins at their latest development period
+- Total ultimate losses become NaN due to summing with NaN values
+
+**Diagnosis:**
+\`\`\`python
+# Check if latest_diagonal shows NaN for origins with valid data
+print(loss_tri.latest_diagonal)  # May show NaN for mature origins
+print(loss_tri)                   # Shows valid data at terminal ages
+\`\`\`
+
+**Workaround:** Manually extract ultimate losses by applying CDFs to each origin's last observed value:
+\`\`\`python
+import numpy as np
+
+pipe = cl.Pipeline(steps=[
+    ('dev', cl.Development(average='volume')),
+    ('tail', cl.TailConstant(tail=1.0)),
+    ('model', cl.Chainladder())
+])
+pipe.fit(loss_tri)
+
+# Manual extraction to avoid NaN issues
+dev_obj = pipe.named_steps.dev
+ultimates = []
+
+for i, origin in enumerate(loss_tri.origin):
+    # Get the row of triangle data for this origin
+    row_data = loss_tri.values[0, 0, i, :]
+    
+    # Find last non-NaN value
+    last_non_nan_idx = np.where(~np.isnan(row_data))[0][-1]
+    last_value = row_data[last_non_nan_idx]
+    
+    # Get CDF at that development period
+    cdf_at_period = dev_obj.cdf_.values[0, 0, 0, last_non_nan_idx]
+    
+    # Calculate ultimate = last_observed * CDF
+    ultimate = last_value * cdf_at_period
+    ultimates.append(ultimate)
+
+# Now ultimates is a list with valid values for ALL origins (no NaN)
+step_5_ultimate_losses = np.array(ultimates)
+total_ultimate = step_5_ultimate_losses.sum()  # Valid total, no NaN
+\`\`\`
+
+**When to use workaround:**
+- Always check for NaN values in \`model.ultimate_\` output
+- If any NaN values exist despite valid triangle data, use manual extraction
+- Particularly important when working with triangles where some origins have reached terminal development
 
 **Version:** Tested with chainladder 0.8.x. API: cl.Pipeline(steps=[...]).fit(X) → pipe.named_steps.model.ultimate_/ibnr_/ldf_/cdf_; use MackChainladder() for std_ultimate_ / std_reserve_ diagnostics.`,
 	sources: [
@@ -67,6 +164,8 @@ ult_array = ult.values                    # Get numpy array (shape: 1,1,n_origin
 		"Mack (1993)",
 		"CAS Basic Ratemaking (parallelogram on-level)",
 		"https://chainladder-python.readthedocs.io/en/latest/user_guide/workflow.html",
+		"https://chainladder-python.readthedocs.io/en/latest/library/generated/chainladder.Development.html",
+		"https://chainladder-python.readthedocs.io/en/stable/getting_started/tutorials/development-tutorial.html",
 	],
 	safetyTags: ["actuarial", "IBNR", "triangle-based"],
 }

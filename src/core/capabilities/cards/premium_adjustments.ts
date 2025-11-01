@@ -89,6 +89,7 @@ Projects historical earned premiums to future policy periods using (1) exponenti
 **Part 1: Exponential Trend Fitting**
 
 Fits exponential growth curve using Excel LOGEST equivalent:
+
 \`\`\`python
 import numpy as np
 
@@ -116,6 +117,9 @@ annual_trend = (1 + quarterly_trend) ** 4 - 1  # Compound 4 quarters
 \`\`\`
 
 **Rolling Annual Data for Smoothing:**
+
+CRITICAL: Rolling data is ONLY for trend fitting, NOT for current state values.
+
 \`\`\`python
 # Create rolling 4-quarter sums from quarterly data
 rolling_annual_premium = []
@@ -137,6 +141,7 @@ annual_trend = (1 + trend) ** 4 - 1
 **Part 2: Two-Step Trending**
 
 Separates trending into (A) historical-to-current and (B) current-to-future:
+
 \`\`\`python
 from datetime import datetime
 from ratemaking.trending import future_average_written_date
@@ -157,13 +162,16 @@ projected_period = delta_days / 365.25
 
 # Component A: Current Trend Factor
 # Brings historical earned premium to latest written premium level
-latest_avg_written_crl = rolling_avg[-1]  # From quarterly rolling data
-historical_avg_earned_crl = earned_premium_crl / exposures  # By CY
+# CRITICAL: Use QUARTERLY value (not rolling avg) to represent current state
+avg_written_premium_series = qtrly_df['Average Written Premium at CRL']
+latest_avg_written_crl = avg_written_premium_series.iloc[-1]  # Latest QUARTERLY value
 
+historical_avg_earned_crl = earned_premium_crl / exposures  # By CY
 current_trend_factor = latest_avg_written_crl / historical_avg_earned_crl
 
 # Component B: Projected Trend Factor
 # Projects from current to future average written date
+# Uses the annual trend rate fitted to rolling data in Part 1
 projected_trend_factor = (1 + annual_premium_trend) ** projected_period
 
 # Total Trend Factor
@@ -174,6 +182,7 @@ projected_earned_premium = earned_premium_crl * total_trend_factor
 \`\`\`
 
 **Ratemaking Date Functions:**
+
 \`\`\`python
 from ratemaking.trending import (
     future_average_written_date,
@@ -194,25 +203,30 @@ avg_accident = future_average_accident_date('1/1/2027', rates_in_effect_months=1
 \`\`\`
 
 **Selection Guidance:**
+
 - **n=8** for historical/current: More stable, recent 2 years
 - **n=4** for prospective: Responsive to recent changes
-- **Rolling annual**: Smooths quarterly volatility
+- **Rolling annual**: Smooths quarterly volatility FOR TREND FITTING ONLY
 - Use on-leveled premium data (already adjusted to CRL)
 
 **When to use:**
+
 - Premium trending before rate indications
 - Need to project premiums to future policy period
 - Two-step when separating historical vs prospective patterns
 - Use \`future_average_written_date\` for premium trending (exposure-based)
 
 **Critical Points:**
+
 - Exponential fit: \`np.polyfit\` on log-transformed data (NOT optimization)
 - Quarterly → annual: \`(1+q)^4-1\` (compound), NOT \`q*4\`
 - Current date = **midpoint of latest CY** (7/1), NOT end of period
 - Always use 365.25 for year conversion (accounts for leap years)
 - \`future_average_written_date\` for premium; \`future_average_earned_date\` includes policy term
 - Two-step separates: (1) historical data convergence, (2) forward projection
-- On-level premium FIRST, then trend`,
+- On-level premium FIRST, then trend
+- **ROLLING DATA**: Used ONLY for fitting trend rate (smoothing). Use QUARTERLY values for current state comparisons
+- **Component A**: Latest QUARTERLY avg written premium (not rolling avg) divided by historical avg earned`,
 	sources: ["Werner & Modlin - Basic Ratemaking", "ratemaking package - trending module"],
 	safetyTags: ["actuarial", "ratemaking", "premium", "trending"],
 }
