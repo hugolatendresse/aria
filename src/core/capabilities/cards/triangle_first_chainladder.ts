@@ -101,6 +101,51 @@ target_indices = [i for i, year in enumerate(origin_years) if year in target_yea
 ultimates_for_analysis = all_ultimates[target_indices]
 \`\`\`
 
+**SPECIAL CASE: Non-standard development ages (15, 27, 39, 51, 63 months):**
+
+When your CSV has development ages that don't align with 12-month increments (e.g., 15, 27, 39 months instead of 12, 24, 36), chainladder will misalign the data during grain inference. Fix this by setting the valuation date to the END of the development period (subtract 1 day):
+
+\`\`\`python
+from dateutil.relativedelta import relativedelta
+
+def load_triangle_from_csv_nonstandard_ages(file_path):
+    """
+    Use this variant when CSV has ages like 15, 27, 39, 51, 63 months
+    """
+    df = pd.read_csv(file_path, thousands=',')
+    
+    df_long = df.melt(id_vars=['Accident Year'], var_name='age', value_name='value')
+    df_long = df_long.dropna()
+    df_long['age'] = df_long['age'].str.extract(r'(\d+)').astype(int)
+    
+    # CRITICAL: Use relativedelta and subtract 1 day for proper alignment
+    df_long['origin'] = pd.to_datetime(df_long['Accident Year'].astype(str) + '-01-01')
+    df_long['valuation'] = df_long.apply(
+        lambda row: row['origin'] + relativedelta(months=int(row['age'])) - pd.Timedelta(days=1), 
+        axis=1
+    )
+    
+    tri = cl.Triangle(
+        df_long,
+        origin='origin',
+        development='valuation',
+        columns=['value'],
+        cumulative=True
+    )
+    
+    return tri
+
+# With this approach, development periods will correctly show as 15, 27, 39, 51, 63
+# instead of being misaligned to 27, 39, 51, 63, 75
+\`\`\`
+
+**Why subtract 1 day?**
+- Adding exactly N months (e.g., 15) gives valuation at start of month N+15
+- Chainladder infers this belongs to the next development bucket
+- Subtracting 1 day puts it at end of month N+14, correctly aligning with the N-month bucket
+- Example: AY 2015 + 15 months = 2016-04-01 → chainladder thinks 27 months
+- Example: AY 2015 + 15 months - 1 day = 2016-03-31 → chainladder correctly recognizes 15 months
+
 ---
 
 ### Critical Rules
