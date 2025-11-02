@@ -5,6 +5,7 @@ import { firstDollarTrendedPresentRatesCard } from "./cards/first_dollar_trended
 import { lossTrendingFrequencySeverityCard } from "./cards/loss_adjustments"
 import { lossRatioIndicationCard } from "./cards/loss_ratio_indication"
 import { premiumOnLevelingCard, premiumTrendingCard } from "./cards/premium_adjustments"
+import { purePremiumIndicationCard } from "./cards/pure_premium_indication"
 import { specialAdjustmentsTortReformCard } from "./cards/special_adjustments_tort_reform"
 import { triangleFirstChainladderCard } from "./cards/triangle_first_chainladder"
 import { ultimateBornhuetterFergusonCard } from "./cards/ultimate_bornhuetter_ferguson"
@@ -45,4 +46,5 @@ export const cards: CapabilityCard[] = [
 	premiumTrendingCard,
 	lossTrendingFrequencySeverityCard,
 	lossRatioIndicationCard,
+	purePremiumIndicationCard,
 ]
