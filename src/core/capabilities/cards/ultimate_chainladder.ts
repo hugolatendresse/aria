@@ -119,6 +119,7 @@ ldf_lob = cl.Development(groupby='LOB', average='volume').fit_transform(
 - **Tail options:** Use \`TailConstant(tail=1.05)\` for fixed tail factor, \`TailCurve\` for fitted curves. TailConstant supports \`decay\` parameter for exponential decay over projection periods.
 - Choose averaging (volume vs. simple vs. regression) consistently across ages; consider excluding erratic early/late ages and select a defensible tail.
 - Keep grain consistent (AY/PY, annual vs. quarterly) and align indexes; watch for sparse latest diagonals.
+- Specify the tail attachment age if provided! E.g. cl.TailConstant(tail=1.05, attachment_age=120)
 
 **KNOWN ISSUE: NaN Ultimates for Fully Developed Origins**
 
@@ -191,6 +192,46 @@ When using exclusions like \`drop_high\` or \`drop_low\`, chainladder may reduce
 - If any NaN values exist despite valid triangle data, use manual extraction
 - REQUIRED when using \`drop_high\`/\`drop_low\` or other exclusions that reduce CDF array size
 - Particularly important when working with triangles where some origins have reached terminal development
+
+**APPLYING CDFs TO DATA AT DIFFERENT MATURITY LEVELS**
+
+**Critical:** When applying CDFs calculated from one triangle (e.g., countrywide) to losses from another source (e.g., state data), each accident year is at a different maturity level and requires a different CDF index. **NEVER apply the same CDF to all accident years.**
+
+**How to determine correct CDF indices:**
+
+1. **Know your triangle's development ages** - Check \`triangle.development.values\` (e.g., \`[15, 27, 39, 51, 63]\`)
+2. **Calculate each loss's current age** - Valuation date minus accident year = months of maturity (AY 2011 at 12/31/2015 = 60 months)
+3. **Find the next development age ≥ current age** - AY 2011 at 60 months → next age is 63 months
+4. **Use the CDF at that age's position in the array** - If 63 is at position 5 → use CDF[5]
+
+**Key mistake:** Don't assume CDF indices match age/12. Always match to the actual position in the development array.
+
+\`\`\`python
+# Calculate CDFs from source triangle
+pipe.fit(countrywide_tri)
+cdf_values = pipe.named_steps.model.cdf_.values[0, 0, 0, :]
+
+# Verify what each CDF represents
+print("Development ages:", countrywide_tri.development.values)
+# Output: [15, 27, 39, 51, 63, ...]
+# CDF[0] = 15 months to ultimate
+# CDF[1] = 27 months to ultimate
+# CDF[2] = 39 months to ultimate
+# CDF[3] = 51 months to ultimate
+# CDF[4] = 63 months to ultimate, etc.
+
+# State losses at valuation date 12/31/2015 are at different ages:
+# AY 2011 at 60 months → next age is 63 (position 4) → CDF[4]
+# AY 2012 at 48 months → next age is 51 (position 3) → CDF[3]
+# AY 2013 at 36 months → next age is 39 (position 2) → CDF[2]
+# AY 2014 at 24 months → next age is 27 (position 1) → CDF[1]
+# AY 2015 at 12 months → next age is 15 (position 0) → CDF[0]
+
+cdf_indices = [4, 3, 2, 1, 0]  # For AY 2011-2015
+state_ultimate_losses = state_reported_losses * cdf_values[cdf_indices]
+\`\`\`
+
+**Common mistake:** Using \`cdf_values[0]\` for all accident years assumes all losses are at the same maturity, which is incorrect.
 
 **Version:** Tested with chainladder 0.8.x. API: cl.Pipeline(steps=[...]).fit(X) → pipe.named_steps.model.ultimate_/ibnr_/ldf_/cdf_; use MackChainladder() for std_ultimate_ / std_reserve_ diagnostics.`,
 	sources: [
