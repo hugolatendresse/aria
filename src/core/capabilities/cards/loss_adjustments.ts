@@ -138,7 +138,8 @@ step_7_projected_loss_trend = (1 + frequency_annual_4pt) * (1 + severity_annual_
 
 MANDATORY when "Two-Step trending" is specified. Do NOT use simple trending.
 
-Apply trend from historical accident year midpoints to future, using DIFFERENT rates for current vs projected:
+Apply trend from historical accident year midpoints to future, using DIFFERENT rates for current vs projected.
+You MUST use the \`future_average_accident_date\` function to calculate the date to trend to in the future.
 
 \`\`\`python
 from datetime import datetime
