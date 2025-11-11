@@ -29,12 +29,15 @@ When calculating Loss Development Factors (LDFs), you MUST use ALL available his
 - Calculate development factors using the full triangle
 - Extract specific years' ultimates AFTER fitting the model
 
-**For wide CSV triangles with monthly ages (12, 24, 36...):**
+**For wide CSV triangles with STANDARD monthly ages (12, 24, 36, 48, 60...):**
 
 \`\`\`python
 def load_triangle_from_csv(file_path, target_accident_years=None):
     """
     TESTED PATTERN - Creates chainladder Triangle from wide CSV
+    
+    IMPORTANT: Use this ONLY for standard 12-month ages (12, 24, 36, 48...).
+    For non-standard ages (15, 27, 39...), use load_triangle_from_csv_nonstandard_ages().
     
     WARNING: For LDF calculation, pass target_accident_years=None to use ALL years.
     Only filter when extracting specific years AFTER development factors are fit.
@@ -101,11 +104,31 @@ target_indices = [i for i, year in enumerate(origin_years) if year in target_yea
 ultimates_for_analysis = all_ultimates[target_indices]
 \`\`\`
 
+**CRITICAL: Check Your Development Ages Before Loading!**
+
+Before loading any triangle, **inspect the CSV column headers** to determine which loading function to use:
+
+\\\`\\\`\\\`python
+# Always check the CSV columns first!
+df = pd.read_csv('triangle.csv')
+print(df.columns.tolist())
+# Output: ['Accident Year', '15 Months', '27 Months', '39 Months', ...]
+\\\`\\\`\\\`
+
+**If ages are standard 12-month increments (12, 24, 36, 48...):**
+- Use the standard load_triangle_from_csv() function below
+
+**If ages are non-standard (15, 27, 39, 51, 63, 75, 87...):**
+- Use the load_triangle_from_csv_nonstandard_ages() function (see below)
+- CRITICAL: Non-standard ages require relativedelta and subtracting 1 day
+
+---
+
 **SPECIAL CASE: Non-standard development ages (15, 27, 39, 51, 63 months):**
 
 When your CSV has development ages that don't align with 12-month increments (e.g., 15, 27, 39 months instead of 12, 24, 36), chainladder will misalign the data during grain inference. Fix this by setting the valuation date to the END of the development period (subtract 1 day):
 
-\`\`\`python
+\\\`\\\`\\\`python
 from dateutil.relativedelta import relativedelta
 
 def load_triangle_from_csv_nonstandard_ages(file_path):
@@ -116,7 +139,7 @@ def load_triangle_from_csv_nonstandard_ages(file_path):
     
     df_long = df.melt(id_vars=['Accident Year'], var_name='age', value_name='value')
     df_long = df_long.dropna()
-    df_long['age'] = df_long['age'].str.extract(r'(\d+)').astype(int)
+    df_long['age'] = df_long['age'].str.extract(r'(\\d+)').astype(int)
     
     # CRITICAL: Use relativedelta and subtract 1 day for proper alignment
     df_long['origin'] = pd.to_datetime(df_long['Accident Year'].astype(str) + '-01-01')
@@ -137,82 +160,82 @@ def load_triangle_from_csv_nonstandard_ages(file_path):
 
 # With this approach, development periods will correctly show as 15, 27, 39, 51, 63
 # instead of being misaligned to 27, 39, 51, 63, 75
-\`\`\`
+\\\`\\\`\\\`
 
 **Why subtract 1 day?**
 - Adding exactly N months (e.g., 15) gives valuation at start of month N+15
 - Chainladder infers this belongs to the next development bucket
 - Subtracting 1 day puts it at end of month N+14, correctly aligning with the N-month bucket
-- Example: AY 2015 + 15 months = 2016-04-01 → chainladder thinks 27 months
-- Example: AY 2015 + 15 months - 1 day = 2016-03-31 → chainladder correctly recognizes 15 months
+- Example: AY 2015 + 15 months = 2016-04-01 (chainladder thinks 27 months)
+- Example: AY 2015 + 15 months - 1 day = 2016-03-31 (chainladder correctly recognizes 15 months)
 
 ---
 
 ### Critical Rules
 
 **DO - For development parameter:**
-- ✓ Use \`development='valuation'\` (the datetime column you created)
-- ✓ Valuation column must be datetime64[ns] dtype
-- ✓ Create valuation from origin + age before calling Triangle()
+- Use development='valuation' (the datetime column you created)
+- Valuation column must be datetime64[ns] dtype
+- Create valuation from origin + age before calling Triangle()
 
 **DON'T - Common mistakes:**
-- ✗ \`development='age'\` (age is numeric, not date-like)
-- ✗ Forgetting to create valuation column
-- ✗ Using helper column name that was dropped
-- ✗ Creating \`origin\` column and using \`origin='origin'\`
+- DON'T use development='age' (age is numeric, not date-like)
+- DON'T forget to create valuation column
+- DON'T use helper column name that was dropped
+- DON'T create origin column and use origin='origin'
 
 **DO - For origin parameter:**
-- ✓ Use \`origin='Accident Year'\` (the original CSV column name)
-- ✓ This column should be integers (2001, 2002, ...)
-- ✓ Keep the original column, don't replace it
+- Use origin='Accident Year' (the original CSV column name)
+- This column should be integers (2001, 2002, ...)
+- Keep the original column, don't replace it
 
 **DON'T:**
-- ✗ Creating new origin column and using that
-- ✗ Using Period columns as origin
-- ✗ Typos in column name ('accident year' vs 'Accident Year')
+- DON'T create new origin column and use that
+- DON'T use Period columns as origin
+- DON'T use typos in column name ('accident year' vs 'Accident Year')
 
 **DO - Filtering:**
-- ✓ **FOR LDF CALCULATION: Do NOT filter - use ALL available years**
-- ✓ Filter/extract specific years AFTER fitting the development model
-- ✓ Call \`.dropna()\` after melting (always required)
-- ✓ Only pre-filter when NOT calculating development factors (rare)
+- **FOR LDF CALCULATION: Do NOT filter - use ALL available years**
+- Filter/extract specific years AFTER fitting the development model
+- Call .dropna() after melting (always required)
+- Only pre-filter when NOT calculating development factors (rare)
 
 **DON'T:**
-- ✗ **NEVER filter triangle data before calculating LDFs - this gives wrong results!**
-- ✗ Filter after Triangle() construction (too late)
-- ✗ Assume filtering happened elsewhere
-- ✗ Forget dropna() after melt
-- ✗ Define hardcoded target years for development factor calculation
+- **NEVER filter triangle data before calculating LDFs - this gives wrong results!**
+- DON'T filter after Triangle() construction (too late)
+- DON'T assume filtering happened elsewhere
+- DON'T forget dropna() after melt
+- DON'T define hardcoded target years for development factor calculation
 
 ---
 
 ### Verification Checklist
 
 After creating triangle, verify:
-\`\`\`python
+\\\`\\\`\\\`python
 print(f"Triangle shape: {tri.shape}")  # (1, 1, n_AYs, n_dev)
 print(f"Origins: {len(tri.origin)} (expected: {len(target_years)})")
 assert len(tri.origin) == len(target_years), "Wrong number of origins!"
-\`\`\`
+\\\`\\\`\\\`
 
 ---
 
 ### Common Errors and Fixes
 
 **Error: "Development lags could not be determined"**
-- Cause: \`development='age'\` instead of \`development='valuation'\`
+- Cause: development='age' instead of development='valuation'
 - Fix: Use the datetime valuation column, not numeric age
 
 **Error: IndexError with LDFs**
-- Cause: Treating LDFs as 2D: \`ldfs[i, j]\`  
-- Fix: Extract as 1D: \`ldfs = dev.ldf_.values[0, 0, 0, :]\`
+- Cause: Treating LDFs as 2D: ldfs[i, j]
+- Fix: Extract as 1D: ldfs = dev.ldf_.values[0, 0, 0, :]
 
 **Error: Triangle has 18 origins instead of 8**
 - Cause: Forgot dropna(); chainladder inferred from valuation range (2001-2018)
 - Fix: Call dropna() after melting
 
 **Error: All NaN ultimates**
-- Cause: Triangle has wrong origins (didn't filter properly)
+- Cause: Triangle has wrong origins (did not filter properly)
 - Fix: Filter DataFrame before melting; check tri.shape
 
 **Error: IndexError: list index out of range**
@@ -220,12 +243,19 @@ assert len(tri.origin) == len(target_years), "Wrong number of origins!"
 - Fix: For LDF calculation, do NOT filter - use all available years
 
 **Error: Wrong ultimate losses / LDF values don't match expected**
-- Cause: Triangle was filtered before calculating development factors
+- Cause 1: Triangle was filtered before calculating development factors
 - Fix: Load ALL available years, calculate LDFs on full data, THEN extract specific years' ultimates
+- Cause 2: Used standard loading function for non-standard ages (or vice versa)
+- Fix: Check CSV column headers - use correct loading function for your age pattern (12/24/36 vs 15/27/39)
+
+**Error: Triangle has wrong development ages (shows 12, 24, 36 when data has 15, 27, 39)**
+- Cause: Used standard loading function for non-standard age data
+- Fix: Use load_triangle_from_csv_nonstandard_ages() with relativedelta and subtract 1 day
+- Verify: Check tri.development.values matches your CSV column ages
 
 **Error: Using incr_to_cum() on cumulative triangle**
 - Cause: Wrong conversion direction
-- Fix: Use cum_to_incr() for cumulative→incremental
+- Fix: Use cum_to_incr() for cumulative to incremental
 
 **No pandas-only solutions allowed unless user explicitly opts out.**`,
 	sources: ["chainladder-python docs v0.8.24", "Actuarial compliance mandate"],
