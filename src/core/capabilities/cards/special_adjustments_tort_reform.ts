@@ -4,11 +4,7 @@ export const specialAdjustmentsTortReformCard: CapabilityCard = {
 	id: "special-adjustments-tort-reform",
 	version: "1.4.0",
 	title: "Special Adjustments: Tort Reform & Claims Environment Changes",
-	triggers: [
-		{ kind: "keyword", any: ["tort reform", "tort", "reform", "special factor", "special adjustment"] },
-		{ kind: "keyword", any: ["claims environment", "regulatory change", "law change"] },
-		{ kind: "keyword", all: ["adjust", "severity"], any: ["reform", "change", "environment"] },
-	],
+	triggers: [{ kind: "keyword", any: ["tort reform", "tort", "reform"] }],
 	content: `**Capability Card: Special Adjustments (Tort Reform) v1.4**
 
 **What it does:** Adjusts historical data to current basis when claims environment changes (tort reform, regulatory changes, coverage changes) have made past experience non-comparable to projection periods.

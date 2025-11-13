@@ -20,16 +20,32 @@ export const triangleFirstChainladderCard: CapabilityCard = {
 
 ### FOOLPROOF TEMPLATE - Copy This Exactly
 
+**CRITICAL: This template is for FINAL DATA PREPARATION ONLY, not for LDF calculation!**
+
+When calculating Loss Development Factors (LDFs), you MUST use ALL available historical years. Only use this filtering function when you need to prepare data for non-development purposes (e.g., trend analysis after ultimates are calculated).
+
+**For LDF/development factor calculation:**
+- Load ALL available years from the CSV without filtering
+- Calculate development factors using the full triangle
+- Extract specific years' ultimates AFTER fitting the model
+
 **For wide CSV triangles with monthly ages (12, 24, 36...):**
 
 \`\`\`python
-def load_triangle_from_csv(file_path, target_accident_years):
-    """TESTED PATTERN - Creates chainladder Triangle from wide CSV"""
+def load_triangle_from_csv(file_path, target_accident_years=None):
+    """
+    TESTED PATTERN - Creates chainladder Triangle from wide CSV
+    
+    WARNING: For LDF calculation, pass target_accident_years=None to use ALL years.
+    Only filter when extracting specific years AFTER development factors are fit.
+    """
     # Step 1: Load CSV
     df = pd.read_csv(file_path, thousands=',')
     
-    # Step 2: Filter to target accident years FIRST (before melting)
-    df = df[df['Accident Year'].isin(target_accident_years)]
+    # Step 2: Filter to target accident years ONLY if specified
+    # CRITICAL: For LDF calculation, skip filtering (pass None)
+    if target_accident_years is not None:
+        df = df[df['Accident Year'].isin(target_accident_years)]
     
     # Step 3: Melt wide format to long format
     df_long = df.melt(id_vars=['Accident Year'], var_name='age', value_name='value')
@@ -63,9 +79,26 @@ def load_triangle_from_csv(file_path, target_accident_years):
     
     return tri
 
-# Usage:
-target_years = list(range(2001, 2009))
-tri = load_triangle_from_csv('path/to/file.csv', target_years)
+# CORRECT Usage for LDF calculation:
+# Load ALL available years (no filtering)
+tri = load_triangle_from_csv('path/to/file.csv', target_accident_years=None)
+
+# Fit development model using all available data
+pipe = cl.Pipeline(steps=[
+    ('dev', cl.Development(average='simple')),
+    ('tail', cl.TailConstant(tail=1.0)),
+    ('model', cl.Chainladder())
+])
+pipe.fit(tri)
+
+# Extract ultimates for ALL years
+all_ultimates = pipe.named_steps.model.ultimate_.values[0, 0, :, 0]
+
+# THEN filter to specific years if needed for your analysis
+target_years = [2011, 2012, 2013, 2014, 2015]
+origin_years = [int(str(origin).split('-')[0]) for origin in tri.origin]
+target_indices = [i for i, year in enumerate(origin_years) if year in target_years]
+ultimates_for_analysis = all_ultimates[target_indices]
 \`\`\`
 
 ---
@@ -94,15 +127,17 @@ tri = load_triangle_from_csv('path/to/file.csv', target_years)
 - ✗ Typos in column name ('accident year' vs 'Accident Year')
 
 **DO - Filtering:**
-- ✓ Filter DataFrame BEFORE melting
-- ✓ Include filtering IN helper functions
-- ✓ Use \`.isin(target_years)\` or \`.between(start, end)\`
-- ✓ Call \`.dropna()\` after melting
+- ✓ **FOR LDF CALCULATION: Do NOT filter - use ALL available years**
+- ✓ Filter/extract specific years AFTER fitting the development model
+- ✓ Call \`.dropna()\` after melting (always required)
+- ✓ Only pre-filter when NOT calculating development factors (rare)
 
 **DON'T:**
-- ✗ Filter after Triangle() construction
+- ✗ **NEVER filter triangle data before calculating LDFs - this gives wrong results!**
+- ✗ Filter after Triangle() construction (too late)
 - ✗ Assume filtering happened elsewhere
 - ✗ Forget dropna() after melt
+- ✗ Define hardcoded target years for development factor calculation
 
 ---
 
@@ -136,8 +171,12 @@ assert len(tri.origin) == len(target_years), "Wrong number of origins!"
 - Fix: Filter DataFrame before melting; check tri.shape
 
 **Error: IndexError: list index out of range**
-- Cause: Helper function loaded all years; dimension mismatch
-- Fix: Include filtering in helper function
+- Cause: Helper function filtered years but analysis expects different years
+- Fix: For LDF calculation, do NOT filter - use all available years
+
+**Error: Wrong ultimate losses / LDF values don't match expected**
+- Cause: Triangle was filtered before calculating development factors
+- Fix: Load ALL available years, calculate LDFs on full data, THEN extract specific years' ultimates
 
 **Error: Using incr_to_cum() on cumulative triangle**
 - Cause: Wrong conversion direction

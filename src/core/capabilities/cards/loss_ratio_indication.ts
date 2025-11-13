@@ -2,7 +2,7 @@ import { CapabilityCard } from "../card_registry"
 
 export const lossRatioIndicationCard: CapabilityCard = {
 	id: "ratemaking-loss-ratio-indication",
-	version: "1.0.0",
+	version: "1.2.0",
 	title: "Ratemaking: Loss Ratio Indication Method",
 	triggers: [
 		{
@@ -19,81 +19,93 @@ export const lossRatioIndicationCard: CapabilityCard = {
 		},
 		{ kind: "regex", pattern: "\\b(loss[\\s-]?ratio[\\s-]?(method|indication)|VPLR|ULAE)\\b", flags: "i" },
 	],
-	content: `**Capability Card: Loss Ratio Indication Method v1.0**
+	content: `**Loss Ratio Indication Method v1.2**
 
-**What it does:**
-Calculates the indicated rate change needed to achieve target profitability based on projected loss ratios, expense provisions, and underwriting profit targets. 
+**Core Formula:**
+\`\`\`
+Indicated Rate Change = (Loss+LAE Ratio + Fixed Expense) / VPLR - 1
 
-**Key Concept:**
-The loss ratio method compares projected losses (as % of premium) to the permissible loss ratio (portion of premium available for losses after expenses and profit).
+where:
+  VPLR = 1 - Variable Expense - UW Profit
+  (VPLR contains ONLY variable expenses and profit, NOT fixed expenses)
+\`\`\`
 
-**Canonical Implementation:**
+**Complete Implementation:**
 \`\`\`python
-import numpy as np
-
-# Step 1: Calculate Projected Loss and LAE Ratio
-ulae_factor = 1.10  # e.g., 10% ULAE on loss+ALAE (provided by the user)
-
-# Weighted average (total-level, NOT by-year average)
-total_projected_ultimate_losses = (ultimate_losses * loss_trend_factors).sum()
-total_projected_earned_premium = projected_earned_premium.sum()
+# Step 1: Calculate Projected Loss+LAE Ratio
+ulae_factor = 1.12  # provided
+projected_ultimate_losses_by_ay = ultimate_losses_by_ay * loss_trend_factors_by_ay
 
 projected_loss_lae_ratio = (
-    total_projected_ultimate_losses / total_projected_earned_premium
+    projected_ultimate_losses_by_ay.sum() / projected_earned_premium.sum()
 ) * ulae_factor
 
-# Step 2: Variable Permissible Loss Ratio (VPLR)
-variable_expense_provision = 0.11  # 11% (provided by the user)
-underwriting_profit_provision = 0.04    # 4% (provided by the user)
+# Step 2: Calculate VPLR (Variable Permissible Loss Ratio)
+variable_expense_provision = 0.15  # 15% provided
+underwriting_profit_provision = 0.04   # 4% provided
 
+# CRITICAL: VPLR uses ONLY variable expenses and profit
 vplr = 1 - variable_expense_provision - underwriting_profit_provision
 
-# Step 3: Indicated Rate Change
-fixed_expense_provision = 0.09  # 9% (provided by the user)
+# Step 3: Calculate Indicated Rate Change
+fixed_expense_provision = 0.09  # 9% provided
 
-indicated_rate_change = (
-    (projected_loss_lae_ratio + fixed_expense_provision) / vplr
-) - 1
+# CRITICAL: Fixed expense goes in NUMERATOR, not denominator
+indicated_rate_change = (projected_loss_lae_ratio + fixed_expense_provision) / vplr - 1
 \`\`\`
 
-**ULAE Factor:**
-- ULAE = Unallocated Loss Adjustment Expense (not attributable to specific claims)
-- Ratio method: ULAE / (Loss + ALAE)
-- Factor method: \`1 + ULAE_ratio\` (e.g., 1.10 = 10% ULAE provision)
-- Applied to Loss+ALAE to get total Loss+LAE
+**Why Fixed and Variable Expenses Are Treated Differently:**
 
-**Expense Provisions:**
-- **Variable expenses**: Scale with premium (commissions, taxes, premium-based fees)
-- **Fixed expenses**: Don't scale with premium (general overhead, flat fees)
-- Variable expense % deducted from available premium before calculating VPLR
-- Fixed expense % added to loss+LAE in numerator
+**Variable Expenses** (commissions, premium taxes):
+- Scale with premium: 20% commission on $100 = $20, on $200 = $40
+- Go in DENOMINATOR via VPLR
+- Reduce available premium: \`1 - variable_expense - profit\`
 
-**VPLR (Variable Permissible Loss Ratio):**
-- Portion of premium available for losses after variable expenses and profit
-- Formula: \`1 - variable_expense - UW_profit\`
-- Represents maximum loss ratio that allows target profit
+**Fixed Expenses** (overhead, salaries):
+- Do NOT scale with premium: $50 overhead whether premium is $100 or $200
+- Go in NUMERATOR
+- Added to loss costs: \`loss_ratio + fixed_expense\`
 
-**Indicated Rate Change Formula (Loss Ratio Method):**
-\`\`\`
-Indicated = (Selected Loss+LAE Ratio + Fixed Expense Provision) / VPLR - 1
+**COMMON ERRORS:**
 
-Where:
-- Selected Loss+LAE Ratio = (Projected Ultimate × ULAE Factor) / Projected Premium
-- Fixed Expense Provision = fixed expense as % of premium
-- VPLR = 1 - variable_expense - UW_profit
+**ERROR 1: Treating All Expenses as Multiplicative Complements**
+\`\`\`python
+# WRONG - treats fixed expenses like they scale with premium
+denominator = (1 - variable_expense) * (1 - fixed_expense) * (1 - profit)
+indicated = loss_ratio / denominator - 1
 \`\`\`
 
-**When to use:**
-- Personal lines, homeowners, auto (premium-based exposures)
-- When loss experience is credible predictor of future
+**ERROR 2: Putting Fixed Expenses in VPLR**
+\`\`\`python
+# WRONG - fixed expenses don't belong in VPLR
+vplr = 1 - variable_expense - profit - fixed_expense  # NO!
+indicated = loss_ratio / vplr - 1
+\`\`\`
 
-**Critical Points:**
-- Loss+LAE ratio: Use **total weighted average** unless the user specifies otherwise
-- ULAE factor multiplies entire (losses/premium) ratio
-- Variable expenses reduce available premium (in denominator via VPLR)
-- Fixed expenses add to required premium (in numerator)
-- Negative indicated rate = rates too high; positive = need increase
-- Always use trended/projected values, not historical raw data`,
+**ERROR 3: Putting ALL Expenses in Denominator**
+\`\`\`python
+# WRONG - lumping everything together
+total_provision = variable_expense + profit + fixed_expense
+indicated = loss_ratio / (1 - total_provision) - 1
+\`\`\`
+
+**CORRECT Formula Structure:**
+\`\`\`python
+vplr = 1 - variable_expense - profit  # Denominator: ONLY variable expenses and profit
+indicated = (loss_ratio + fixed_expense) / vplr - 1  # Numerator: loss + fixed expenses
+\`\`\`
+
+**Quick Reference:**
+- ULAE factor: Multiply entire loss ratio by this factor
+- Loss trending: Use Two-Step method by accident year (see loss trending card)
+- Negative rate change: Current rates are too high
+- Positive rate change: Need rate increase
+
+**Verification Checklist:**
+- [ ] VPLR = 1 - variable_expense - profit (NO fixed expenses)
+- [ ] Fixed expense ADDED to loss ratio in numerator
+- [ ] Formula is: (loss_ratio + fixed_expense) / VPLR - 1
+- [ ] NOT using: loss_ratio / (1 - all_expenses) - 1`,
 	sources: ["Werner & Modlin - Basic Ratemaking", "CAS Ratemaking Principles"],
 	safetyTags: ["actuarial", "ratemaking", "indication"],
 }

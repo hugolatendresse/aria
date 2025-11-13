@@ -6,22 +6,17 @@ export const ultimateFreqSev3Card: CapabilityCard = {
 	title: "Ultimates: Frequency–Severity (Approach 3 – Disposal Rate Method)",
 	triggers: [
 		{
-			kind: "keyword",
-			any: [
-				"frequency severity",
-				"freq sev",
-				"freq-sev",
-				"frequency-severity",
-				"freqsev",
-				"frequency and severity",
-				"disposal rate",
-				"disposal rates",
-				"closed claim count",
-				"settlement rate",
-			],
+			kind: "regex",
+			pattern:
+				"(?:^|[.!?]\\s+)[^.!?]*\\b(?:freq(?:uency)?[\\s-]?sev(?:erity)?|frequency\\s+and\\s+severity|disposal\\s+rates?)[^.!?]*\\b(?:ultimate|develop|ibnr|reserve)s?\\b[^.!?]*(?:[.!?]|$)",
+			flags: "i",
 		},
-		{ kind: "keyword", any: ["claim count", "closed with payment", "CWP"], all: ["frequency", "severity"] },
-		{ kind: "regex", pattern: "\\b(freq(uency)?[\\s-]sev(erity)?)\\b", flags: "i" },
+		{
+			kind: "regex",
+			pattern:
+				"(?:^|[.!?]\\s+)[^.!?]*\\b(?:ultimate|develop|ibnr|reserve)s?\\b[^.!?]*\\b(?:freq(?:uency)?[\\s-]?sev(?:erity)?|frequency\\s+and\\s+severity|disposal\\s+rates?)[^.!?]*(?:[.!?]|$)",
+			flags: "i",
+		},
 	],
 	content: `**Capability Card: Frequency–Severity 3 (Disposal Rate Method) v1.1**
 
