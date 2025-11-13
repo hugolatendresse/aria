@@ -109,6 +109,28 @@ ldf_lob = cl.Development(groupby='LOB', average='volume').fit_transform(
 - **Input:** X: cl.Triangle (cumulative loss), options for averaging (volume/simple/regression), tail selection, exclusions
 - **Output:** ultimate_, ibnr_, ldf_, cdf_; with Mack: std_ultimate_ / std_reserve_
 
+**CRITICAL: dev.cdf_ vs model.cdf_**
+- **ALWAYS use \`pipe.named_steps.model.cdf_\`** to extract CDFs - these include the tail factor
+- **NEVER use \`pipe.named_steps.dev.cdf_\`** - these exclude the tail factor and will understate ultimates
+- The Development step calculates CDFs only through the observed data
+- The Chainladder model applies the tail factor to produce final CDFs
+- Using dev CDFs when you specified a tail factor (e.g., TailConstant(tail=1.01)) will silently exclude that 1% tail, causing all ultimate losses to be understated
+
+\`\`\`python
+pipe = cl.Pipeline(steps=[
+    ('dev', cl.Development(average='simple')),
+    ('tail', cl.TailConstant(tail=1.01, attachment_age=63)),
+    ('model', cl.Chainladder())
+])
+pipe.fit(tri)
+
+# CORRECT - includes 1.01 tail factor
+cdf_with_tail = pipe.named_steps.model.cdf_.values[0, 0, 0, :]
+
+# WRONG - excludes tail factor, ultimates will be too low
+cdf_no_tail = pipe.named_steps.dev.cdf_.values[0, 0, 0, :]
+\`\`\`
+
 **Critical Points:**
 - **CRITICAL: DO NOT FILTER TRIANGLE DATA BEFORE CALCULATING LDFs!** When you need ultimates for specific years (e.g., 2011-2015 for your analysis), you MUST load the FULL triangle with ALL available historical years (e.g., 2009-2015) to calculate stable development factors. Filter/extract specific years' ultimates AFTER the model is fit, NOT before. Pre-filtering reduces the number of origins and produces different/less stable LDFs, giving materially wrong results.
 - DO NOT define hardcoded target years - simply use the available years in the triangle data
@@ -119,6 +141,7 @@ ldf_lob = cl.Development(groupby='LOB', average='volume').fit_transform(
 - **Tail options:** Use \`TailConstant(tail=1.05)\` for fixed tail factor, \`TailCurve\` for fitted curves. TailConstant supports \`decay\` parameter for exponential decay over projection periods.
 - Choose averaging (volume vs. simple vs. regression) consistently across ages; consider excluding erratic early/late ages and select a defensible tail.
 - Keep grain consistent (AY/PY, annual vs. quarterly) and align indexes; watch for sparse latest diagonals.
+- Specify the tail attachment age if provided! E.g. cl.TailConstant(tail=1.05, attachment_age=120)
 
 **KNOWN ISSUE: NaN Ultimates for Fully Developed Origins**
 
@@ -149,8 +172,9 @@ pipe = cl.Pipeline(steps=[
 pipe.fit(loss_tri)
 
 # Manual extraction to avoid NaN issues
-dev_obj = pipe.named_steps.dev
-cdf_values = dev_obj.cdf_.values[0, 0, 0, :]
+# CRITICAL: Use model.cdf_ (includes tail), NOT dev.cdf_ (excludes tail)
+model_obj = pipe.named_steps.model
+cdf_values = model_obj.cdf_.values[0, 0, 0, :]
 ultimates = []
 
 for i, origin in enumerate(loss_tri.origin):
@@ -191,6 +215,61 @@ When using exclusions like \`drop_high\` or \`drop_low\`, chainladder may reduce
 - If any NaN values exist despite valid triangle data, use manual extraction
 - REQUIRED when using \`drop_high\`/\`drop_low\` or other exclusions that reduce CDF array size
 - Particularly important when working with triangles where some origins have reached terminal development
+
+**APPLYING CDFs TO DATA AT DIFFERENT MATURITY LEVELS**
+
+**Critical:** When applying CDFs calculated from one triangle (e.g., countrywide) to losses from another source (e.g., state data), each accident year is at a different maturity level and requires a different CDF index. **NEVER apply the same CDF to all accident years.**
+
+**How to determine correct CDF indices:**
+
+1. **Know your triangle's development ages** - Check \`triangle.development.values\` (e.g., \`[6, 18, 30, 42, 54, 66]\`)
+2. **Calculate each loss's current age** - Valuation date minus accident year = months of maturity
+3. **Find the next development age ≥ current age** - For each loss at its current maturity
+4. **Find that age's position in the development array** - Use the position/index in the array for CDF lookup
+
+**CRITICAL: Don't assume positions - always count from the array!** The development ages array may include early ages that shift all indices. Always use the actual position in the array, not age/12.
+
+**Common mistake:** Assuming CDF indices can be calculated as age/12. If your triangle has non-standard ages or includes early periods, the position in the array will differ from this calculation.
+
+\`\`\`python
+# Calculate CDFs from industry triangle
+pipe.fit(industry_tri)
+cdf_values = pipe.named_steps.model.cdf_.values[0, 0, 0, :]
+
+# CRITICAL: Check what ages you actually have
+dev_ages = industry_tri.development.values
+print("Development ages:", dev_ages)
+# Example output: [6, 18, 30, 42, 54, 66, 78, 90, 102]
+
+# Verify what each CDF represents by counting positions
+for i, (age, cdf) in enumerate(zip(dev_ages, cdf_values)):
+    print(f"Index {i}: Age {age} → CDF {cdf:.6f}")
+
+# Calculate maturity for each company loss at your valuation date
+from datetime import datetime
+valuation_date = datetime(2023, 6, 30).date()
+
+cdf_indices = []
+for ay in accident_years:
+    # Calculate months mature
+    ay_start = datetime(ay, 1, 1).date()
+    months_mature = (valuation_date.year - ay_start.year) * 12 + (valuation_date.month - ay_start.month)
+    
+    # Find next development age >= current maturity
+    next_age_idx = None
+    for i, dev_age in enumerate(dev_ages):
+        if dev_age >= months_mature:
+            next_age_idx = i
+            break
+    
+    cdf_indices.append(next_age_idx)
+    print(f"AY {ay}: {months_mature} months mature → next age {dev_ages[next_age_idx]} (index {next_age_idx})")
+
+# Apply correct CDFs to company losses
+company_ultimate_losses = company_reported_losses * cdf_values[cdf_indices]
+\`\`\`
+
+**DO NOT hardcode CDF indices** - calculate them programmatically based on the actual development ages in your triangle. Different triangles may have different age patterns.
 
 **Version:** Tested with chainladder 0.8.x. API: cl.Pipeline(steps=[...]).fit(X) → pipe.named_steps.model.ultimate_/ibnr_/ldf_/cdf_; use MackChainladder() for std_ultimate_ / std_reserve_ diagnostics.`,
 	sources: [
