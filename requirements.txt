@@ -24,3 +24,4 @@ pypdf>=6.0.0
 # Actuarial dependencies
 chainladder>=0.8.21
 pydantic>=2.0.0
+pypdf>=6.0.0
