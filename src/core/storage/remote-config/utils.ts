@@ -1,14 +1,15 @@
+import { synchronizeRemoteRuleToggles } from "@core/context/instructions/user-instructions/rule-helpers"
 import { RemoteConfig } from "@shared/remote-config/schema"
-import { GlobalStateAndSettings } from "@shared/storage/state-keys"
+import { RemoteConfigFields } from "@shared/storage/state-keys"
 import { StateManager } from "../StateManager"
 
 /**
- * Transforms RemoteConfig schema to GlobalStateAndSettings shape
+ * Transforms RemoteConfig schema to RemoteConfigFields shape
  * @param remoteConfig The remote configuration object
- * @returns Partial<GlobalStateAndSettings> containing only the fields present in remote config
+ * @returns Partial<RemoteConfigFields> containing only the fields present in remote config
  */
-export function transformRemoteConfigToStateShape(remoteConfig: RemoteConfig): Partial<GlobalStateAndSettings> {
-	const transformed: Partial<GlobalStateAndSettings> = {}
+export function transformRemoteConfigToStateShape(remoteConfig: RemoteConfig): Partial<RemoteConfigFields> {
+	const transformed: Partial<RemoteConfigFields> = {}
 
 	// Map top-level settings
 	if (remoteConfig.telemetryEnabled !== undefined) {
@@ -17,6 +18,9 @@ export function transformRemoteConfigToStateShape(remoteConfig: RemoteConfig): P
 	if (remoteConfig.mcpMarketplaceEnabled !== undefined) {
 		transformed.mcpMarketplaceEnabled = remoteConfig.mcpMarketplaceEnabled
 	}
+	if (remoteConfig.allowedMCPServers !== undefined) {
+		transformed.allowedMCPServers = remoteConfig.allowedMCPServers
+	}
 	if (remoteConfig.yoloModeAllowed !== undefined) {
 		// only set the yoloModeToggled field if yolo mode is not allowed. Otherwise, we let the user toggle it.
 		if (remoteConfig.yoloModeAllowed === false) {
@@ -24,11 +28,60 @@ export function transformRemoteConfigToStateShape(remoteConfig: RemoteConfig): P
 		}
 	}
 
+	// Map OpenTelemetry settings
+	if (remoteConfig.openTelemetryEnabled !== undefined) {
+		transformed.openTelemetryEnabled = remoteConfig.openTelemetryEnabled
+	}
+	if (remoteConfig.openTelemetryMetricsExporter !== undefined) {
+		transformed.openTelemetryMetricsExporter = remoteConfig.openTelemetryMetricsExporter
+	}
+	if (remoteConfig.openTelemetryLogsExporter !== undefined) {
+		transformed.openTelemetryLogsExporter = remoteConfig.openTelemetryLogsExporter
+	}
+	if (remoteConfig.openTelemetryOtlpProtocol !== undefined) {
+		transformed.openTelemetryOtlpProtocol = remoteConfig.openTelemetryOtlpProtocol
+	}
+	if (remoteConfig.openTelemetryOtlpEndpoint !== undefined) {
+		transformed.openTelemetryOtlpEndpoint = remoteConfig.openTelemetryOtlpEndpoint
+	}
+	if (remoteConfig.openTelemetryOtlpMetricsProtocol !== undefined) {
+		transformed.openTelemetryOtlpMetricsProtocol = remoteConfig.openTelemetryOtlpMetricsProtocol
+	}
+	if (remoteConfig.openTelemetryOtlpMetricsEndpoint !== undefined) {
+		transformed.openTelemetryOtlpMetricsEndpoint = remoteConfig.openTelemetryOtlpMetricsEndpoint
+	}
+	if (remoteConfig.openTelemetryOtlpLogsProtocol !== undefined) {
+		transformed.openTelemetryOtlpLogsProtocol = remoteConfig.openTelemetryOtlpLogsProtocol
+	}
+	if (remoteConfig.openTelemetryOtlpLogsEndpoint !== undefined) {
+		transformed.openTelemetryOtlpLogsEndpoint = remoteConfig.openTelemetryOtlpLogsEndpoint
+	}
+	if (remoteConfig.openTelemetryMetricExportInterval !== undefined) {
+		transformed.openTelemetryMetricExportInterval = remoteConfig.openTelemetryMetricExportInterval
+	}
+	if (remoteConfig.openTelemetryOtlpInsecure !== undefined) {
+		transformed.openTelemetryOtlpInsecure = remoteConfig.openTelemetryOtlpInsecure
+	}
+	if (remoteConfig.openTelemetryLogBatchSize !== undefined) {
+		transformed.openTelemetryLogBatchSize = remoteConfig.openTelemetryLogBatchSize
+	}
+	if (remoteConfig.openTelemetryLogBatchTimeout !== undefined) {
+		transformed.openTelemetryLogBatchTimeout = remoteConfig.openTelemetryLogBatchTimeout
+	}
+	if (remoteConfig.openTelemetryLogMaxQueueSize !== undefined) {
+		transformed.openTelemetryLogMaxQueueSize = remoteConfig.openTelemetryLogMaxQueueSize
+	}
+
+	// Map provider settings
+
+	const providers: string[] = []
+
 	// Map OpenAiCompatible provider settings
 	const openAiSettings = remoteConfig.providerSettings?.OpenAiCompatible
 	if (openAiSettings) {
 		transformed.planModeApiProvider = "openai"
 		transformed.actModeApiProvider = "openai"
+		providers.push("openai")
 
 		if (openAiSettings.openAiBaseUrl !== undefined) {
 			transformed.openAiBaseUrl = openAiSettings.openAiBaseUrl
@@ -46,6 +99,7 @@ export function transformRemoteConfigToStateShape(remoteConfig: RemoteConfig): P
 	if (awsBedrockSettings) {
 		transformed.planModeApiProvider = "bedrock"
 		transformed.actModeApiProvider = "bedrock"
+		providers.push("bedrock")
 
 		if (awsBedrockSettings.awsRegion !== undefined) {
 			transformed.awsRegion = awsBedrockSettings.awsRegion
@@ -64,6 +118,26 @@ export function transformRemoteConfigToStateShape(remoteConfig: RemoteConfig): P
 		}
 	}
 
+	const clineSettings = remoteConfig.providerSettings?.Cline
+	if (clineSettings) {
+		transformed.planModeApiProvider = "cline"
+		transformed.actModeApiProvider = "cline"
+		providers.push("cline")
+	}
+
+	// This line needs to stay here, it is order dependent on the above code checking the configured providers
+	if (providers.length > 0) {
+		transformed.remoteConfiguredProviders = providers
+	}
+
+	// Map global rules and workflows
+	if (remoteConfig.globalRules !== undefined) {
+		transformed.remoteGlobalRules = remoteConfig.globalRules
+	}
+	if (remoteConfig.globalWorkflows !== undefined) {
+		transformed.remoteGlobalWorkflows = remoteConfig.globalWorkflows
+	}
+
 	return transformed
 }
 
@@ -74,20 +148,33 @@ export function transformRemoteConfigToStateShape(remoteConfig: RemoteConfig): P
 export function applyRemoteConfig(remoteConfig?: RemoteConfig): void {
 	const stateManager = StateManager.get()
 
-	// If no remote config provided, clear the cache
+	// If no remote config provided, clear the cache and relevant state
 	if (!remoteConfig) {
 		stateManager.clearRemoteConfig()
+		// the remote config cline rules toggle state is stored in global state
+		stateManager.setGlobalState("remoteRulesToggles", {})
+		stateManager.setGlobalState("remoteWorkflowToggles", {})
 		return
 	}
 
 	// Transform remote config to state shape
 	const transformed = transformRemoteConfigToStateShape(remoteConfig)
 
+	// Synchronize toggle state
+	const currentRuleToggles = stateManager.getGlobalStateKey("remoteRulesToggles") || {}
+	const currentWorkflowToggles = stateManager.getGlobalStateKey("remoteWorkflowToggles") || {}
+
+	const syncedRuleToggles = synchronizeRemoteRuleToggles(remoteConfig.globalRules || [], currentRuleToggles)
+	const syncedWorkflowToggles = synchronizeRemoteRuleToggles(remoteConfig.globalWorkflows || [], currentWorkflowToggles)
+
+	stateManager.setGlobalState("remoteRulesToggles", syncedRuleToggles)
+	stateManager.setGlobalState("remoteWorkflowToggles", syncedWorkflowToggles)
+
 	// Clear existing remote config cache
 	stateManager.clearRemoteConfig()
 
 	// Populate remote config cache with transformed values
 	for (const [key, value] of Object.entries(transformed)) {
-		stateManager.setRemoteConfigField(key as keyof GlobalStateAndSettings, value)
+		stateManager.setRemoteConfigField(key as keyof RemoteConfigFields, value)
 	}
 }

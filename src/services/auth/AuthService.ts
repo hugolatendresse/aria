@@ -1,8 +1,9 @@
 import { AuthState, UserInfo } from "@shared/proto/cline/account"
 import { type EmptyRequest, String } from "@shared/proto/cline/common"
-import { clineEnvConfig } from "@/config"
+import { ClineEnv } from "@/config"
 import { Controller } from "@/core/controller"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
+import { setWelcomeViewCompleted } from "@/core/controller/state/setWelcomeViewCompleted"
 import { HostProvider } from "@/hosts/host-provider"
 import { telemetryService } from "@/services/telemetry"
 import { openExternal } from "@/utils/env"
@@ -140,6 +141,14 @@ export class AuthService {
 		return activeOrg?.organizationId ?? null
 	}
 
+	/**
+	 * Gets all organizations from the authenticated user's info
+	 * @returns Array of organizations, or undefined if not available
+	 */
+	getUserOrganizations(): ClineAccountOrganization[] | undefined {
+		return this._clineAuthInfo?.userInfo?.organizations
+	}
+
 	private async internalGetAuthToken(provider: IAuthProvider): Promise<string | null> {
 		try {
 			let clineAccountAuthToken = this._clineAuthInfo?.idToken
@@ -150,7 +159,6 @@ export class AuthService {
 
 			// Check if token has expired
 			if (await provider.shouldRefreshIdToken(clineAccountAuthToken, this._clineAuthInfo.expiresAt)) {
-				console.log("Provider indicates token needs refresh")
 				const updatedAuthInfo = await provider.retrieveClineAuthInfo(this._controller)
 				if (updatedAuthInfo) {
 					this._clineAuthInfo = updatedAuthInfo
@@ -182,14 +190,22 @@ export class AuthService {
 		// Keeping the providerName param for forward compatibility/telemetry
 		switch (providerName) {
 			case "cline":
-				this._provider = new ClineAuthProvider(clineEnvConfig)
-				this._fallbackProvider = new FirebaseAuthProvider(clineEnvConfig)
+				this._provider = new ClineAuthProvider()
+				this._fallbackProvider = new FirebaseAuthProvider()
 				break
 			case "firebase":
 			default:
-				this._provider = new FirebaseAuthProvider(clineEnvConfig)
+				this._provider = new FirebaseAuthProvider()
 				break
 		}
+	}
+
+	/**
+	 * Gets the provider name for the current authentication
+	 * @returns The provider name (e.g., "cline", "firebase"), or null if not authenticated
+	 */
+	getProviderName(): string | null {
+		return this._clineAuthInfo?.provider ?? null
 	}
 
 	getInfo(): AuthState {
@@ -197,7 +213,7 @@ export class AuthService {
 		let user: any = null
 		if (this._clineAuthInfo && this._authenticated) {
 			const userInfo = this._clineAuthInfo.userInfo
-			this._clineAuthInfo.userInfo.appBaseUrl = clineEnvConfig?.appBaseUrl
+			this._clineAuthInfo.userInfo.appBaseUrl = ClineEnv.config()?.appBaseUrl
 
 			user = UserInfo.create({
 				// TODO: create proto for new user info type
@@ -214,8 +230,9 @@ export class AuthService {
 		})
 	}
 
-	async createAuthRequest(): Promise<String> {
-		if (this._authenticated) {
+	async createAuthRequest(strict = false): Promise<String> {
+		// In strict mode, we do not open a new auth window if already authenticated
+		if (strict && this._authenticated) {
 			this.sendAuthStatusUpdate()
 			return String.create({ value: "Already authenticated" })
 		}
@@ -246,7 +263,7 @@ export class AuthService {
 			telemetryService.captureAuthLoggedOut(this._provider.name, reason)
 			this._clineAuthInfo = null
 			this._authenticated = false
-			this._controller.stateManager.setSecret("clineAccountId", undefined)
+			this.destroyTokens()
 			this.sendAuthStatusUpdate()
 		} catch (error) {
 			console.error("Error signing out:", error)
@@ -264,11 +281,13 @@ export class AuthService {
 			this._authenticated = this._clineAuthInfo?.idToken !== undefined
 
 			telemetryService.captureAuthSucceeded(this._provider.name)
-			await this.sendAuthStatusUpdate()
+			await setWelcomeViewCompleted(this._controller, { value: true })
 		} catch (error) {
 			console.error("Error signing in with custom token:", error)
 			telemetryService.captureAuthFailed(this._provider.name)
 			throw error
+		} finally {
+			await this.sendAuthStatusUpdate()
 		}
 	}
 
@@ -278,8 +297,7 @@ export class AuthService {
 	 * This is typically called when the user logs out.
 	 */
 	async clearAuthToken(): Promise<void> {
-		this._controller.stateManager.setSecret("clineAccountId", undefined)
-		this._controller.stateManager.setSecret("cline:clineAccountId", undefined)
+		this.destroyTokens()
 	}
 
 	/**
@@ -338,8 +356,6 @@ export class AuthService {
 		responseStream: StreamingResponseHandler<AuthState>,
 		requestId?: string,
 	): Promise<void> {
-		console.log("Subscribing to authStatusUpdate")
-
 		// Add this subscription to the active subscriptions
 		this._activeAuthStatusUpdateHandlers.add(responseStream)
 		this._handlerToController.set(responseStream, controller)
@@ -404,5 +420,10 @@ export class AuthService {
 
 		// Update state in webviews once per unique controller
 		await Promise.all(Array.from(uniqueControllers).map((c) => c.postStateToWebview()))
+	}
+
+	private destroyTokens() {
+		this._controller.stateManager.setSecret("clineAccountId", undefined)
+		this._controller.stateManager.setSecret("cline:clineAccountId", undefined)
 	}
 }

@@ -7,6 +7,7 @@ import { FocusChainSettings } from "@shared/FocusChainSettings"
 import { HistoryItem } from "@shared/HistoryItem"
 import { McpDisplayMode } from "@shared/McpDisplayMode"
 import { WorkspaceRoot } from "@shared/multi-root/types"
+import { GlobalInstructionsFile } from "@shared/remote-config/schema"
 import { Mode, OpenaiReasoningEffort } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
 import { UserInfo } from "@shared/UserInfo"
@@ -23,6 +24,15 @@ export type GlobalStateAndSettingsKey = keyof (GlobalState & Settings)
 
 export type GlobalStateAndSettings = GlobalState & Settings
 
+export interface RemoteConfigExtraFields {
+	remoteConfiguredProviders: string[]
+	allowedMCPServers: Array<{ id: string }>
+	remoteGlobalRules?: GlobalInstructionsFile[]
+	remoteGlobalWorkflows?: GlobalInstructionsFile[]
+}
+
+export type RemoteConfigFields = GlobalStateAndSettings & RemoteConfigExtraFields
+
 export interface GlobalState {
 	lastShownAnnouncementId: string | undefined
 	taskHistory: HistoryItem[]
@@ -31,6 +41,7 @@ export interface GlobalState {
 	mcpMarketplaceEnabled: boolean
 	mcpResponsesCollapsed: boolean
 	terminalReuseEnabled: boolean
+	vscodeTerminalExecutionMode: "vscodeTerminal" | "backgroundExec"
 	isNewUser: boolean
 	welcomeViewCompleted: boolean | undefined
 	mcpDisplayMode: McpDisplayMode
@@ -41,6 +52,10 @@ export interface GlobalState {
 	hooksEnabled: boolean
 	lastDismissedInfoBannerVersion: number
 	lastDismissedModelBannerVersion: number
+	lastDismissedCliBannerVersion: number
+	nativeToolCallEnabled: boolean
+	remoteRulesToggles: ClineRulesToggles
+	remoteWorkflowToggles: ClineRulesToggles
 }
 
 export interface Settings {
@@ -84,6 +99,8 @@ export interface Settings {
 	shellIntegrationTimeout: number
 	defaultTerminalProfile: string
 	terminalOutputLineLimit: number
+	maxConsecutiveMistakes: number
+	subagentTerminalOutputLineLimit: number
 	sapAiCoreTokenUrl: string | undefined
 	sapAiCoreBaseUrl: string | undefined
 	sapAiResourceGroup: string | undefined
@@ -102,8 +119,13 @@ export interface Settings {
 	difyBaseUrl: string | undefined
 	autoCondenseThreshold: number | undefined // number from 0 to 1
 	ocaBaseUrl: string | undefined
+	minimaxApiLine: string | undefined
 	ocaMode: string | undefined
+	aihubmixBaseUrl: string | undefined
+	aihubmixAppCode: string | undefined
 	hooksEnabled: boolean
+	subagentsEnabled: boolean
+	hicapModelId: string | undefined
 
 	// Plan mode configurations
 	planModeApiProvider: ApiProvider
@@ -137,6 +159,11 @@ export interface Settings {
 	planModeHuaweiCloudMaasModelInfo: ModelInfo | undefined
 	planModeOcaModelId: string | undefined
 	planModeOcaModelInfo: OcaModelInfo | undefined
+	planModeHicapModelId: string | undefined
+	planModeHicapModelInfo: ModelInfo | undefined
+	planModeAihubmixModelId: string | undefined
+	planModeAihubmixModelInfo: ModelInfo | undefined
+	planModeNousResearchModelId: string | undefined
 	// Act mode configurations
 	actModeApiProvider: ApiProvider
 	actModeApiModelId: string | undefined
@@ -167,12 +194,29 @@ export interface Settings {
 	actModeHuggingFaceModelInfo: ModelInfo | undefined
 	actModeHuaweiCloudMaasModelId: string | undefined
 	actModeHuaweiCloudMaasModelInfo: ModelInfo | undefined
-	planModeVercelAiGatewayModelId: string | undefined
-	planModeVercelAiGatewayModelInfo: ModelInfo | undefined
-	actModeVercelAiGatewayModelId: string | undefined
-	actModeVercelAiGatewayModelInfo: ModelInfo | undefined
 	actModeOcaModelId: string | undefined
 	actModeOcaModelInfo: OcaModelInfo | undefined
+	actModeHicapModelId: string | undefined
+	actModeHicapModelInfo: ModelInfo | undefined
+	actModeAihubmixModelId: string | undefined
+	actModeAihubmixModelInfo: ModelInfo | undefined
+	actModeNousResearchModelId: string | undefined
+
+	// OpenTelemetry configuration
+	openTelemetryEnabled: boolean
+	openTelemetryMetricsExporter: string | undefined
+	openTelemetryLogsExporter: string | undefined
+	openTelemetryOtlpProtocol: string
+	openTelemetryOtlpEndpoint: string
+	openTelemetryOtlpMetricsProtocol: string | undefined
+	openTelemetryOtlpMetricsEndpoint: string | undefined
+	openTelemetryOtlpLogsProtocol: string | undefined
+	openTelemetryOtlpLogsEndpoint: string | undefined
+	openTelemetryMetricExportInterval: number
+	openTelemetryOtlpInsecure: boolean
+	openTelemetryLogBatchSize: number
+	openTelemetryLogBatchTimeout: number
+	openTelemetryLogMaxQueueSize: number
 }
 
 export interface Secrets {
@@ -214,6 +258,11 @@ export interface Secrets {
 	difyApiKey: string | undefined
 	ocaApiKey: string | undefined
 	ocaRefreshToken: string | undefined
+	minimaxApiKey: string | undefined
+	hicapApiKey: string | undefined
+	aihubmixApiKey: string | undefined
+	mcpOAuthSecrets: string | undefined
+	nousResearchApiKey: string | undefined
 }
 
 export interface LocalState {
