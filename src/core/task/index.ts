@@ -903,6 +903,10 @@ export class Task {
 	}
 
 	private async initiateTaskLoop(userContent: UserContent): Promise<void> {
+		// Reset debug run ID for new task loop (new user message)
+		this.taskState.debugRunId = undefined
+		this.taskState.debugAttemptCount = 0
+
 		let nextUserContent = userContent
 		let includeFileDetails = true
 		while (!this.taskState.abort) {
@@ -1064,6 +1068,10 @@ export class Task {
 		let bufferStuckTimer: NodeJS.Timeout | null = null
 		const BUFFER_STUCK_TIMEOUT_MS = 6000 // 6 seconds
 
+		// Track if buffer gets stuck
+		let bufferStuckTimer: NodeJS.Timeout | null = null
+		const BUFFER_STUCK_TIMEOUT_MS = 6000 // 6 seconds
+
 		const flushBuffer = async (force = false) => {
 			if (outputBuffer.length === 0) {
 				if (force) {
@@ -1214,6 +1222,12 @@ export class Task {
 			}
 		} else {
 			await process
+		}
+
+		// Clear timer if process completes normally
+		if (completionTimer) {
+			clearTimeout(completionTimer)
+			completionTimer = null
 		}
 
 		// Clear timer if process completes normally
@@ -1551,7 +1565,7 @@ ${systemPrompt}
 		} catch (error) {
 			console.warn("[PROMPT DEBUG] Failed to save system prompt:", error)
 		}
-		
+
 		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(
 			this.messageStateHandler.getApiConversationHistory(),
 			this.messageStateHandler.getClineMessages(),

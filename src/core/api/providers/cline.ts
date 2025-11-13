@@ -82,6 +82,31 @@ export class ClineHandler implements ApiHandler {
 						}
 						return resp
 					},
+					// Capture real HTTP request ID from initial streaming response headers
+					fetch: async (...args: Parameters<typeof fetch>): Promise<Awaited<ReturnType<typeof fetch>>> => {
+						const [input, init] = args
+						const resp = await fetch(input, init)
+						try {
+							let urlStr = ""
+							if (typeof input === "string") {
+								urlStr = input
+							} else if (input instanceof URL) {
+								urlStr = input.toString()
+							} else if (typeof (input as { url?: unknown }).url === "string") {
+								urlStr = (input as { url: string }).url
+							}
+							// Only record for chat completions (the primary streaming request)
+							if (urlStr.includes("/chat/completions")) {
+								const rid = resp.headers.get("x-request-id") || resp.headers.get("request-id")
+								if (rid) {
+									this.lastRequestId = rid
+								}
+							}
+						} catch {
+							// ignore header capture errors
+						}
+						return resp
+					},
 				})
 			} catch (error: any) {
 				throw new Error(`Error creating Cline client: ${error.message}`)

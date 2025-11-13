@@ -62,6 +62,49 @@ export type TelemetryMetadata = {
 }
 
 /**
+ * Enum for terminal output failure reasons
+ */
+export enum TerminalOutputFailureReason {
+	TIMEOUT = "timeout",
+	NO_SHELL_INTEGRATION = "no_shell_integration",
+	CLIPBOARD_FAILED = "clipboard_failed",
+}
+
+/**
+ * Enum for terminal user intervention actions
+ */
+export enum TerminalUserInterventionAction {
+	PROCESS_WHILE_RUNNING = "process_while_running",
+	MANUAL_PASTE = "manual_paste",
+	CANCELLED = "cancelled",
+}
+
+/**
+ * Enum for terminal hang stages
+ */
+export enum TerminalHangStage {
+	WAITING_FOR_COMPLETION = "waiting_for_completion",
+	BUFFER_STUCK = "buffer_stuck",
+	STREAM_TIMEOUT = "stream_timeout",
+}
+
+export type TelemetryMetadata = {
+	/** The extension or cline-core version. */
+	extension_version: string
+	/** The name of the host IDE or environment e.g. VSCode */
+	platform: string
+	/** The version of the host environment */
+	platform_version: string
+	/** The operating system type, e.g. darwin, win32. This is the value returned by os.platform() */
+	os_type: string
+	/** The operating system version e.g. 'Windows 10 Pro', 'Darwin Kernel Version 21.6.0...'
+	 * This is the value returned by os.version() */
+	os_version: string
+	/** Whether the extension is running in development mode */
+	is_dev: string | undefined
+}
+
+/**
  * Maximum length for error messages to prevent excessive data
  */
 const MAX_ERROR_MESSAGE_LENGTH = 500
@@ -105,6 +148,19 @@ export class TelemetryService {
 			// Tracks when voice transcription fails
 			TRANSCRIPTION_ERROR: "voice.transcription_error",
 			// Tracks when voice feature is enabled or disabled in settings
+		},
+		// Workspace-related events for multi-root support
+		WORKSPACE: {
+			// Track workspace initialization
+			INITIALIZED: "workspace.initialized",
+			// Track initialization errors
+			INIT_ERROR: "workspace.init_error",
+			// Track VCS detection
+			VCS_DETECTED: "workspace.vcs_detected",
+			// Track multi-root checkpoint operations
+			MULTI_ROOT_CHECKPOINT: "workspace.multi_root_checkpoint",
+			// Track workspace resolution
+			PATH_RESOLVED: "workspace.path_resolved",
 		},
 		// Workspace-related events for multi-root support
 		WORKSPACE: {
