@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import sys
 import logging
 import os
@@ -89,60 +88,6 @@ def search_both_papers(prompt: str) -> str:
     werner_modlin_docs = werner_modlin_store.similarity_search(prompt, k=5)
     all_docs = friedland_docs + werner_modlin_docs
     return generate_answer(prompt, all_docs)
-
-=======
-# TODO switch to technologies I have in rag.py
-
-# server.py
-from mcp.server.fastmcp import FastMCP
-from langchain.chains import RetrievalQA
-from langchain_community.document_loaders import TextLoader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_ollama.llms import OllamaLLM
-from langchain_ollama import OllamaEmbeddings
-
-# Create an MCP server
-mcp = FastMCP("RAG")
-
-embeddings = OllamaEmbeddings(
-    model="nomic-embed-text:latest",base_url="http://127.0.0.1:11434"
-)
-model = OllamaLLM(model="qwen2.5",base_url="http://127.0.0.1:11434")
-
-#RAG 1
-loader = TextLoader("/home/hugo/code/aria/assets/actuarial/dummy.txt")
-data = loader.load()
-#Document Transformer
-text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-texts = text_splitter.split_documents(data)
-#Vector DB
-docsearch = Chroma.from_documents(texts, embeddings)
-#Retriever
-qa=RetrievalQA.from_chain_type(llm=model,retriever=docsearch.as_retriever())
-
-#RAG 2
-loader = TextLoader("/home/hugo/code/aria/assets/actuarial/dummy2.txt")
-data = loader.load()
-#Document Transformer
-text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-texts = text_splitter.split_documents(data)
-#Vector DB
-docsearch = Chroma.from_documents(texts, embeddings)
-#Retriever
-qa2=RetrievalQA.from_chain_type(llm=model,retriever=docsearch.as_retriever())
-
-
-@mcp.tool()
-def retrieve_asop12(prompt: str) -> str:
-    """get information on ASOP 12"""
-    return qa.run(prompt)
-    
-@mcp.tool()
-def retrieve_animal_names(prompt: str) -> str:
-    """get information on animal names"""
-    return qa2.run(prompt)
->>>>>>> dev
 
 if __name__ == "__main__":
     mcp.run()
