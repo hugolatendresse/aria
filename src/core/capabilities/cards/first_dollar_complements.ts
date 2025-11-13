@@ -22,8 +22,8 @@ export const firstDollarComplementsUmbrellaCard: CapabilityCard = {
 
 **Python module usage (enforced):**
 \`\`\`python
-# Install: pip install ratemaking-tools
-from ratemaking_tools.complements import (
+# Install: pip install ratemaking==0.3.0
+from ratemaking.complements import (
     larger_group_applied_rate_change_to_present_rate,
     harwayne_complement, 
     HarwayneInputs

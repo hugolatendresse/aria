@@ -30,8 +30,8 @@ C = Present Rate × (1 + loss_trend)^{t} × (Prior Indicated / Prior Implemented
 
 **Python module usage (enforced):**
 \`\`\`python
-# Install: pip install ratemaking-tools
-from ratemaking_tools.complements import (
+# Install: pip install ratemaking==0.3.0
+from ratemaking.complements import (
     trended_present_rates_loss_cost,
     trended_present_rates_rate_change_factor
 )
