@@ -49,3 +49,6 @@ test-results
 tests/ide_results/
 
 temp/*
+
+## File store
+rag/experiment/docstore
