@@ -2,10 +2,13 @@ import { classicalLimitedFluctuationCredibilityCard, credibilityBayesianCard, cr
 import { currentLevelPremiumCard } from "./cards/current_level_premium"
 import { firstDollarComplementsUmbrellaCard } from "./cards/first_dollar_complements"
 import { firstDollarTrendedPresentRatesCard } from "./cards/first_dollar_trended_present_rates"
+import { specialAdjustmentsTortReformCard } from "./cards/special_adjustments_tort_reform"
 import { triangleFirstChainladderCard } from "./cards/triangle_first_chainladder"
 import { ultimateBornhuetterFergusonCard } from "./cards/ultimate_bornhuetter_ferguson"
 import { ultimateCapeCodCard } from "./cards/ultimate_capecod"
 import { ultimateChainladderCard } from "./cards/ultimate_chainladder"
+import { ultimateFreqSev1Card } from "./cards/ultimate_frequency_severity_1"
+import { ultimateFreqSev2Card } from "./cards/ultimate_frequency_severity_2"
 
 export type CapabilityCard = {
 	id: string
@@ -25,6 +28,9 @@ export const cards: CapabilityCard[] = [
 	ultimateBornhuetterFergusonCard,
 	ultimateCapeCodCard,
 	ultimateChainladderCard,
+	ultimateFreqSev1Card,
+	ultimateFreqSev2Card,
+	specialAdjustmentsTortReformCard,
 	currentLevelPremiumCard,
 	classicalLimitedFluctuationCredibilityCard,
 	credibilityBuhlmannCard,

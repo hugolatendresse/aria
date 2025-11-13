@@ -7,10 +7,9 @@ export const ultimateChainladderCard: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["chain ladder", "chainladder", "link ratio", "ldf", "cdf", "mack", "ultimate", "IBNR", "tail", "bootstrap"],
+			any: ["chain ladder", "chainladder", "chain-ladder", "link ratio", "link-ratio", "ldf", "cdf", "mack", "mack method"],
 		},
-		{ kind: "keyword", any: ["ultimate", "IBNR"], all: ["triangle"] },
-		{ kind: "regex", pattern: "\\b(ldf|cdf|link[- ]?ratio|mack|tail|std|mse|sigma|reserve)s?\\b", flags: "i" },
+		{ kind: "regex", pattern: "\\b(chain[\\s-]?ladder|link[\\s-]?ratio|ldf|cdf|mack)\\b", flags: "i" },
 	],
 	importance: 5,
 	content: `**Capability Card: Chain Ladder (Link‑Ratio) v1.0**

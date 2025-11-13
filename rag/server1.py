@@ -89,6 +89,5 @@ def search_both_papers(prompt: str) -> str:
     all_docs = friedland_docs + werner_modlin_docs
     return generate_answer(prompt, all_docs)
 
-
 if __name__ == "__main__":
     mcp.run()
