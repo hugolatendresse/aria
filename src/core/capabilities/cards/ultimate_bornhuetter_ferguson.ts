@@ -19,7 +19,6 @@ export const ultimateBornhuetterFergusonCard: CapabilityCard = {
 		},
 		{ kind: "regex", pattern: "\\b(bornhuetter|bf[\\s-]?method|expected[\\s-]?loss[\\s-]?ratio)\\b", flags: "i" },
 	],
-	importance: 5,
 	content: `**Capability Card: Bornhuetter–Ferguson v1.0**
 
 **What it does:**

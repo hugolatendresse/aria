@@ -9,6 +9,7 @@ import { ultimateCapeCodCard } from "./cards/ultimate_capecod"
 import { ultimateChainladderCard } from "./cards/ultimate_chainladder"
 import { ultimateFreqSev1Card } from "./cards/ultimate_frequency_severity_1"
 import { ultimateFreqSev2Card } from "./cards/ultimate_frequency_severity_2"
+import { ultimateFreqSev3Card } from "./cards/ultimate_frequency_severity_3"
 
 export type CapabilityCard = {
 	id: string
@@ -17,7 +18,6 @@ export type CapabilityCard = {
 	triggers: Array<
 		{ kind: "keyword"; any: string[]; all?: string[]; none?: string[] } | { kind: "regex"; pattern: string; flags?: string }
 	>
-	importance?: number
 	content: string
 	sources?: string[]
 	safetyTags?: string[]
@@ -30,6 +30,7 @@ export const cards: CapabilityCard[] = [
 	ultimateChainladderCard,
 	ultimateFreqSev1Card,
 	ultimateFreqSev2Card,
+	ultimateFreqSev3Card,
 	specialAdjustmentsTortReformCard,
 	currentLevelPremiumCard,
 	classicalLimitedFluctuationCredibilityCard,

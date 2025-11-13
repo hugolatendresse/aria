@@ -11,7 +11,6 @@ export const ultimateCapeCodCard: CapabilityCard = {
 		},
 		{ kind: "regex", pattern: "\\b(cape[\\s-]?cod|stanard|b[üu]hlmann)\\b", flags: "i" },
 	],
-	importance: 5,
 	content: `**Capability Card: Cape Cod v1.0**
 
 **What it does:**  

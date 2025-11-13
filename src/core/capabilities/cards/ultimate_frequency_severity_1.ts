@@ -12,7 +12,6 @@ export const ultimateFreqSev1Card: CapabilityCard = {
 		{ kind: "keyword", any: ["claim count", "closed with payment", "CWP"], all: ["frequency", "severity"] },
 		{ kind: "regex", pattern: "\\b(freq(uency)?[\\s-]sev(erity)?)\\b", flags: "i" },
 	],
-	importance: 5,
 	content: `**Capability Card: Frequency-Severity 1 v1.0**
 
 **What it does:**  

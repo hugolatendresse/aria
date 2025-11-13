@@ -12,7 +12,6 @@ export const firstDollarComplementsUmbrellaCard: CapabilityCard = {
 		},
 		{ kind: "regex", pattern: "\\b(trended present rates|rate change from larger group|Harwayne)\\b", flags: "i" },
 	],
-	importance: 5,
 	content: `**First-Dollar complements available (method auto-selection based on user phrasing):**
 1) Larger group loss costs → exposure-weighted PP from the larger set.  
 2) Related group loss costs → similar but acknowledge bias; document adjustments.  

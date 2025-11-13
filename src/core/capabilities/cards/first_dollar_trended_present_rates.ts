@@ -14,7 +14,6 @@ export const firstDollarTrendedPresentRatesCard: CapabilityCard = {
 			flags: "i",
 		},
 	],
-	importance: 6,
 	content: `**Capability: Trended Present Rates Complement (WM Ch.12)**
 
 **Formula (pure premium form):**  

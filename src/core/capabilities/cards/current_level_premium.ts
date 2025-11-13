@@ -20,7 +20,6 @@ export const currentLevelPremiumCard: CapabilityCard = {
 			flags: "i",
 		},
 	],
-	importance: 4,
 	content: `**Capability Card: On-Level Premium Adjustment v1.0**
 
 **What it does:**
