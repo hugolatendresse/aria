@@ -7,16 +7,11 @@ export const currentLevelPremiumCard: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["on-level", "onlevel", "on level", "rate change", "rate level", "premium adjustment", "average rate level"],
-		},
-		{
-			kind: "keyword",
-			any: ["cape cod", "expected loss", "exposure", "premium"],
-			all: ["rate"],
+			any: ["on-level", "onlevel", "on level", "rate level"],
 		},
 		{
 			kind: "regex",
-			pattern: "\\b(rate\\s*change|rate\\s*level|current\\s*level|on[- ]?level|parallelogram)\\b",
+			pattern: "\\b(rate\\s+level|on[- ]?level)\\b",
 			flags: "i",
 		},
 	],

@@ -2,7 +2,7 @@ import { classicalLimitedFluctuationCredibilityCard, credibilityBayesianCard, cr
 import { currentLevelPremiumCard } from "./cards/current_level_premium"
 import { firstDollarComplementsUmbrellaCard } from "./cards/first_dollar_complements"
 import { firstDollarTrendedPresentRatesCard } from "./cards/first_dollar_trended_present_rates"
-import { lossTrendingFrequencySeverityCard } from "./cards/loss_adjustments"
+import { lossTrending } from "./cards/loss_adjustments"
 import { lossRatioIndicationCard } from "./cards/loss_ratio_indication"
 import { premiumOnLevelingCard, premiumTrendingCard } from "./cards/premium_adjustments"
 import { purePremiumIndicationCard } from "./cards/pure_premium_indication"
@@ -44,7 +44,7 @@ export const cards: CapabilityCard[] = [
 	firstDollarTrendedPresentRatesCard,
 	premiumOnLevelingCard,
 	premiumTrendingCard,
-	lossTrendingFrequencySeverityCard,
+	lossTrending,
 	lossRatioIndicationCard,
 	purePremiumIndicationCard,
 ]

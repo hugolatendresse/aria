@@ -1,9 +1,9 @@
 import { CapabilityCard } from "../card_registry"
 
-export const lossTrendingFrequencySeverityCard: CapabilityCard = {
+export const lossTrending: CapabilityCard = {
 	id: "ratemaking-loss-trending-freqsev",
 	version: "1.1.0",
-	title: "Ratemaking: Loss Trending via Frequency-Severity (Two-Step)",
+	title: "Ratemaking: Loss Trending (Two-Step Method)",
 	triggers: [
 		{
 			kind: "keyword",
@@ -14,18 +14,91 @@ export const lossTrendingFrequencySeverityCard: CapabilityCard = {
 				"frequency severity",
 				"two-step loss trend",
 				"loss trend",
+				"loss trending",
+				"trend losses",
 			],
 		},
-		{ kind: "regex", pattern: "\\b(frequency[\\s-]?severity|freq[\\s-]?sev|loss[\\s-]?trend)\\b", flags: "i" },
+		{
+			kind: "regex",
+			pattern: "\\b(frequency[\\s-]?severity|freq[\\s-]?sev|loss[\\s-]?trend|pure[\\s-]?premium[\\s-]?trend)\\b",
+			flags: "i",
+		},
 	],
-	content: `**Capability Card: Loss Trending (Frequency-Severity) v1.1**
+	content: `**Capability Card: Loss Trending (Two-Step Method) v1.1**
 
 **What it does:**
-Trends historical ultimate losses to future policy periods by separately analyzing claim frequency and severity components, then applying Two-Step trending to project from historical accident years to future average accident date.
+Trends historical ultimate losses to future policy periods using Two-Step trending methodology. This card covers BOTH pure premium trending AND frequency-severity decomposition approaches.
+
+**APPLIES TO ALL LOSS TRENDING METHODS:**
+- Pure Premium Trending (trend aggregate losses directly)
+- Loss Cost Trending (trend losses per exposure)
+- Frequency-Severity Decomposition (trend components separately)
+
+**The Two-Step trending methodology, date calculations, and per-accident-year structure described here are MANDATORY for ALL methods.**
+
+**OPTION 1: Pure Premium / Loss Cost Trending**
+
+When trending losses or loss ratios directly (WITHOUT frequency-severity decomposition):
 
 **CRITICAL DATA REQUIREMENTS:**
 
-Loss trending uses **QUARTERLY REGIONAL/STATE LOSS TREND DATA**, with frequency and severity calculated as:
+Loss trending uses **QUARTERLY REGIONAL/STATE PURE PREMIUM or LOSS COST DATA**:
+
+\`\`\`python
+# Load quarterly pure premium data
+qtrly_pp_df = pd.read_csv('qtrly_regional_pure_premium.csv')
+
+# The series to fit trends to
+pp_series = qtrly_pp_df['Paid Pure Premium (including ALAE)']
+\`\`\`
+
+**MANDATORY METHODOLOGY - LOGEST Regression (NOT Geometric Means):**
+
+\`\`\`python
+import numpy as np
+
+def exponential_trend_fit(data_series, n_points):
+    """
+    Fit exponential trend using least squares (Excel LOGEST method).
+    
+    CRITICAL: This is LINEAR REGRESSION on LOG-TRANSFORMED data,
+    NOT geometric mean of period-to-period changes.
+    """
+    if len(data_series) < n_points:
+        raise ValueError(f"Data series has {len(data_series)} points but {n_points} requested")
+    
+    if hasattr(data_series, 'values'):
+        recent_data = data_series[-n_points:].values
+    else:
+        recent_data = data_series[-n_points:]
+    
+    x = np.arange(n_points)  # 0, 1, 2, ..., n-1
+    log_y = np.log(recent_data)
+    
+    # Linear regression on log-transformed data
+    coeffs = np.polyfit(x, log_y, 1)
+    slope = coeffs[0]
+    
+    # Convert back from log space
+    trend_rate = np.exp(slope) - 1
+    
+    return trend_rate
+
+# CURRENT loss trend (8-point for historical/stable)
+quarterly_trend_8pt = exponential_trend_fit(pp_series, n_points=8)
+annual_trend_8pt = (1 + quarterly_trend_8pt) ** 4 - 1
+
+# PROJECTED loss trend (4-point for recent/responsive)
+quarterly_trend_4pt = exponential_trend_fit(pp_series, n_points=4)
+annual_trend_4pt = (1 + quarterly_trend_4pt) ** 4 - 1
+
+# Use annual_trend_8pt for "current" period
+# Use annual_trend_4pt for "projected" period
+\`\`\`
+
+**OPTION 2: Frequency-Severity Decomposition**
+
+When decomposing into frequency and severity components:
 
 \`\`\`python
 # Load quarterly loss trend data
@@ -134,23 +207,66 @@ step_7_projected_loss_trend = (1 + frequency_annual_4pt) * (1 + severity_annual_
 - Always fit to QUARTERLY data, then compound to annual
 - Do NOT use the same trend rate for both current and projected
 
-**Part 2: Two-Step Trending for Losses**
+**Part 2: Two-Step Trending - MANDATORY FOR ALL LOSS TRENDING METHODS**
+
+**THIS SECTION APPLIES TO:**
+- Pure Premium Trending (Option 1)
+- Loss Cost Trending (Option 1)  
+- Frequency-Severity Trending (Option 2)
 
 MANDATORY when "Two-Step trending" is specified. Do NOT use simple trending.
 
 Apply trend from historical accident year midpoints to future, using DIFFERENT rates for current vs projected.
-You MUST use the \`future_average_accident_date\` function to calculate the date to trend to in the future.
+
+**CRITICAL STRUCTURE: Trend EACH Accident Year Individually**
+
+YOU MUST apply trending to each accident year separately. Each AY gets its own trend factor based on how far it needs to be trended:
+- AY 2011 (oldest) needs MORE trending than AY 2015 (newest)
+- NEVER average losses first, then trend the average
+- ALWAYS trend each AY's ultimate loss individually, THEN sum
+
+\`\`\`python
+# CORRECT: Trend each accident year individually
+for ay in accident_years:
+    ay_midpoint = datetime(ay, 7, 1).date()
+    # Calculate trend factor specific to this AY
+    # Apply to this AY's ultimate loss
+    
+# Sum the trended losses AFTER trending each AY
+
+# WRONG: Do NOT do this!
+avg_loss = total_losses / total_exposures
+trended_avg = avg_loss * single_trend_factor  # Wrong!
+\`\`\`
+
+**CRITICAL: Calculating Future Average Accident Date**
+
+**========================================================================**
+**ABSOLUTELY MANDATORY - NO EXCEPTIONS - READ THIS CAREFULLY**
+**========================================================================**
+
+YOU MUST USE THE EXISTING FUNCTION FROM THE RATEMAKING PACKAGE.
+
+**DO NOT:**
+- Implement your own date calculation
+- Write manual datetime arithmetic
+- Calculate the date using formulas
+- Skip using the ratemaking package
+
+**YOU MUST:**
+- Import future_average_accident_date from ratemaking.trending
+- Call the function with the three required parameters
+- Use the result directly
+
+**THIS IS NON-NEGOTIABLE. IF YOU IMPLEMENT YOUR OWN DATE CALCULATION, YOU ARE MAKING A CRITICAL ERROR.**
+
+**REQUIRED USAGE - COPY THIS EXACTLY:**
 
 \`\`\`python
 from datetime import datetime
 from ratemaking.trending import future_average_accident_date
 
-# Setup
-accident_years = [2021, 2022, 2023, 2024, 2025]
-latest_ay = 2025
-current_ay_date = datetime(latest_ay, 7, 1).date()  # Midpoint of latest AY
-
-# Future average accident date
+# MANDATORY: Use the function from ratemaking package
 effective_date = '1/1/2027'
 rates_in_effect_months = 12
 policy_term_months = 6
@@ -160,12 +276,26 @@ future_avg_accident = future_average_accident_date(
     rates_in_effect_months, 
     policy_term_months
 )
-# Returns: datetime.date(2027, 10, 1)
+# Result: datetime.date(2027, 10, 1)
+\`\`\`
+
+**WHY THIS IS CRITICAL:**
+The ratemaking package already has this function implemented correctly with all edge cases handled. Reimplementing it manually WILL produce incorrect results.
+
+**IF YOU ARE TEMPTED TO CALCULATE IT YOURSELF:**
+STOP. Go back and read this section again. Import and use the function.
+
+**========================================================================**
 
 # Calculate projected period (same for all accident years)
 def calculate_trend_period_years(from_date, to_date):
     delta_days = (to_date - from_date).days
     return delta_days / 365.25
+
+# Setup
+accident_years = [2021, 2022, 2023, 2024, 2025]
+latest_ay = 2025
+current_ay_date = datetime(latest_ay, 7, 1).date()  # Midpoint of latest AY
 
 projected_loss_trend_period = calculate_trend_period_years(current_ay_date, future_avg_accident)
 
@@ -252,7 +382,10 @@ trended_losses = ultimate_losses * loss_trend_factor
 7. Using fixed trend factor for all accident years (Two-Step produces different factors per AY)
 8. Not properly annualizing quarterly trends before combining
 9. Using \`future_average_written_date\` instead of \`future_average_accident_date\` for losses
-10. Applying trends before calculating ultimate losses (develop first, then trend)`,
+10. Applying trends before calculating ultimate losses (develop first, then trend)
+11. **CRITICAL ERROR: Calculating future average accident date incorrectly** - You MUST import and use the future_average_accident_date function from ratemaking.trending package. DO NOT implement your own calculation. DO NOT use manual datetime arithmetic. THE FUNCTION EXISTS - USE IT.
+12. **CRITICAL ERROR: Implementing custom date calculation instead of importing the function** - The function is already implemented in ratemaking.trending. Import it. Use it. Period.
+13. **Averaging losses first, then trending the average** - MUST trend each accident year individually, then sum`,
 	sources: ["Werner & Modlin - Basic Ratemaking", "ratemaking package - trending module"],
 	safetyTags: ["actuarial", "ratemaking", "loss", "trending"],
 }

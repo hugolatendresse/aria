@@ -133,6 +133,7 @@ cdf_no_tail = pipe.named_steps.dev.cdf_.values[0, 0, 0, :]
 
 **Critical Points:**
 - **CRITICAL: DO NOT FILTER TRIANGLE DATA BEFORE CALCULATING LDFs!** When you need ultimates for specific years (e.g., 2011-2015 for your analysis), you MUST load the FULL triangle with ALL available historical years (e.g., 2009-2015) to calculate stable development factors. Filter/extract specific years' ultimates AFTER the model is fit, NOT before. Pre-filtering reduces the number of origins and produces different/less stable LDFs, giving materially wrong results.
+- PAY ATTENTION to if the user requests you develop the data using DIFFERENT DATA. E.g. you may be asked to develop state data using countrywide or regional data. You must CALCULATE LDFs from the different data and then APPLY THEM to the state data.
 - DO NOT define hardcoded target years - simply use the available years in the triangle data
 - Supply **cumulative** data; if you have incremental, cumulate first and validate triangles for structural zeros/outliers.
 - **Use Pipeline:** Chains estimators into single object for reproducibility. Steps are named ('dev', 'tail', 'model') for easy access via \`pipe.named_steps.model.ultimate_\`.

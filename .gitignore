@@ -9,6 +9,7 @@ tmp
 .cursor/
 .env
 venv/
+.cline-debug/
 
 .DS_Store
 .idea

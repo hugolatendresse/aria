@@ -63,21 +63,11 @@ export const premiumTrendingCard: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: [
-				"premium trend",
-				"exponential trend",
-				"two-step trend",
-				"two-step premium",
-				"LOGEST",
-				"rolling annual",
-				"current trend factor",
-				"projected trend factor",
-				"average written premium",
-			],
+			any: ["premium trend", "premium trending"],
 		},
 		{
 			kind: "regex",
-			pattern: "\\b(premium[\\s-]?trend|exponential[\\s-]?fit|two[\\s-]?step[\\s-]?(trend|premium)|LOGEST)\\b",
+			pattern: "\\b(premium[\\s-]?trend(ing)?)\\b",
 			flags: "i",
 		},
 	],

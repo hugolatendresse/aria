@@ -15,12 +15,13 @@ export interface CapabilityCardResult {
 export function getRelevantCapabilityCards(userMessages: string[]): CapabilityCardResult {
 	const detections = detectCards(userMessages, CARD_REGISTRY)
 	const selected = detections.map((d) => d.card)
-	const cardsBlock = formatCardsForPrompt(selected)
+	const signals = detections.flatMap((d) => d.signals)
+	const cardsBlock = formatCardsForPrompt(selected, signals)
 
 	return {
 		cardsFound: selected.length > 0,
 		cardIds: selected.map((c) => c.id),
-		signals: detections.flatMap((d) => d.signals),
+		signals,
 		cardsBlock,
 	}
 }

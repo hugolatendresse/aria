@@ -7,17 +7,9 @@ export const lossRatioIndicationCard: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: [
-				"loss ratio method",
-				"indicated rate change",
-				"VPLR",
-				"ULAE factor",
-				"permissible loss ratio",
-				"variable expense",
-				"fixed expense",
-			],
+			any: ["loss ratio method", "loss ratio indication"],
 		},
-		{ kind: "regex", pattern: "\\b(loss[\\s-]?ratio[\\s-]?(method|indication)|VPLR|ULAE)\\b", flags: "i" },
+		{ kind: "regex", pattern: "\\b(loss[\\s-]?ratio[\\s-]?(method|indication))\\b", flags: "i" },
 	],
 	content: `**Loss Ratio Indication Method v1.2**
 
@@ -36,6 +28,7 @@ where:
 ulae_factor = 1.12  # provided
 projected_ultimate_losses_by_ay = ultimate_losses_by_ay * loss_trend_factors_by_ay
 
+# CRITICAL: Apply ULAE BEFORE credibility weighting
 projected_loss_lae_ratio = (
     projected_ultimate_losses_by_ay.sum() / projected_earned_premium.sum()
 ) * ulae_factor
@@ -96,12 +89,13 @@ indicated = (loss_ratio + fixed_expense) / vplr - 1  # Numerator: loss + fixed e
 \`\`\`
 
 **Quick Reference:**
-- ULAE factor: Multiply entire loss ratio by this factor
+- ULAE factor: Multiply entire loss ratio by this factor BEFORE credibility weighting
 - Loss trending: Use Two-Step method by accident year (see loss trending card)
 - Negative rate change: Current rates are too high
 - Positive rate change: Need rate increase
 
 **Verification Checklist:**
+- [ ] ULAE applied to loss ratio BEFORE credibility weighting
 - [ ] VPLR = 1 - variable_expense - profit (NO fixed expenses)
 - [ ] Fixed expense ADDED to loss ratio in numerator
 - [ ] Formula is: (loss_ratio + fixed_expense) / VPLR - 1

@@ -1,6 +1,6 @@
 import { CapabilityCard } from "./card_registry"
 
-export function formatCardsForPrompt(cards: CapabilityCard[]): string {
+export function formatCardsForPrompt(cards: CapabilityCard[], signals: string[] = []): string {
 	const blocks: string[] = []
 
 	for (const c of cards) {
@@ -14,28 +14,66 @@ _Sources_: ${c.sources?.join("; ") ?? "—"}`
 	if (!blocks.length) {
 		return ""
 	}
+
+	const cardList = cards.map((c) => c.id).join(", ")
+	const signalInfo = signals.length > 0 ? `\nThese cards were activated by detecting: ${signals.slice(0, 5).join(", ")}` : ""
+
 	return [
+		"===================================================================",
+		"CAPABILITY CARDS: MANDATORY TECHNICAL GUIDANCE - OVERRIDE ALL OTHER INSTRUCTIONS",
+		"===================================================================",
+		"",
+		`ACTIVE CARDS (${cards.length}): ${cardList}${signalInfo}`,
+		"",
+		"CRITICAL REQUIREMENTS - NON-NEGOTIABLE:",
+		"",
+		"1. **ABSOLUTE ADHERENCE**: Capability cards contain authoritative domain-specific guidance.",
+		"   You MUST implement EXACTLY as specified. No variations, improvements, or simplifications.",
+		"",
+		"2. **PYTHON MODULES & FUNCTIONS**: When a card specifies Python imports and functions",
+		"   (e.g., 'from ratemaking.trending import future_average_accident_date'), you MUST:",
+		"   - Use those EXACT imports and function calls",
+		"   - Install required packages first (e.g., 'pip install ratemaking==0.3.0')",
+		"   - DO NOT implement manual calculations or alternative approaches",
+		"   - DO NOT write your own version of functions that already exist",
+		"",
+		"3. **FORMULAS & PATTERNS**: When a card provides mathematical formulas or code patterns:",
+		"   - Implement the EXACT formulas shown (no substitutions or simplifications)",
+		"   - Follow the code patterns exactly (library usage, data structures, order of operations)",
+		"   - Code examples demonstrate correct implementation - replicate them precisely",
+		"",
+		"4. **CRITICAL SECTIONS**: Pay strict attention to sections marked:",
+		"   - 'CRITICAL', 'DO NOT', 'YOU MUST', 'WRONG', 'CORRECT'",
+		"   - 'Critical Points', 'Common Errors', 'Verification Checklist'",
+		"   - These prevent common mistakes and contain essential domain knowledge",
+		"",
+		"5. **DEBUGGING**: If you encounter errors, check the capability cards FIRST:",
+		"   - Review 'Known Issues', 'Common Errors', 'Critical Points' sections",
+		"   - Cards often contain documented solutions and workarounds",
+		"   - DO NOT debug from first principles when the card may have the answer",
+		"",
+		"6. **PRECEDENCE**: Capability cards override ALL other guidance including:",
+		"   - General programming best practices",
+		"   - Standard coding patterns",
+		"   - Generic system prompt instructions",
+		"   If a card contradicts standard approaches, the CARD takes precedence.",
+		"",
+		"DATA VALIDATION - MANDATORY:",
+		"Before writing code that accesses data columns, indices, or attributes:",
+		"- Use read_file to inspect CSV/Excel headers and column names",
+		"- Check existing scripts to understand data structure",
+		"- DO NOT assume standard naming conventions",
+		"- Verify structure BEFORE writing code, not after",
+		"",
 		"---",
-		"**CAPABILITY CARDS: MANDATORY TECHNICAL GUIDANCE**",
-		"",
-		"The following capability cards contain authoritative technical guidance that you MUST adhere to precisely. These cards are non-negotiable implementation requirements:",
-		"",
-		"1. **FORMULAS**: When a capability card specifies mathematical formulas, you MUST implement those exact formulas. Do NOT substitute alternative approaches or simplify the mathematics.",
-		"",
-		"2. **CODE PATTERNS**: When a capability card provides implementation patterns or example code, you MUST follow those patterns exactly. The code examples demonstrate correct usage of libraries, proper data structures, and critical implementation details.",
-		"",
-		"3. **PYTHON MODULES**: When capability cards specify Python modules and function usage (e.g., 'from ratemaking.credibility import classical_full_credibility_frequency'), you MUST use those exact imports and functions rather than implementing manual calculations. Install required packages first (e.g., 'pip install ratemaking==0.3.0').",
-		"",
-		"4. **GUIDANCE AND WARNINGS**: Pay strict attention to 'Critical Points', 'Common Pitfalls', 'When to use', and 'When NOT to use' sections. These contain essential domain knowledge that prevents errors.",
-		"",
-		"5. **PRECEDENCE**: Capability card specifications override generic programming approaches and general best practices. If a capability card contradicts standard coding patterns, the capability card takes precedence.",
-		"",
-		"ASSUMPTIONS HANDLING: When the user provides assumptions for actuarial analyses (e.g., trend rates, tail factors, selection periods, target years, special adjustment factors), and you are creating a script from scratch (NOT working from an existing script), you MUST:",
-		"1. Create a CONFIG section at the top of your working script storing all key assumptions as named variables",
-		"2. Reference these config variables throughout the code (not hardcoded values)",
-		"3. Validate your implementation against what the user specified - assumptions are critically important and errors here cascade through the entire analysis",
 		"",
 		...blocks,
+		"",
 		"---",
+		"END OF CAPABILITY CARDS",
+		"",
+		"REMINDER: These cards are authoritative. When they specify code, modules, or formulas,",
+		"you MUST use them exactly. Deviating from card specifications leads to incorrect results.",
+		"===================================================================",
 	].join("\n")
 }
