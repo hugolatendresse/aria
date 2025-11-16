@@ -64,11 +64,32 @@ export const premiumTrendingCard: CapabilityCard = {
 		{
 			kind: "keyword",
 			any: ["premium trend", "premium trending"],
+			all: ["loss ratio indication"],
 		},
 		{
-			kind: "regex",
-			pattern: "\\b(premium[\\s-]?trend(ing)?)\\b",
-			flags: "i",
+			kind: "keyword",
+			any: ["premium trend", "premium trending"],
+			all: ["pure premium indication"],
+		},
+		{
+			kind: "keyword",
+			any: ["premium trend", "premium trending"],
+			all: ["loss ratio method"],
+		},
+		{
+			kind: "keyword",
+			any: ["premium trend", "premium trending"],
+			all: ["pure premium method"],
+		},
+		{
+			kind: "keyword",
+			any: ["premium trend", "premium trending"],
+			all: ["indicated rate change"],
+		},
+		{
+			kind: "keyword",
+			any: ["premium trend", "premium trending"],
+			all: ["rate indication"],
 		},
 	],
 	content: `**Capability Card: Premium Trending (Exponential & Two-Step) v1.1**

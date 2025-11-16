@@ -224,32 +224,6 @@ If you're getting factors > 1.0 for pre-reform years, you're dividing when you s
 
 Tort reform typically affects SEVERITY (claim size), not frequency (claim count). Apply to severity data only.
 
----
-
-### Integration with Trend
-
-When using both trend and tort reform:
-
-\`\`\`python
-for i in range(n_AYs):
-    ay = 2001 + i
-    
-    # Trend factor
-    years_to_trend = base_year - ay
-    trend_factor = (1 + trend_rate) ** years_to_trend
-    
-    # Tort reform factor (using function above)
-    tort_factor = get_tort_reform_factor(ay, base_year)
-    
-    # Apply BOTH adjustments
-    for j in range(n_ages):
-        if not np.isnan(severity[i, j]):
-            adjusted_severity[i, j] = severity[i, j] * trend_factor * tort_factor
-\`\`\`
-
-Both factors multiply the original data - they compound.
-
----
 
 ### Exposure-Based Methods (BF / Stanard-Buhlmann)
 
