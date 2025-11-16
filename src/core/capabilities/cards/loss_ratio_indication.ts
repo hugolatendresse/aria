@@ -7,9 +7,9 @@ export const lossRatioIndicationCard: CapabilityCard = {
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["loss ratio method", "loss ratio indication"],
+			any: ["loss ratio method", "loss ratio indication", "loss ratio"],
 		},
-		{ kind: "regex", pattern: "\\b(loss[\\s-]?ratio[\\s-]?(method|indication))\\b", flags: "i" },
+		{ kind: "regex", pattern: "\\b(loss[\\s-]?ratio[\\s-]?(method|indication)|loss[\\s-]?ratio)\\b", flags: "i" },
 	],
 	content: `**Loss Ratio Indication Method v1.2**
 
