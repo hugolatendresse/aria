@@ -1,6 +1,5 @@
 import { classicalLimitedFluctuationCredibilityCard, credibilityBayesianCard, credibilityBuhlmannCard } from "./cards/credibility"
 import { currentLevelPremiumCard } from "./cards/current_level_premium"
-import { firstDollarComplementsUmbrellaCard } from "./cards/first_dollar_complements"
 import { firstDollarTrendedPresentRatesCard } from "./cards/first_dollar_trended_present_rates"
 import { lossTrending } from "./cards/loss_adjustments"
 import { lossRatioIndicationCard } from "./cards/loss_ratio_indication"
@@ -40,7 +39,6 @@ export const cards: CapabilityCard[] = [
 	classicalLimitedFluctuationCredibilityCard,
 	credibilityBuhlmannCard,
 	credibilityBayesianCard,
-	firstDollarComplementsUmbrellaCard,
 	firstDollarTrendedPresentRatesCard,
 	premiumOnLevelingCard,
 	premiumTrendingCard,

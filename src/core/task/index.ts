@@ -1458,7 +1458,7 @@ export class Task {
 
 		// Prepend actuarial compliance mandate (non-negotiable)
 		const actuarialComplianceMandate = `ACTUARIAL COMPLIANCE — NON‑NEGOTIABLE
-If the user's task involves loss development, triangles, reserving, pricing, IBNR, AY/PY, BF/Cape Cod, Mack, or any claims/premium/exposure aggregation, you must:
+If the user's task involves loss development, triangles, reserving, pricing, IBNR, AY/PY, BF, Mack, or any claims/premium/exposure aggregation, you must:
 import chainladder as cl
 convert data to a cl.Triangle(...)
 perform development/ultimates using Chainladder APIs.

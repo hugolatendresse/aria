@@ -21,7 +21,7 @@ export const currentLevelPremiumCard: CapabilityCard = {
 Adjusts historical premiums to a current (target) rate level by applying cumulative rate change factors. This ensures premiums from different periods are comparable at a consistent rate level, which is essential for expected-loss methods that use premium as exposure.
 
 **When to use:**
-- Cape Cod method: Exposure (premium) must be on-leveled before use
+- Exposure-based methods: Exposure (premium) must be on-leveled before use
 - Bornhuetter-Ferguson with exposure: When using premium as \`sample_weight\`, on-level first
 - Loss Ratio / ELR calculations: When comparing losses to premiums across years with rate changes
 - Any analysis requiring premiums and losses at the same rate level
@@ -60,7 +60,7 @@ rate_data['onlevel_premium'] = rate_data['earned_premium'] * rate_data['onlevel_
 print(rate_data[['accident_year', 'rate_change', 'rate_factor', 'cumulative_factor', 
                  'onlevel_factor_to_current', 'earned_premium', 'onlevel_premium']])
 
-# Total on-level premium for use in Cape Cod or other methods
+# Total on-level premium for use in exposure-based methods
 total_onlevel_premium = rate_data['onlevel_premium'].sum()
 \`\`\`
 
@@ -87,8 +87,8 @@ Premium 2005: $1,650,000 × 1.000 = $1,650,000 (already at 2005 level)
 - **First year baseline:** The first year typically has rate_change = 0.0 (no change from itself), serving as the baseline. Its rate_factor = 1.0.
 - **Cumulative product order:** Use \`.cumprod()\` to calculate cumulative factors in chronological order. This compounds rate changes sequentially.
 - **On-level direction:** To on-level TO a target year: \`target_factor / historical_factor\`. To on-level FROM a target year back: \`historical_factor / target_factor\`.
-- **When to apply:** On-level premiums BEFORE using them in Cape Cod, BF (when using premium as exposure), or any ELR/loss ratio calculation. Do NOT on-level after the fact.
-- **Chainladder integration:** Create a Triangle from on-leveled premiums, then use \`.latest_diagonal\` as \`sample_weight\` in Cape Cod or BF methods.
+- **When to apply:** On-level premiums BEFORE using them in exposure-based methods, BF (when using premium as exposure), or any ELR/loss ratio calculation. Do NOT on-level after the fact.
+- **Chainladder integration:** Create a Triangle from on-leveled premiums, then use \`.latest_diagonal\` as \`sample_weight\` in exposure-based methods.
 - **Parallelogram method:** This card covers simple rate change adjustments. For more complex mid-year rate changes with triangular data, use chainladder's \`ParallelogramOLF\` class which handles rate changes by effective date.
 
 **Alternative: Using chainladder ParallelogramOLF for complex cases:**

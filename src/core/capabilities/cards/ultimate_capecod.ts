@@ -2,14 +2,14 @@ import { CapabilityCard } from "../card_registry"
 
 export const ultimateCapeCodCard: CapabilityCard = {
 	id: "ultimate-capecod",
-	version: "1.0.0",
+	version: "1.2.0",
 	title: "Ultimates: Cape Cod (Stanard–Bühlmann)",
 	triggers: [
 		{
 			kind: "keyword",
-			any: ["cape cod", "capecod", "cape-cod", "stanard", "bühlmann", "buhlmann", "stanard-bühlmann", "stanard buhlmann"],
+			any: ["cape cod method", "capecod method", "cape-cod method"],
 		},
-		{ kind: "regex", pattern: "\\b(cape[\\s-]?cod|stanard|b[üu]hlmann)\\b", flags: "i" },
+		{ kind: "regex", pattern: "\\b(cape[\\s-]?cod)\\s+(method|approach|model|estimator)\\b", flags: "i" },
 	],
 	content: `**Capability Card: Cape Cod v1.0**
 
@@ -37,6 +37,14 @@ X = loss_tri
 # Then pass the on-leveled premium as-is (do NOT manually trend it)
 onlevel_prem = premium_tri.latest_diagonal   # already on-leveled to current
 
+
+# --- CRITICAL: Create sample_weight correctly ---
+# WRONG: Creating a new triangle from long data - valuation dates won't align
+# RIGHT: Reshape premium array and copy triangle structure
+prem_array = [19783309, 30547757, ...]  # one value per origin (on-leveled)
+sample_weight = X.copy()
+sample_weight.values = prem_array.reshape(1, 1, -1, 1)  # reshape to 4D triangle
+
 # Pipeline: Development → Tail → CapeCod (with trend parameter)
 # IMPORTANT: Use a Pipeline, do NOT fit separately
 pipe = cl.Pipeline(steps=[
@@ -46,8 +54,8 @@ pipe = cl.Pipeline(steps=[
 ])
 pipe.set_fit_request(sample_weight=True)
 
-# Fit with on-level premium (NOT manually trended)
-pipe.fit(X, sample_weight=onlevel_prem)
+# Fit with reshaped premium as sample_weight (NOT manually trended)
+pipe.fit(X, sample_weight=sample_weight)
 
 ult  = pipe.named_steps.model.ultimate_
 ibnr = pipe.named_steps.model.ibnr_
@@ -62,7 +70,7 @@ total_ibnr = ibnr.sum().sum()
 - **The \`trend\` parameter is NOT for premium**; it adjusts the apriori estimation by detrending losses to a common basis.
 
 **Tort Reform (Triangle Adjustment Approach):**
-When tort reform or claims environment changes require adjustment, apply factors to the triangle before fitting, then adjust results back. Factor direction logic: see **Special Adjustments: Tort Reform** card. Implementation: (1) Create factor triangle with appropriate factors by origin; (2) Adjust input triangle: \`X_adjusted = X * tort_tri\`; (3) Fit Cape Cod with premium as sample_weight; (4) Adjust results back: \`ult_original = model.ultimate_ / tort_tri.latest_diagonal\`. Example: Reform reduced losses 40% starting 2006 → old years get factor 0.60, reformed years get 1.0 (already at current level).
+When tort reform or claims environment changes require adjustment, apply factors to the TRIANGLE (not premium) before fitting, then adjust results back. CRITICAL: Do NOT adjust premium by tort factors - premium represents current exposure and should remain at full current-level amounts. Implementation: (1) Create factor triangle with appropriate factors by origin; (2) Adjust input triangle: \`X_adjusted = X * tort_tri\`; (3) Fit model with UNADJUSTED premium as sample_weight: \`pipe.fit(X_adjusted, sample_weight=premium)\`; (4) Adjust results back: \`ult_original = model.ultimate_ / tort_tri.latest_diagonal\`, \`ibnr_original = model.ibnr_ / tort_tri.latest_diagonal\`. Common error: Adjusting premium down produces systematically low ultimates. Factor direction: see **Special Adjustments: Tort Reform** card.
 
 **Understanding apriori outputs:**  
 With \`trend\` ≠ 0, \`apriori_\` is expressed at the latest origin basis, while \`detrended_apriori_\` maps back to each origin’s basis (the detrended vector is what the estimator actually uses).
@@ -72,15 +80,17 @@ With \`trend\` ≠ 0, \`apriori_\` is expressed at the latest origin basis, whil
 - **Output:** \`ultimate_\`, \`ibnr_\`, \`apriori_\`, \`detrended_apriori_\` as Triangles.
 
 **Critical Points:**
-- **Always provide exposure** via \`sample_weight=exposure.latest_diagonal\`. Do **not** pass the full exposure triangle to \`fit\`; the estimator expects one value per origin. IMPORTANT: When applying tort reform adjustments, the \`sample_weight\` should be the PREMIUM (on-level earned premium), NOT the tort reform factors. Tort factors adjust the loss triangle (X), not the sample_weight.
-- **DO NOT manually trend premium:** Cape Cod handles trending internally via the \`trend\` parameter. Pass on-level premium as-is; do NOT multiply it by \`(1 + trend) ** years\`. The \`trend\` parameter tells Cape Cod to common-base all origins to the latest year when estimating the apriori.
+- **Create sample_weight correctly**: NEVER create a new triangle from long-format premium data (valuation dates won't align). Instead: (1) Get premium array (one value per origin); (2) Copy loss triangle structure: \`sw = X.copy()\`; (3) Reshape and assign: \`sw.values = prem_array.reshape(1, 1, -1, 1)\`. This preserves triangle alignment.
+- **Always provide exposure** via \`sample_weight\` (one value per origin). Do **not** pass the full exposure triangle to \`fit\`; the estimator expects specific structure.
+- **Tort reform**: NEVER adjust premium by tort factors. Pass UNADJUSTED current-level premium as sample_weight. Tort factors adjust the loss triangle only.
+- **DO NOT manually trend premium:** This method handles trending internally via the \`trend\` parameter. Pass on-level premium as-is; do NOT multiply it by \`(1 + trend) ** years\`. The \`trend\` parameter common-bases all origins to the latest year when estimating the apriori.
 - **Use Pipeline for proper workflow:** Chain Development → (optional Tail) → CapeCod in a Pipeline. Do NOT fit them separately and manually combine. Example: \`cl.Pipeline(steps=[('dev', cl.Development(n_periods=2)), ('tail', cl.TailConstant(tail=1.05)), ('model', cl.CapeCod(trend=0.025))])\`.
-- \`trend\` parameter: Annual trend rate (e.g., 0.025 for 2.5% per year) used to adjust apriori estimation, NOT for manually trending premium. Cape Cod detrends losses internally to estimate apriori consistently across origins.
+- \`trend\` parameter: Annual trend rate (e.g., 0.025 for 2.5% per year) used to adjust apriori estimation, NOT for manually trending premium. The method detrends losses internally to estimate apriori consistently across origins.
 - \`decay < 1\` gives more weight to nearer origins when estimating apriori; default \`decay=1\` treats all origins equally.
-- If you want Cape Cod logic but a fixed/judgmental ELR, use **BF** instead (apriori chosen externally); Cape Cod's apriori is estimated from data.
-- **Tort reform adjustment:** When applying special adjustments, create factor triangle and adjust input losses before fitting (see example above). For factor direction and calculation logic, refer to **Special Adjustments: Tort Reform** card. Always adjust results back after fitting: \`ultimate_original = ultimate_adjusted / tort_tri.latest_diagonal\`.
+- If you want this method's logic but a fixed/judgmental ELR, use **BF** instead (apriori chosen externally); this method's apriori is estimated from data.
+- **Tort reform adjustment:** Adjust TRIANGLE (not premium) before fitting, adjust RESULTS back after. Never multiply premium by tort factors - this produces incorrect ultimates. See **Special Adjustments: Tort Reform** card for complete implementation and factor direction logic.
 
-**Version:** Tested against chainladder 0.8.x/0.9.x APIs (\`fit(..., sample_weight=...)\`, \`ultimate_\`, \`ibnr_\`, \`apriori_\`, \`detrended_apriori_\`).`,
+**Version:** v1.2 - Added sample_weight construction guidance. Tested against chainladder 0.8.x/0.9.x APIs.`,
 	sources: [
 		"chainladder‑python docs — CapeCod API",
 		"chainladder‑python docs — IBNR Methods: CapeCod (concept, apriori, trend/decay)",
