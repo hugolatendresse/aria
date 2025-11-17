@@ -11,13 +11,20 @@ EMBEDDING_MODEL = "ollama"  # "ollama" to run locally or "gemini" to run with ap
 CHUNKING_STRATEGY = "recursive"  # works well 
 # CHUNKING_STRATEGY = "unstructured" # doesn't work well
 
-# SQLite database and PDF configuration
-# PDF_FILENAME, SQLITE_TABLE_NAME_PREFIX, PDF_ENGLISH_NAME  = "5_Friedland_stripped_EX_appendices.pdf", "friedland_whole", "Friedland Whole", 
-# PDF_FILENAME, SQLITE_TABLE_NAME_PREFIX, PDF_ENGLISH_NAME  = "5_Friedland_two_chapters.pdf", "friedland_two_chapters", "Friedland Two Chapter", 
-# PDF_FILENAME, SQLITE_TABLE_NAME_PREFIX, PDF_ENGLISH_NAME  = "5_Werner_Modlin_stripped_EX_appendices.pdf", "werner_whole", "Werner Whole", 
-PDF_FILENAME, SQLITE_TABLE_NAME_PREFIX, PDF_ENGLISH_NAME  = "Statute of Westminster.pdf", "westminster", "Statute of Westminster", 
-
+# SQLite table name (all PDFs will be stored in this single table)
+SQLITE_TABLE_NAME_PREFIX = "actuarial_docs"  # Choose a descriptive name for your collection
 SQLITE_TABLE_NAME = SQLITE_TABLE_NAME_PREFIX + "_" + CHUNKING_STRATEGY
+
+# PDF Configuration
+# List all PDFs you want to process. All chunks will be stored in the same table
+# for unified vector search across all documents.
+# Format: (filename, friendly_name)
+PDF_CONFIGS = [
+    ("5_Friedland_stripped_EX_appendices.pdf", "Friedland Whole"),
+    ("5_Werner_Modlin_stripped_EX_appendices.pdf", "Werner Whole"),
+    # ("Statute of Westminster.pdf", "Statute of Westminster"),
+    # ("5_Friedland_two_chapters.pdf", "Friedland Two Chapters"),
+]
 
 
 """
@@ -237,12 +244,20 @@ if REBUILD_VECTOR_DB:
 
     # --- Load and Process Documents ---
     assets_dir = os.path.join(repo_root, "assets", "actuarial")
+    
+    # Build the list of PDFs to process from the configuration
     pdf_configs = [
         {
-            "path": os.path.join(assets_dir, PDF_FILENAME),
-            "name": PDF_ENGLISH_NAME,
-        },
+            "path": os.path.join(assets_dir, filename),
+            "name": english_name,
+        }
+        for filename, english_name in PDF_CONFIGS
     ]
+    
+    print(f"Processing {len(pdf_configs)} PDF(s):")
+    for config in pdf_configs:
+        print(f"  - {config['name']}")
+    print()
 
     for config in pdf_configs:
         pdf_path = config["path"]
@@ -325,32 +340,72 @@ rag_chain = (
     | StrOutputParser()
 )
 
-def search(question: str):
+def search(question: str, print_retrieved=False):
     """
     Queries the RAG chain with a specific question.
     """
     print(f"\n--- Searching for: '{question}' ---")
     
-    # Uncomment the line below to see the retrieved parent chunks
-    print("\n ***** Retrieved Context: ********\n", retriever.invoke(question))
-    print("\n ***** End of retrieved Context: ********\n")
-
-    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Actual answer: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    if print_retrieved:
+        print("\n ***** Retrieved Context: ********\n", retriever.invoke(question))
+        print("\n ***** End of retrieved Context: ********\n")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Actual answer: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     
     return rag_chain.invoke(question)
 
 
-
 # --- Test Searching ---
 
-friedland_response = search("What is the Bornhuetter-Ferguson technique and how does it work?")
-print(f"Answer: {friedland_response}\n")
-    
 friedland_response2 = search("When is the Bornhuetter-Ferguson technique most useful, and when does it not work well?")
 print(f"Answer: {friedland_response2}\n")
+"""
+Expected:
+An advantage of the Bornhuetter-Ferguson technique is that random fluctuations early in the life
+of an accident year (or other defined time interval) do not significantly distort the projections. For
+example, if several large and unusual claims are reported for an accident year, then the reported
+claim development technique may produce overly conservative ultimate claims estimates. This
+situation does not, however, seriously distort the Bornhuetter-Ferguson technique.
+Actuaries frequently use the Bornhuetter-Ferguson method for long-tail lines of insurance,
+particularly for the most immature years, due to the highly leveraged nature of claim development
+factors for such lines. Actuaries may also use the Bornhuetter-Ferguson technique if the data is
+extremely thin or volatile or both. For example, when an insurer has recently entered a new line
+of business or a new territory and there is not yet a credible volume of historical claim
+development experience, an actuary may use the Bornhuetter-Ferguson technique. In such
+circumstances, the actuary would likely need to rely on benchmarks, either from similar lines at
+the same insurer or insurance industry experience, for development patterns and expected claim
+ratios (or pure premiums). (See previous comments about the use of industry benchmarks.)
+In a discussion of when to use the Bornhuetter-Ferguson method in the paper “The Actuary and
+IBNR,” the authors state: “It can be argued that the most prudent course is, when in doubt, to use
+expected losses, in as much as it is certainly indicated for volatile lines, and in the case of a stable
+line, the expected loss ratio should be predictable enough so that both techniques produce the
+same result.”56
+The Bornhuetter-Ferguson technique can be a useful method for very short-tail lines as well as
+long-tail lines. For very short-tail lines, the IBNR can be set equal to a multiple of the last few
+months’ earned premium; this is essentially an application of the Bornhuetter-Ferguson
+technique.
+"""
+
+werner_response = search("How can CART (Classification and Regression Trees) help actuaries?")
+print(f"Answer: {werner_response}\n")
+"""
+Expected:
+The purpose of CART (Classification and Regression Trees) is to develop tree-building algorithms to
+determine a set of if-then logical conditions that help improve classification.
+In personal automobile insurance, a resulting tree may start with an if-then condition around gender. If
+the risk is male, the tree then continues to another if-then condition around age. If the risk is male and
+youthful, the tree may then continue to an if-then condition involving prior accident experience. The tree
+“branch” for females may involve a different order or in fact, a completely different set of conditions.
+Examination of the tree may help ratemaking actuaries identify:
+- the strongest list of initial variables (i.e., whittle down a long list of potential variables to a more manageable yet meaningful list)
+- determine how to categorize each variable. 
+- CART can also help detect interactions between variables.
+"""
 
 no_context_response = search("What is the best recipe for a chocolate cake?")
 print(f"Answer: {no_context_response}\n")
+"""Expected:
+nothing
+"""
 
 westminster_response = search("State section 2(1) of the Statute of Westminster")
 print(f"Answer: {westminster_response}\n")
