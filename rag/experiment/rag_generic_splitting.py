@@ -8,16 +8,17 @@ EMBEDDING_MODEL = "ollama"  # "ollama" or "gemini"
 
 # Chunking strategy selection
 # Options: "recursive" or "unstructured"
-# CHUNKING_STRATEGY = "recursive"
-CHUNKING_STRATEGY = "unstructured"
+CHUNKING_STRATEGY = "recursive"
+# CHUNKING_STRATEGY = "unstructured"
 
 # SQLite database and PDF configuration
-SQLITE_TABLE_NAME_PREFIX = "friedland_two_chapters"
-PDF_ENGLISH_NAME = "Friedland Two Chapter"
+# PDF_FILENAME, SQLITE_TABLE_NAME_PREFIX, PDF_ENGLISH_NAME  = "5_Friedland_stripped_EX_appendices.pdf", "friedland_whole", "Friedland Whole", 
+# PDF_FILENAME, SQLITE_TABLE_NAME_PREFIX, PDF_ENGLISH_NAME  = "5_Friedland_two_chapters.pdf", "friedland_two_chapters", "Friedland Two Chapter", 
+# PDF_FILENAME, SQLITE_TABLE_NAME_PREFIX, PDF_ENGLISH_NAME  = "5_Werner_Modlin_stripped_EX_appendices.pdf", "werner_whole", "Werner Whole", 
+PDF_FILENAME, SQLITE_TABLE_NAME_PREFIX, PDF_ENGLISH_NAME  = "Statute of Westminster.pdf", "westminster", "Statute of Westminster", 
+
 SQLITE_TABLE_NAME = SQLITE_TABLE_NAME_PREFIX + "_" + CHUNKING_STRATEGY
 
-# PDF_FILENAME = "5_Friedland_stripped_EX_appendices.pdf"
-PDF_FILENAME = "5_Friedland_two_chapters.pdf"
 
 """
 EXISTING TABLES
@@ -190,7 +191,7 @@ def inspect_langchain_text_splitters_results():
         for page, count in sorted(page_distribution.items())[:10]:
             print(f"  Page {page}: {count} parent chunks")
 
-inspect_langchain_text_splitters_results()
+# inspect_langchain_text_splitters_results() # TODO decide on some logic to run this?
 
 # Create a thread-safe SQLite connection with sqlite_vec extension
 def create_thread_safe_connection(db_file: str):
@@ -324,25 +325,36 @@ rag_chain = (
     | StrOutputParser()
 )
 
-def search_friedland(question: str):
+def search(question: str):
     """
     Queries the RAG chain with a specific question.
     """
     print(f"\n--- Searching for: '{question}' ---")
     
     # Uncomment the line below to see the retrieved parent chunks
-    # print("\nRetrieved Context:\n", retriever.invoke(question))
+    print("\n ***** Retrieved Context: ********\n", retriever.invoke(question))
+    print("\n ***** End of retrieved Context: ********\n")
+
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Actual answer: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     
     return rag_chain.invoke(question)
 
 
+
 # --- Test Searching ---
 
-friedland_response = search_friedland("What is the Bornhuetter-Ferguson technique and how does it work?")
+friedland_response = search("What is the Bornhuetter-Ferguson technique and how does it work?")
 print(f"Answer: {friedland_response}\n")
     
-technique_response = search_friedland("When is the Bornhuetter-Ferguson technique most useful, and when does it not work well?")
-print(f"Answer: {technique_response}\n")
+friedland_response2 = search("When is the Bornhuetter-Ferguson technique most useful, and when does it not work well?")
+print(f"Answer: {friedland_response2}\n")
 
-no_context_response = search_friedland("What is the best recipe for a chocolate cake?")
+no_context_response = search("What is the best recipe for a chocolate cake?")
 print(f"Answer: {no_context_response}\n")
+
+westminster_response = search("State section 2(1) of the Statute of Westminster")
+print(f"Answer: {westminster_response}\n")
+"""
+Expected:
+In Canada, no law and no provision of any law made after the commencement of this Act by the Parliament of a Dominion shall be void or inoperative on the ground that it is repugnant to the Law of England, or to the provisions of any existing or future Act of Parliament of the United Kingdom, or to any order, rule or regulation made under any such Act, and the powers of the Parliament of a Dominion shall include the power to repeal or amend any such Act, order, rule or regulation in so far as the same is part of the law of the Dominion.
+"""
