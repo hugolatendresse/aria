@@ -1,7 +1,7 @@
 ############################### Configuration #################################
 # - Set to True: Load/update documents in vector database (first run or when adding new docs)
 # - Set to False: Skip document loading and use existing vector database (for testing)
-REBUILD_VECTOR_DB = False  # Set to False after first run to test queries
+REBUILD_VECTOR_DB = True  # Set to False after first run to test queries
 
 # Embedding model selection
 EMBEDDING_MODEL = "ollama"  # "ollama" or "gemini"
@@ -32,20 +32,16 @@ unstructured -> Unstructured.io (structure-aware, preserves hierarchy)
 
 import os
 import shutil
-from langchain import hub
-from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from typing_extensions import List, TypedDict
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import SQLiteVec
 from langchain_ollama import OllamaEmbeddings
 from langchain.chat_models import init_chat_model
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain.storage import LocalFileStore, create_kv_docstore
-from langchain.retrievers import ParentDocumentRetriever
+from langchain_classic.storage import LocalFileStore, create_kv_docstore
+from langchain_classic.retrievers import ParentDocumentRetriever
 
 from dotenv import load_dotenv
 
