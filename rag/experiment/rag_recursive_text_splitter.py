@@ -201,7 +201,7 @@ if REBUILD_VECTOR_DB:
     pdf_configs = [
         {
             "path": os.path.join(assets_dir, PDF_FILENAME),
-            "name": "PDF_ENGLISH_NAME",
+            "name": PDF_ENGLISH_NAME,
         },
     ]
 

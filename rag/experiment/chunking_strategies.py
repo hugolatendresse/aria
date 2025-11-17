@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters.base import TextSplitter
 
 
 class ChunkingStrategy(ABC):
@@ -211,7 +212,7 @@ class UnstructuredChunkingStrategy(ChunkingStrategy):
         )
 
 
-class UnstructuredParentSplitter:
+class UnstructuredParentSplitter(TextSplitter):
     """
     Custom splitter that wraps Unstructured.io for parent chunk creation.
     
@@ -230,6 +231,9 @@ class UnstructuredParentSplitter:
         infer_table_structure: bool = True
     ):
         """Initialize the parent splitter with Unstructured functions."""
+        # Initialize the parent TextSplitter with basic parameters
+        super().__init__(chunk_size=max_chars, chunk_overlap=0)
+        
         self.partition_pdf = partition_pdf
         self.chunk_by_title = chunk_by_title
         self.max_chars = max_chars
@@ -237,6 +241,21 @@ class UnstructuredParentSplitter:
         self.new_after_n_chars = new_after_n_chars
         self.parsing_strategy = parsing_strategy
         self.infer_table_structure = infer_table_structure
+    
+    def split_text(self, text: str) -> List[str]:
+        """
+        Required by TextSplitter base class but not used for Unstructured.
+        We override split_documents instead.
+        
+        Args:
+            text: Text to split
+        
+        Returns:
+            List of text chunks
+        """
+        # This method is required by TextSplitter but we don't use it
+        # since we work directly with Documents in split_documents
+        return [text]
     
     def split_documents(self, documents: List[Document]) -> List[Document]:
         """
@@ -251,14 +270,21 @@ class UnstructuredParentSplitter:
         all_chunks = []
         
         for doc in documents:
-            # Get the PDF path from metadata (assuming it was loaded via PyPDFLoader)
-            pdf_path = doc.metadata.get('source')
+            # Get the PDF path from metadata
+            # Try 'pdf_path' first (explicitly set), then 'source' (from PyPDFLoader)
+            pdf_path = doc.metadata.get('pdf_path') or doc.metadata.get('source')
             
             if not pdf_path:
                 # If no path in metadata, fall back to text-based chunking
                 # This handles pre-loaded text documents
                 print(f"Warning: No PDF path found in metadata. Using fallback text chunking.")
                 # For fallback, just wrap the content as-is
+                all_chunks.append(doc)
+                continue
+            
+            # Verify the file exists
+            if not isinstance(pdf_path, str) or not pdf_path.endswith('.pdf'):
+                print(f"Warning: Invalid PDF path '{pdf_path}'. Using fallback text chunking.")
                 all_chunks.append(doc)
                 continue
             
@@ -303,7 +329,7 @@ class UnstructuredParentSplitter:
         return all_chunks
 
 
-class UnstructuredChildSplitter:
+class UnstructuredChildSplitter(TextSplitter):
     """
     Custom splitter for creating smaller child chunks from Unstructured parent chunks.
     
@@ -312,6 +338,9 @@ class UnstructuredChildSplitter:
     
     def __init__(self, max_chars: int = 500, combine_under_n_chars: int = 100):
         """Initialize the child splitter with smaller chunk sizes."""
+        # Initialize the parent TextSplitter
+        super().__init__(chunk_size=max_chars, chunk_overlap=50)
+        
         self.max_chars = max_chars
         self.combine_under_n_chars = combine_under_n_chars
         
@@ -323,6 +352,18 @@ class UnstructuredChildSplitter:
             chunk_overlap=50,  # Small overlap to maintain context
             separator="\n\n"  # Split on paragraphs first
         )
+    
+    def split_text(self, text: str) -> List[str]:
+        """
+        Split text into smaller chunks using the internal splitter.
+        
+        Args:
+            text: Text to split
+        
+        Returns:
+            List of text chunks
+        """
+        return self._internal_splitter.split_text(text)
     
     def split_documents(self, documents: List[Document]) -> List[Document]:
         """

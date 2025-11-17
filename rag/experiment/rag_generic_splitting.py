@@ -8,7 +8,8 @@ EMBEDDING_MODEL = "ollama"  # "ollama" or "gemini"
 
 # Chunking strategy selection
 # Options: "recursive" or "unstructured"
-CHUNKING_STRATEGY = "recursive"
+# CHUNKING_STRATEGY = "recursive"
+CHUNKING_STRATEGY = "unstructured"
 
 # SQLite database and PDF configuration
 SQLITE_TABLE_NAME_PREFIX = "friedland_two_chapters"
@@ -106,7 +107,7 @@ try:
             child_max_chars=500,
             combine_under_n_chars=200,
             new_after_n_chars=1500,
-            strategy="hi_res",  # or "fast" for quicker processing
+            strategy="fast",  # "fast" doesn't require tesseract, "hi_res" does
             infer_table_structure=True
         )
     else:
@@ -238,7 +239,7 @@ if REBUILD_VECTOR_DB:
     pdf_configs = [
         {
             "path": os.path.join(assets_dir, PDF_FILENAME),
-            "name": "PDF_ENGLISH_NAME",
+            "name": PDF_ENGLISH_NAME,
         },
     ]
 
@@ -253,8 +254,11 @@ if REBUILD_VECTOR_DB:
         docs = loader.load()
         
         # Add metadata to identify the source
+        # Preserve the original file path and add a friendly name
         for doc in docs:
-            doc.metadata["source"] = config["name"]
+            doc.metadata["pdf_path"] = pdf_path  # Store actual file path for Unstructured
+            doc.metadata["source_name"] = config["name"]  # Store friendly name
+            # Keep original 'source' from PyPDFLoader which has the path
             
         print(f"Adding {len(docs)} pages to the retriever...")
         # This one command does all the work:
