@@ -8,8 +8,8 @@ EMBEDDING_MODEL = "ollama"  # "ollama" or "gemini"
 
 # Chunking strategy selection
 # Options: "recursive" or "unstructured"
-CHUNKING_STRATEGY = "recursive"
-# CHUNKING_STRATEGY = "unstructured"
+CHUNKING_STRATEGY = "recursive"  # works well 
+# CHUNKING_STRATEGY = "unstructured" # doesn't work well
 
 # SQLite database and PDF configuration
 # PDF_FILENAME, SQLITE_TABLE_NAME_PREFIX, PDF_ENGLISH_NAME  = "5_Friedland_stripped_EX_appendices.pdf", "friedland_whole", "Friedland Whole", 
