@@ -4,7 +4,7 @@
 REBUILD_VECTOR_DB = True  # Set to False after first run to test queries
 
 # Embedding model selection
-EMBEDDING_MODEL = "ollama"  # "ollama" or "gemini"
+EMBEDDING_MODEL = "ollama"  # "ollama" to run locally or "gemini" to run with api key
 
 # Chunking strategy selection
 # Options: "recursive" or "unstructured"
