@@ -1,6 +1,6 @@
-### RAG tool that is not directly connected to the rest of cline
-### This script is necessary to create the vector store!
-### It can also be used for retrieval
+# RAG tool that is not directly connected to the rest of cline
+# This script is necessary to create the vector store!
+# It can also be used for retrieval
 
 # RAG Structure
 # Large chunks stored in a docstore (LocalFileStore - file-system based storage)
@@ -12,17 +12,34 @@
 ############################### Configuration #################################
 # - Set to True: Load/update documents in vector database (first run or when adding new docs)
 # - Set to False: Skip document loading and use existing vector database (for testing)
+from langchain_ollama import OllamaEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_core.stores import BaseStore
+from langchain_core.documents import Document
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chat_models import init_chat_model
+from core.search import get_rag_chain, search, get_retriever_from_existing_db
+from core.prompt import PROMPT
+from core.chunking_strategies import get_splitters
+from core.get_root_path import get_root_path
+from core.build import build_db_and_get_retriever
+from dotenv import load_dotenv
+import warnings
+import os
 REBUILD_VECTOR_DB = False  # Set to False after first run to test queries
 
 # Embedding model selection
 EMBEDDING_MODEL = "ollama"  # "ollama" to run locally or "gemini" to run with api key
 
 # Options: "recursive" or "unstructured"
-CHUNKING_STRATEGY = "recursive"  # works well 
+CHUNKING_STRATEGY = "recursive"  # works well
 # CHUNKING_STRATEGY = "unstructured" # doesn't work well
 
 # SQLite table name (all PDFs will be stored in this single table)
-SQLITE_TABLE_NAME_PREFIX = "actuarial_docs"  # Choose a descriptive name for your collection
+# Choose a descriptive name for your collection
+SQLITE_TABLE_NAME_PREFIX = "actuarial_docs"
 SQLITE_TABLE_NAME = SQLITE_TABLE_NAME_PREFIX + "_" + CHUNKING_STRATEGY
 
 # PDF Configuration
@@ -48,28 +65,6 @@ unstructured -> Unstructured.io (structure-aware, preserves hierarchy)
 
 ###############################################################################
 
-import os
-import shutil
-import warnings
-from dotenv import load_dotenv
-from core.get_root_path import get_root_path
-from core.chunking_strategies import get_splitters
-from core.create_thread_safe_connection import create_thread_safe_connection
-from core.prompt import PROMPT
-from core.search import get_rag_chain, search 
-from langchain.chat_models import init_chat_model
-from langchain_classic.storage import LocalFileStore, create_kv_docstore
-from langchain_classic.retrievers import ParentDocumentRetriever
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.vectorstores import SQLiteVec
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.documents import Document
-from langchain_core.stores import BaseStore
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_ollama import OllamaEmbeddings
-
 
 # Common issue when parsing pdfs. Can ignore - most of the content gets parsed correctly.
 warnings.filterwarnings("ignore", message=".*Ignoring wrong pointing object.*")
@@ -92,129 +87,46 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Assuming script is in a 'scripts' dir, one level down from repo root
 repo_root = get_root_path()
 
-# Select embedding model
-if EMBEDDING_MODEL == "gemini":
-    embedding_function = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    db_filename = "gemini_vector.db"
-elif EMBEDDING_MODEL == "ollama":
-    embedding_function = OllamaEmbeddings(
-        model="nomic-embed-text:latest", base_url="http://127.0.0.1:11434"
-    )
-    db_filename = "ollama_vector.db"
-else:
-    raise ValueError(f"Unsupported EMBEDDING_MODEL option: {EMBEDDING_MODEL}")
 
-db_file = os.path.join(script_dir, db_filename)
+def init_rag(embedding_model, chunking_strategy):
+    # Select embedding model
+    if embedding_model == "gemini":
+        embedding_function = GoogleGenerativeAIEmbeddings(
+            model="models/embedding-001")
+        db_filename = "gemini_vector.db"
+    elif embedding_model == "ollama":
+        embedding_function = OllamaEmbeddings(
+            model="nomic-embed-text:latest", base_url="http://127.0.0.1:11434"
+        )
+        db_filename = "ollama_vector.db"
+    else:
+        raise ValueError(f"Unsupported EMBEDDING_MODEL option: {embedding_model}")
 
-docstore_path = os.path.join(script_dir, "docstore")
+    db_file = os.path.join(script_dir, db_filename)
+    docstore_path = os.path.join(script_dir, "docstore")
+    parent_splitter, child_splitter = get_splitters()
 
-parent_splitter, child_splitter = get_splitters(CHUNKING_STRATEGY)
+    return embedding_function, db_file, docstore_path, parent_splitter, child_splitter
 
-fs_store = LocalFileStore(root_path=docstore_path)
-store: BaseStore[str, Document] = create_kv_docstore(fs_store)
+embedding_function, db_file, docstore_path, parent_splitter, child_splitter = init_rag(embedding_model = EMBEDDING_MODEL, chunking_strategy=CHUNKING_STRATEGY)
+
 
 if REBUILD_VECTOR_DB:
-    print(f"Rebuilding vector database: {db_file}")
-    print(f"Rebuilding document store: {docstore_path}")
-    
-    # --- Clean up old stores ---
-    shutil.rmtree(docstore_path, ignore_errors=True)
-    if os.path.exists(db_file):
-        os.remove(db_file)
+    retriever = build_db_and_get_retriever(pdf_configs=PDF_CONFIGS, db_file=db_file, table_name=SQLITE_TABLE_NAME, embedding_function=embedding_function,
+                                           docstore_path=docstore_path, child_splitter=child_splitter, parent_splitter=parent_splitter)
 
-    # --- Re-initialize empty stores ---
-    # Create a thread-safe connection with sqlite_vec extension
-    connection = create_thread_safe_connection(db_file)
-    vectorstore = SQLiteVec(
-        table=SQLITE_TABLE_NAME,
-        embedding=embedding_function,
-        db_file=db_file,
-        connection=connection,
-    )
-    # Recreate the document store wrapper
-    fs_store = LocalFileStore(root_path=docstore_path)
-    store = create_kv_docstore(fs_store)
-    
-    # Initialize the retriever with fresh stores
-    retriever = ParentDocumentRetriever(
-        vectorstore=vectorstore,
-        docstore=store,
-        child_splitter=child_splitter,
-        parent_splitter=parent_splitter,
-    )
-
-    # --- Load and Process Documents ---
-    assets_dir = os.path.join(repo_root, "assets", "actuarial")
-    
-    # Build the list of PDFs to process from the configuration
-    pdf_configs = [
-        {
-            "path": os.path.join(assets_dir, filename),
-            "name": english_name,
-        }
-        for filename, english_name in PDF_CONFIGS
-    ]
-    
-    print(f"Processing {len(pdf_configs)} PDF(s):")
-    for config in pdf_configs:
-        print(f"  - {config['name']}")
-    print()
-
-    for config in pdf_configs:
-        pdf_path = config["path"]
-        if not os.path.exists(pdf_path):
-            print(f"Warning: PDF not found at {pdf_path}. Skipping.")
-            continue
-            
-        print(f"Loading document: {config['name']}...")
-        loader = PyPDFLoader(pdf_path)
-        docs = loader.load()
-        
-        # Add metadata to identify the source
-        # Preserve the original file path and add a friendly name
-        for doc in docs:
-            doc.metadata["pdf_path"] = pdf_path  # Store actual file path for Unstructured
-            doc.metadata["source_name"] = config["name"]  # Store friendly name
-            # Keep original 'source' from PyPDFLoader which has the path
-            
-        print(f"Adding {len(docs)} pages to the retriever...")
-        # This one command does all the work:
-        # 1. Splits docs with parent_splitter
-        # 2. Stores parent chunks in the FileSystemStore
-        # 3. Splits parent chunks with child_splitter
-        # 4. Creates embeddings for child chunks
-        # 5. Stores child chunks in the SQLiteVec vector store
-        # 6. Links parent and child chunks
-        retriever.add_documents(docs, ids=None)
-        
-    print("\nVector database rebuild complete.\n")
 else:
-    # When not rebuilding, use existing database with thread-safe connection
-    connection = create_thread_safe_connection(db_file)
-    vectorstore = SQLiteVec(
-        table=SQLITE_TABLE_NAME,
-        embedding=embedding_function,
-        db_file=db_file,
-        connection=connection,
-    )
-    
-    # Initialize the retriever with existing stores
-    retriever = ParentDocumentRetriever(
-        vectorstore=vectorstore,
-        docstore=store,
-        child_splitter=child_splitter,
-        parent_splitter=parent_splitter,
-    )
-    
-    print(f"Using existing vector database: {db_file}\n")
+    retriever = get_retriever_from_existing_db(db_file=db_file, table_name=SQLITE_TABLE_NAME, embedding_function=embedding_function,
+                                               docstore_path=docstore_path, child_splitter=child_splitter, parent_splitter=parent_splitter)
+
 
 if __name__ == "__main__":
     rag_chain = get_rag_chain(retriever, PROMPT, llm)
 
-
     # --- Test Searching ---
 
-    friedland_response2 = search("When is the Bornhuetter-Ferguson technique most useful, and when does it not work well?", rag_chain=rag_chain, print_question=True)
+    friedland_response2 = search(
+        "When is the Bornhuetter-Ferguson technique most useful, and when does it not work well?", rag_chain=rag_chain, print_question=True)
     print(f"Answer: {friedland_response2}\n")
     """
     Expected:
@@ -243,7 +155,8 @@ if __name__ == "__main__":
     technique.
     """
 
-    werner_response = search("How can CART (Classification and Regression Trees) help actuaries?", rag_chain=rag_chain, print_question=True)
+    werner_response = search(
+        "How can CART (Classification and Regression Trees) help actuaries?", rag_chain=rag_chain, print_question=True)
     print(f"Answer: {werner_response}\n")
     """
     Expected:
@@ -259,13 +172,15 @@ if __name__ == "__main__":
     - CART can also help detect interactions between variables.
     """
 
-    no_context_response = search("What is the best recipe for a chocolate cake?", rag_chain=rag_chain, print_question=True)
+    no_context_response = search(
+        "What is the best recipe for a chocolate cake?", rag_chain=rag_chain, print_question=True)
     print(f"Answer: {no_context_response}\n")
     """Expected:
     nothing
     """
 
-    westminster_response = search("State section 2(1) of the Statute of Westminster", rag_chain=rag_chain, print_question=True)
+    westminster_response = search(
+        "State section 2(1) of the Statute of Westminster", rag_chain=rag_chain, print_question=True)
     print(f"Answer: {westminster_response}\n")
     """
     Expected:

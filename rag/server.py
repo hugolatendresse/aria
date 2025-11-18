@@ -30,7 +30,7 @@ from typing import List
 from core.get_root_path import get_root_path
 from core.create_thread_safe_connection import create_thread_safe_connection
 from core.prompt import PROMPT
-from core.search import get_rag_chain, search
+from core.search import get_rag_chain, search, get_retriever_from_existing_db
 from mcp.server.fastmcp import FastMCP
 from langchain.chat_models import init_chat_model
 from langchain_classic.retrievers import ParentDocumentRetriever
