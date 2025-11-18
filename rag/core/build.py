@@ -87,4 +87,5 @@ def build_db_and_get_retriever(pdf_configs, db_file, table_name, embedding_funct
         retriever.add_documents(docs, ids=None)
 
     print("\nVector database rebuild complete.\n")
+    return retriever
 

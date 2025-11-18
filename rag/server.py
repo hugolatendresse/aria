@@ -60,7 +60,6 @@ if not os.environ.get("GOOGLE_API_KEY"):
     else:
         print("Warning: GOOGLE_API_KEY not set. Gemini models will fail.")
 
-llm = init_chat_model("gemini-2.0-flash-exp", model_provider="google_genai")
 
 # Path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -100,10 +99,11 @@ retriever = ParentDocumentRetriever(
 )
 
 
-
+llm = init_chat_model("gemini-2.0-flash-exp", model_provider="google_genai")
 rag_chain = get_rag_chain(retriever, PROMPT, llm)
 
 
+# TODO shouldn't we use the cline llm directly? Just pass retrieved text to it directly? Why us a separate llm?
 
 def generate_answer(question: str, context_docs: List[Document]) -> str:
     """Generate answer using retrieved context"""

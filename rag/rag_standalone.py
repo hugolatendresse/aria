@@ -12,23 +12,20 @@
 ############################### Configuration #################################
 # - Set to True: Load/update documents in vector database (first run or when adding new docs)
 # - Set to False: Skip document loading and use existing vector database (for testing)
-from langchain_ollama import OllamaEmbeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.stores import BaseStore
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.prompts import ChatPromptTemplate
+from core.init_rag import init_rag
 from langchain.chat_models import init_chat_model
 from core.search import get_rag_chain, search, get_retriever_from_existing_db
 from core.prompt import PROMPT
-from core.chunking_strategies import get_splitters
 from core.get_root_path import get_root_path
 from core.build import build_db_and_get_retriever
-from dotenv import load_dotenv
 import warnings
 import os
-REBUILD_VECTOR_DB = False  # Set to False after first run to test queries
+REBUILD_VECTOR_DB = True  # Set to False after first run to test queries
 
 # Embedding model selection
 EMBEDDING_MODEL = "ollama"  # "ollama" to run locally or "gemini" to run with api key
@@ -67,47 +64,9 @@ unstructured -> Unstructured.io (structure-aware, preserves hierarchy)
 
 
 # Common issue when parsing pdfs. Can ignore - most of the content gets parsed correctly.
-warnings.filterwarnings("ignore", message=".*Ignoring wrong pointing object.*")
+warnings.filterwarnings("ignore", message=".*Ignoring wrong pointing object.*")  # TODO this doesn't work, try with a `with`
 
-
-env_path = os.path.join(get_root_path(), '.env')
-load_dotenv(env_path)
-
-if not os.environ.get("GOOGLE_API_KEY"):
-    if EMBEDDING_MODEL == "gemini":
-        raise ValueError('no GOOGLE_API_KEY!')
-    else:
-        print("Warning: GOOGLE_API_KEY not set. Gemini models will fail.")
-
-
-llm = init_chat_model("gemini-2.0-flash-exp", model_provider="google_genai")
-
-# Path
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# Assuming script is in a 'scripts' dir, one level down from repo root
-repo_root = get_root_path()
-
-
-def init_rag(embedding_model, chunking_strategy):
-    # Select embedding model
-    if embedding_model == "gemini":
-        embedding_function = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001")
-        db_filename = "gemini_vector.db"
-    elif embedding_model == "ollama":
-        embedding_function = OllamaEmbeddings(
-            model="nomic-embed-text:latest", base_url="http://127.0.0.1:11434"
-        )
-        db_filename = "ollama_vector.db"
-    else:
-        raise ValueError(f"Unsupported EMBEDDING_MODEL option: {embedding_model}")
-
-    db_file = os.path.join(script_dir, db_filename)
-    docstore_path = os.path.join(script_dir, "docstore")
-    parent_splitter, child_splitter = get_splitters()
-
-    return embedding_function, db_file, docstore_path, parent_splitter, child_splitter
-
+# TODO namedtuple
 embedding_function, db_file, docstore_path, parent_splitter, child_splitter = init_rag(embedding_model = EMBEDDING_MODEL, chunking_strategy=CHUNKING_STRATEGY)
 
 
@@ -121,6 +80,7 @@ else:
 
 
 if __name__ == "__main__":
+    llm = init_chat_model("gemini-2.0-flash-exp", model_provider="google_genai")
     rag_chain = get_rag_chain(retriever, PROMPT, llm)
 
     # --- Test Searching ---
