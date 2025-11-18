@@ -12,8 +12,6 @@
 ############################### Configuration #################################
 # - Set to True: Load/update documents in vector database (first run or when adding new docs)
 # - Set to False: Skip document loading and use existing vector database (for testing)
-from langchain_core.stores import BaseStore
-from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.prompts import ChatPromptTemplate
@@ -25,7 +23,7 @@ from core.get_root_path import get_root_path
 from core.build import build_db_and_get_retriever
 import warnings
 import os
-REBUILD_VECTOR_DB = True  # Set to False after first run to test queries
+REBUILD_VECTOR_DB = False  # Set to False after first run to test queries
 
 # Embedding model selection
 EMBEDDING_MODEL = "ollama"  # "ollama" to run locally or "gemini" to run with api key

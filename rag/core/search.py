@@ -3,9 +3,12 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.vectorstores import SQLiteVec
 from langchain_classic.retrievers import ParentDocumentRetriever
+from langchain_core.stores import BaseStore
+from langchain_core.documents import Document
+from langchain_classic.storage import LocalFileStore, create_kv_docstore
 
 
-def get_retriever_from_existing_db(db_file, table_name, embedding_function, docstore, child_splitter, parent_splitter):
+def get_retriever_from_existing_db(db_file, table_name, embedding_function, docstore_path, child_splitter, parent_splitter):
     print(f"Using existing vector database: {db_file}\n")
     fs_store = LocalFileStore(root_path=docstore_path)
     store: BaseStore[str, Document] = create_kv_docstore(fs_store)
@@ -23,7 +26,7 @@ def get_retriever_from_existing_db(db_file, table_name, embedding_function, docs
     # Initialize the retriever with existing stores
     retriever = ParentDocumentRetriever(
         vectorstore=vectorstore,
-        docstore=docstore,
+        docstore=store,
         child_splitter=child_splitter,
         parent_splitter=parent_splitter,
     )
