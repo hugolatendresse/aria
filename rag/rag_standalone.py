@@ -12,17 +12,6 @@
 ############################### Configuration #################################
 # - Set to True: Load/update documents in vector database (first run or when adding new docs)
 # - Set to False: Skip document loading and use existing vector database (for testing)
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.prompts import ChatPromptTemplate
-from core.init_rag import init_rag
-from langchain.chat_models import init_chat_model
-from core.search import get_rag_chain, search, get_retriever_from_existing_db
-from core.prompt import PROMPT
-from core.get_root_path import get_root_path
-from core.build import build_db_and_get_retriever
-import warnings
-import os
 REBUILD_VECTOR_DB = False  # Set to False after first run to test queries
 
 # Embedding model selection
@@ -59,6 +48,18 @@ unstructured -> Unstructured.io (structure-aware, preserves hierarchy)
 """
 
 ###############################################################################
+
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.prompts import ChatPromptTemplate
+from core.init_rag import init_rag
+from langchain.chat_models import init_chat_model
+from core.search import get_rag_chain, search, get_retriever_from_existing_db
+from core.prompt import PROMPT
+from core.get_root_path import get_root_path
+from core.build import build_db_and_get_retriever
+import warnings
+import os
 
 
 # Common issue when parsing pdfs. Can ignore - most of the content gets parsed correctly.
