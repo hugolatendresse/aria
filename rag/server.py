@@ -105,6 +105,9 @@ rag_chain = get_rag_chain(retriever, PROMPT, llm)
 
 # TODO shouldn't we use the cline llm directly? Just pass retrieved text to it directly? Why us a separate llm?
 
+# TODO rag.standlone (in search()), we return rag_chain.invoke directly. However, below, we would do
+#  PROMPT.invoke and then llm.invoke. What's the difference?
+
 def generate_answer(question: str, context_docs: List[Document]) -> str:
     """Generate answer using retrieved context"""
     docs_content = "\n\n".join(doc.page_content for doc in context_docs)
