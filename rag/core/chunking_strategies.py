@@ -13,6 +13,43 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_text_splitters.base import TextSplitter
 
 
+def get_splitters(strategy):
+    print(f"Using chunking strategy: {strategy}")
+    try:
+        if strategy == "recursive":
+            # Recursive text splitter with default settings
+            chunking_strategy = get_chunking_strategy(
+                "recursive",
+                parent_chunk_size=2048,
+                child_chunk_size=512,
+                chunk_overlap=0
+            )
+        elif strategy == "unstructured":
+            # Unstructured.io structure-aware chunking
+            chunking_strategy = get_chunking_strategy(
+                "unstructured",
+                parent_max_chars=2000,
+                child_max_chars=500,
+                combine_under_n_chars=200,
+                new_after_n_chars=1500,
+                strategy="fast",  # "fast" doesn't require tesseract, "hi_res" does
+                infer_table_structure=True
+            )
+        else:
+            raise ValueError(f"Unknown CHUNKING_STRATEGY: {strategy}")
+        
+        print(f"Strategy details: {chunking_strategy.get_description()}")
+        
+    except ImportError as e:
+        print(f"Error initializing chunking strategy: {e}")
+        print("Falling back to recursive text splitter...")
+        chunking_strategy = get_chunking_strategy("recursive")
+
+    parent_splitter = chunking_strategy.get_parent_splitter()
+    child_splitter = chunking_strategy.get_child_splitter()
+    return parent_splitter, child_splitter
+
+
 class ChunkingStrategy(ABC):
     """
     Abstract base class for document chunking strategies.

@@ -41,32 +41,30 @@ unstructured -> Unstructured.io (structure-aware, preserves hierarchy)
 
 import os
 import shutil
+from langchain.chat_models import init_chat_model
+from langchain_classic.storage import LocalFileStore, create_kv_docstore
+from langchain_classic.retrievers import ParentDocumentRetriever
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.vectorstores import SQLiteVec
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.vectorstores import SQLiteVec
-from langchain_ollama import OllamaEmbeddings
-from langchain.chat_models import init_chat_model
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_classic.storage import LocalFileStore, create_kv_docstore
-from langchain_classic.retrievers import ParentDocumentRetriever
+from langchain_ollama import OllamaEmbeddings
 
 from dotenv import load_dotenv
 
 from get_root_path import get_root_path
 from chunking_strategies import get_chunking_strategy
 
-# Load environment variables from .env file (if it exists)
-# Assumes .env is in the same directory as the script
 env_path = os.path.join(get_root_path(), '.env')
 load_dotenv(env_path)
 
 if not os.environ.get("GOOGLE_API_KEY"):
-    print("Warning: GOOGLE_API_KEY not set. Gemini models will fail.")
-    # You might want to raise an error if Gemini is selected:
-    # if EMBEDDING_MODEL == "gemini":
-    #     raise ValueError('no GOOGLE_API_KEY!')
+    if EMBEDDING_MODEL == "gemini":
+        raise ValueError('no GOOGLE_API_KEY!')
+    else:
+        print("Warning: GOOGLE_API_KEY not set. Gemini models will fail.")
 
 
 llm = init_chat_model("gemini-2.0-flash-exp", model_provider="google_genai")
@@ -89,7 +87,7 @@ else:
     raise ValueError(f"Unsupported EMBEDDING_MODEL option: {EMBEDDING_MODEL}")
 
 # Define paths for database and document store
-db_path = os.path.join(script_dir, db_filename)
+db_file = os.path.join(script_dir, db_filename)
 docstore_path = os.path.join(script_dir, "docstore")
 
 # TODO there might be some extra chunking work here that should not be redone when we don't rebuild
@@ -213,21 +211,21 @@ def create_thread_safe_connection(db_file: str):
     return connection
 
 if REBUILD_VECTOR_DB:
-    print(f"Rebuilding vector database: {db_path}")
+    print(f"Rebuilding vector database: {db_file}")
     print(f"Rebuilding document store: {docstore_path}")
     
     # --- Clean up old stores ---
     shutil.rmtree(docstore_path, ignore_errors=True)
-    if os.path.exists(db_path):
-        os.remove(db_path)
+    if os.path.exists(db_file):
+        os.remove(db_file)
 
     # --- Re-initialize empty stores ---
     # Create a thread-safe connection with sqlite_vec extension
-    connection = create_thread_safe_connection(db_path)
+    connection = create_thread_safe_connection(db_file)
     vectorstore = SQLiteVec(
         table=SQLITE_TABLE_NAME,
         embedding=embedding_function,
-        db_file=db_path,
+        db_file=db_file,
         connection=connection,
     )
     # Recreate the document store wrapper
@@ -289,11 +287,11 @@ if REBUILD_VECTOR_DB:
     print("\nVector database rebuild complete.\n")
 else:
     # When not rebuilding, use existing database with thread-safe connection
-    connection = create_thread_safe_connection(db_path)
+    connection = create_thread_safe_connection(db_file)
     vectorstore = SQLiteVec(
         table=SQLITE_TABLE_NAME,
         embedding=embedding_function,
-        db_file=db_path,
+        db_file=db_file,
         connection=connection,
     )
     
@@ -305,7 +303,7 @@ else:
         parent_splitter=parent_splitter,
     )
     
-    print(f"Using existing vector database: {db_path}\n")
+    print(f"Using existing vector database: {db_file}\n")
 
 # Define prompt for question-answering
 prompt = ChatPromptTemplate.from_template("""
@@ -344,9 +342,8 @@ def search(question: str, print_retrieved=False):
     """
     Queries the RAG chain with a specific question.
     """
-    print(f"\n--- Searching for: '{question}' ---")
-    
     if print_retrieved:
+        print(f"\n--- Searching for: '{question}' ---")
         print("\n ***** Retrieved Context: ********\n", retriever.invoke(question))
         print("\n ***** End of retrieved Context: ********\n")
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Actual answer: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")

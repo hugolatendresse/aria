@@ -1,4 +1,13 @@
-### RAG tool that is not connected to the rest of cline
+### RAG tool that is not directly connected to the rest of cline
+### This script is necessary to create the vector store!
+### It can also be used for retrieval
+
+# RAG Structure
+# Large chunks stored in a docstore (LocalFileStore - file-system based storage)
+# Small chunks stored in sqlite_vec
+# Semantic search done on small chunks
+# Small chunks point to big chunks, which are passed to context
+# Need to wrap LocalFileStore with create_kv_docstore to handle Document objects
 
 ############################### Configuration #################################
 # - Set to True: Load/update documents in vector database (first run or when adding new docs)
@@ -8,7 +17,6 @@ REBUILD_VECTOR_DB = False  # Set to False after first run to test queries
 # Embedding model selection
 EMBEDDING_MODEL = "ollama"  # "ollama" to run locally or "gemini" to run with api key
 
-# Chunking strategy selection
 # Options: "recursive" or "unstructured"
 CHUNKING_STRATEGY = "recursive"  # works well 
 # CHUNKING_STRATEGY = "unstructured" # doesn't work well
@@ -22,12 +30,11 @@ SQLITE_TABLE_NAME = SQLITE_TABLE_NAME_PREFIX + "_" + CHUNKING_STRATEGY
 # for unified vector search across all documents.
 # Format: (filename, friendly_name)
 PDF_CONFIGS = [
-    ("5_Friedland_stripped_EX_appendices.pdf", "Friedland Whole"),
-    ("5_Werner_Modlin_stripped_EX_appendices.pdf", "Werner Whole"),
+    ("5_Friedland_stripped_EX_appendices.pdf", "Friedland Entire Text"),
+    ("5_Werner_Modlin_stripped_EX_appendices.pdf", "Werner Entire Text"),
     # ("Statute of Westminster.pdf", "Statute of Westminster"),
     # ("5_Friedland_two_chapters.pdf", "Friedland Two Chapters"),
 ]
-
 
 """
 EXISTING TABLES
@@ -43,6 +50,13 @@ unstructured -> Unstructured.io (structure-aware, preserves hierarchy)
 
 import os
 import shutil
+import warnings
+from dotenv import load_dotenv
+from core.get_root_path import get_root_path
+from core.chunking_strategies import get_splitters
+from core.create_thread_safe_connection import create_thread_safe_connection
+from core.prompt import PROMPT
+from core.search import get_rag_chain, search 
 from langchain.chat_models import init_chat_model
 from langchain_classic.storage import LocalFileStore, create_kv_docstore
 from langchain_classic.retrievers import ParentDocumentRetriever
@@ -51,13 +65,15 @@ from langchain_community.vectorstores import SQLiteVec
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.documents import Document
+from langchain_core.stores import BaseStore
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_ollama import OllamaEmbeddings
 
-from dotenv import load_dotenv
 
-from core.get_root_path import get_root_path
-from core.chunking_strategies import get_chunking_strategy
+# Common issue when parsing pdfs. Can ignore - most of the content gets parsed correctly.
+warnings.filterwarnings("ignore", message=".*Ignoring wrong pointing object.*")
+
 
 env_path = os.path.join(get_root_path(), '.env')
 load_dotenv(env_path)
@@ -88,129 +104,14 @@ elif EMBEDDING_MODEL == "ollama":
 else:
     raise ValueError(f"Unsupported EMBEDDING_MODEL option: {EMBEDDING_MODEL}")
 
-# Define paths for database and document store
 db_file = os.path.join(script_dir, db_filename)
+
 docstore_path = os.path.join(script_dir, "docstore")
 
-# TODO there might be some extra chunking work here that should not be redone when we don't rebuild
+parent_splitter, child_splitter = get_splitters(CHUNKING_STRATEGY)
 
-# --- Initialize Chunking Strategy ---
-# Select and configure the chunking strategy based on configuration
-print(f"Using chunking strategy: {CHUNKING_STRATEGY}")
-
-try:
-    if CHUNKING_STRATEGY == "recursive":
-        # Recursive text splitter with default settings
-        chunking_strategy = get_chunking_strategy(
-            "recursive",
-            parent_chunk_size=2048,
-            child_chunk_size=512,
-            chunk_overlap=0
-        )
-    elif CHUNKING_STRATEGY == "unstructured":
-        # Unstructured.io structure-aware chunking
-        chunking_strategy = get_chunking_strategy(
-            "unstructured",
-            parent_max_chars=2000,
-            child_max_chars=500,
-            combine_under_n_chars=200,
-            new_after_n_chars=1500,
-            strategy="fast",  # "fast" doesn't require tesseract, "hi_res" does
-            infer_table_structure=True
-        )
-    else:
-        raise ValueError(f"Unknown CHUNKING_STRATEGY: {CHUNKING_STRATEGY}")
-    
-    print(f"Strategy details: {chunking_strategy.get_description()}")
-    
-except ImportError as e:
-    print(f"Error initializing chunking strategy: {e}")
-    print("Falling back to recursive text splitter...")
-    chunking_strategy = get_chunking_strategy("recursive")
-
-# Get the splitters from the strategy
-parent_splitter = chunking_strategy.get_parent_splitter()
-child_splitter = chunking_strategy.get_child_splitter()
-
-# --- Initialize Document Store ---
-# The file system store for the large parent chunks
-# Need to wrap LocalFileStore with create_kv_docstore to handle Document objects
 fs_store = LocalFileStore(root_path=docstore_path)
-store = create_kv_docstore(fs_store)
-
-def inspect_langchain_text_splitters_results():
-    """
-    Inspect the splits after retriever.add_documents() completes.
-    This function needs to be called AFTER the vector DB is rebuilt.
-    """
-    # First check if stores have content
-    if not os.path.exists(docstore_path):
-        print("Error: Docstore not found. Set REBUILD_VECTOR_DB=True first.")
-        return
-    
-    # 1. Inspect the docstore (parent chunks)
-    print("\n=== DOCSTORE (Parent Chunks) ===")
-    # Get all keys from the document store
-    all_parent_ids = list(store.yield_keys())
-    print(f"Total parent chunks: {len(all_parent_ids)}")
-    
-    for i, doc_id in enumerate(all_parent_ids[:5]):  # Show first 5
-        parent_doc = store.mget([doc_id])[0]
-        if parent_doc:
-            print(f"\n--- Parent Chunk {i+1} (ID: {doc_id}) ---")
-            print(f"Content length: {len(parent_doc.page_content)} chars")
-            print(f"Metadata: {parent_doc.metadata}")
-            print(f"Content preview:\n{parent_doc.page_content[:300]}...")
-            print(f"...{parent_doc.page_content[-150:]}")  # Show end too
-
-    # 2. Inspect split boundaries (most useful!)
-    print("\n\n=== DETAILED SPLIT ANALYSIS (First 3 Parents) ===")
-    for i, doc_id in enumerate(all_parent_ids[:3]):
-        parent_doc = store.mget([doc_id])[0]
-        if parent_doc:
-            print(f"\n{'='*80}")
-            print(f"PARENT {i+1} | ID: {doc_id} | Length: {len(parent_doc.page_content)} chars")
-            print(f"Page: {parent_doc.metadata.get('page', 'N/A')} | Source: {parent_doc.metadata.get('source', 'N/A')}")
-            print(f"{'='*80}")
-            print(parent_doc.page_content[:800])  # Show more content
-            if len(parent_doc.page_content) > 800:
-                print(f"\n... [{len(parent_doc.page_content) - 1600} chars omitted] ...\n")
-                print(parent_doc.page_content[-800:])
-            print(f"\n{'-'*80}\n")
-
-    # 3. Show statistics
-    print("\n=== STATISTICS ===")
-    parent_lengths = []
-    page_distribution = {}
-    
-    for doc_id in all_parent_ids:
-        parent_doc = store.mget([doc_id])[0]
-        if parent_doc:
-            parent_lengths.append(len(parent_doc.page_content))
-            page_num = parent_doc.metadata.get('page', 'unknown')
-            page_distribution[page_num] = page_distribution.get(page_num, 0) + 1
-    
-    if parent_lengths:
-        print(f"Average parent chunk size: {sum(parent_lengths)/len(parent_lengths):.0f} chars")
-        print(f"Min parent chunk size: {min(parent_lengths)} chars")
-        print(f"Max parent chunk size: {max(parent_lengths)} chars")
-        print(f"\nChunks per page (first 10 pages):")
-        for page, count in sorted(page_distribution.items())[:10]:
-            print(f"  Page {page}: {count} parent chunks")
-
-# inspect_langchain_text_splitters_results() # TODO decide on some logic to run this?
-
-# Create a thread-safe SQLite connection with sqlite_vec extension
-def create_thread_safe_connection(db_file: str):
-    import sqlite3
-    import sqlite_vec
-    
-    connection = sqlite3.connect(db_file, check_same_thread=False)
-    connection.row_factory = sqlite3.Row
-    connection.enable_load_extension(True)
-    sqlite_vec.load(connection)
-    connection.enable_load_extension(False)
-    return connection
+store: BaseStore[str, Document] = create_kv_docstore(fs_store)
 
 if REBUILD_VECTOR_DB:
     print(f"Rebuilding vector database: {db_file}")
@@ -307,110 +208,66 @@ else:
     
     print(f"Using existing vector database: {db_file}\n")
 
-# Define prompt for question-answering
-prompt = ChatPromptTemplate.from_template("""
-You are an expert actuary assistant. Use the following context from actuarial documents to answer the question.
-
-Context from actuarial documents:
-{context}
-
-Question: {question}
-
-Instructions:
-- Provide a detailed answer based on the actuarial context provided
-- If the context contains relevant information, explain it thoroughly
-- Include specific details, formulas, or methods mentioned in the context
-- Do not ever make inferences, only rely on the context provided
-- Say "I don't know" if the context is completely unrelated to the question
-
-Answer:""")
+if __name__ == "__main__":
+    rag_chain = get_rag_chain(retriever, PROMPT, llm)
 
 
-# --- Define the RAG Chain ---
-# This chain orchestrates the entire process:
-# 1. The `retriever` gets the question and finds relevant child chunks,
-#    then automatically merges them into their parent chunks.
-# 2. The `prompt` receives the parent chunks (as context) and the question.
-# 3. The `llm` generates an answer based on the prompt.
-# 4. The `StrOutputParser` cleans up the output.
-rag_chain = (
-    {"context": retriever, "question": RunnablePassthrough()}
-    | prompt
-    | llm
-    | StrOutputParser()
-)
+    # --- Test Searching ---
 
-def search(question: str, print_question=False, print_retrieved=False):
+    friedland_response2 = search("When is the Bornhuetter-Ferguson technique most useful, and when does it not work well?", rag_chain=rag_chain, print_question=True)
+    print(f"Answer: {friedland_response2}\n")
     """
-    Queries the RAG chain with a specific question.
+    Expected:
+    An advantage of the Bornhuetter-Ferguson technique is that random fluctuations early in the life
+    of an accident year (or other defined time interval) do not significantly distort the projections. For
+    example, if several large and unusual claims are reported for an accident year, then the reported
+    claim development technique may produce overly conservative ultimate claims estimates. This
+    situation does not, however, seriously distort the Bornhuetter-Ferguson technique.
+    Actuaries frequently use the Bornhuetter-Ferguson method for long-tail lines of insurance,
+    particularly for the most immature years, due to the highly leveraged nature of claim development
+    factors for such lines. Actuaries may also use the Bornhuetter-Ferguson technique if the data is
+    extremely thin or volatile or both. For example, when an insurer has recently entered a new line
+    of business or a new territory and there is not yet a credible volume of historical claim
+    development experience, an actuary may use the Bornhuetter-Ferguson technique. In such
+    circumstances, the actuary would likely need to rely on benchmarks, either from similar lines at
+    the same insurer or insurance industry experience, for development patterns and expected claim
+    ratios (or pure premiums). (See previous comments about the use of industry benchmarks.)
+    In a discussion of when to use the Bornhuetter-Ferguson method in the paper “The Actuary and
+    IBNR,” the authors state: “It can be argued that the most prudent course is, when in doubt, to use
+    expected losses, in as much as it is certainly indicated for volatile lines, and in the case of a stable
+    line, the expected loss ratio should be predictable enough so that both techniques produce the
+    same result.”56
+    The Bornhuetter-Ferguson technique can be a useful method for very short-tail lines as well as
+    long-tail lines. For very short-tail lines, the IBNR can be set equal to a multiple of the last few
+    months’ earned premium; this is essentially an application of the Bornhuetter-Ferguson
+    technique.
     """
-    if print_question:
-        print(f"\n--- Searching for: '{question}' ---")
 
-    if print_retrieved:
-        print("\n ***** Retrieved Context: ********\n", retriever.invoke(question))
-        print("\n ***** End of retrieved Context: ********\n")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Actual answer: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    
-    return rag_chain.invoke(question)
+    werner_response = search("How can CART (Classification and Regression Trees) help actuaries?", rag_chain=rag_chain, print_question=True)
+    print(f"Answer: {werner_response}\n")
+    """
+    Expected:
+    The purpose of CART (Classification and Regression Trees) is to develop tree-building algorithms to
+    determine a set of if-then logical conditions that help improve classification.
+    In personal automobile insurance, a resulting tree may start with an if-then condition around gender. If
+    the risk is male, the tree then continues to another if-then condition around age. If the risk is male and
+    youthful, the tree may then continue to an if-then condition involving prior accident experience. The tree
+    “branch” for females may involve a different order or in fact, a completely different set of conditions.
+    Examination of the tree may help ratemaking actuaries identify:
+    - the strongest list of initial variables (i.e., whittle down a long list of potential variables to a more manageable yet meaningful list)
+    - determine how to categorize each variable. 
+    - CART can also help detect interactions between variables.
+    """
 
+    no_context_response = search("What is the best recipe for a chocolate cake?", rag_chain=rag_chain, print_question=True)
+    print(f"Answer: {no_context_response}\n")
+    """Expected:
+    nothing
+    """
 
-# --- Test Searching ---
-
-friedland_response2 = search("When is the Bornhuetter-Ferguson technique most useful, and when does it not work well?")
-print(f"Answer: {friedland_response2}\n")
-"""
-Expected:
-An advantage of the Bornhuetter-Ferguson technique is that random fluctuations early in the life
-of an accident year (or other defined time interval) do not significantly distort the projections. For
-example, if several large and unusual claims are reported for an accident year, then the reported
-claim development technique may produce overly conservative ultimate claims estimates. This
-situation does not, however, seriously distort the Bornhuetter-Ferguson technique.
-Actuaries frequently use the Bornhuetter-Ferguson method for long-tail lines of insurance,
-particularly for the most immature years, due to the highly leveraged nature of claim development
-factors for such lines. Actuaries may also use the Bornhuetter-Ferguson technique if the data is
-extremely thin or volatile or both. For example, when an insurer has recently entered a new line
-of business or a new territory and there is not yet a credible volume of historical claim
-development experience, an actuary may use the Bornhuetter-Ferguson technique. In such
-circumstances, the actuary would likely need to rely on benchmarks, either from similar lines at
-the same insurer or insurance industry experience, for development patterns and expected claim
-ratios (or pure premiums). (See previous comments about the use of industry benchmarks.)
-In a discussion of when to use the Bornhuetter-Ferguson method in the paper “The Actuary and
-IBNR,” the authors state: “It can be argued that the most prudent course is, when in doubt, to use
-expected losses, in as much as it is certainly indicated for volatile lines, and in the case of a stable
-line, the expected loss ratio should be predictable enough so that both techniques produce the
-same result.”56
-The Bornhuetter-Ferguson technique can be a useful method for very short-tail lines as well as
-long-tail lines. For very short-tail lines, the IBNR can be set equal to a multiple of the last few
-months’ earned premium; this is essentially an application of the Bornhuetter-Ferguson
-technique.
-"""
-
-werner_response = search("How can CART (Classification and Regression Trees) help actuaries?")
-print(f"Answer: {werner_response}\n")
-"""
-Expected:
-The purpose of CART (Classification and Regression Trees) is to develop tree-building algorithms to
-determine a set of if-then logical conditions that help improve classification.
-In personal automobile insurance, a resulting tree may start with an if-then condition around gender. If
-the risk is male, the tree then continues to another if-then condition around age. If the risk is male and
-youthful, the tree may then continue to an if-then condition involving prior accident experience. The tree
-“branch” for females may involve a different order or in fact, a completely different set of conditions.
-Examination of the tree may help ratemaking actuaries identify:
-- the strongest list of initial variables (i.e., whittle down a long list of potential variables to a more manageable yet meaningful list)
-- determine how to categorize each variable. 
-- CART can also help detect interactions between variables.
-"""
-
-no_context_response = search("What is the best recipe for a chocolate cake?")
-print(f"Answer: {no_context_response}\n")
-"""Expected:
-nothing
-"""
-
-westminster_response = search("State section 2(1) of the Statute of Westminster")
-print(f"Answer: {westminster_response}\n")
-"""
-Expected:
-In Canada, no law and no provision of any law made after the commencement of this Act by the Parliament of a Dominion shall be void or inoperative on the ground that it is repugnant to the Law of England, or to the provisions of any existing or future Act of Parliament of the United Kingdom, or to any order, rule or regulation made under any such Act, and the powers of the Parliament of a Dominion shall include the power to repeal or amend any such Act, order, rule or regulation in so far as the same is part of the law of the Dominion.
-"""
+    westminster_response = search("State section 2(1) of the Statute of Westminster", rag_chain=rag_chain, print_question=True)
+    print(f"Answer: {westminster_response}\n")
+    """
+    Expected:
+    In Canada, no law and no provision of any law made after the commencement of this Act by the Parliament of a Dominion shall be void or inoperative on the ground that it is repugnant to the Law of England, or to the provisions of any existing or future Act of Parliament of the United Kingdom, or to any order, rule or regulation made under any such Act, and the powers of the Parliament of a Dominion shall include the power to repeal or amend any such Act, order, rule or regulation in so far as the same is part of the law of the Dominion.
+    """
