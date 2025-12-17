@@ -91,7 +91,7 @@ total_ultimate = ult_by_ay.sum()
 - Don't have reliable count data
 - Counts are reported inconsistently across years
 - Severity patterns show no credible trend (too volatile)
-- Single-triangle methods (CL, BF, Cape Cod) already produce stable estimates
+- Single-triangle methods (CL, BF, exposure-based) already produce stable estimates
 
 **Advantages:**
 - Captures different development speeds for frequency vs severity

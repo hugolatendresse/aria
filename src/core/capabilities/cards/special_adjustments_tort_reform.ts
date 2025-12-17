@@ -2,10 +2,10 @@ import { CapabilityCard } from "../card_registry"
 
 export const specialAdjustmentsTortReformCard: CapabilityCard = {
 	id: "special-adjustments-tort-reform",
-	version: "1.4.0",
+	version: "1.5.0",
 	title: "Special Adjustments: Tort Reform & Claims Environment Changes",
-	triggers: [{ kind: "keyword", any: ["tort reform", "tort", "reform"] }],
-	content: `**Capability Card: Special Adjustments (Tort Reform) v1.4**
+	triggers: [{ kind: "keyword", any: ["tort reform"] }],
+	content: `**Capability Card: Special Adjustments (Tort Reform) v1.5**
 
 **What it does:** Adjusts historical data to current basis when claims environment changes (tort reform, regulatory changes, coverage changes) have made past experience non-comparable to projection periods.
 
@@ -251,7 +251,13 @@ Both factors multiply the original data - they compound.
 
 ---
 
-**Version:** v1.4 - Added explicit debugging example, enhanced verification, pattern recognition.`,
+### Exposure-Based Methods (BF / Stanard-Buhlmann)
+
+**CRITICAL:** With exposure-based methods, adjust the TRIANGLE (not premium) by tort factors. Premium represents current exposure and must stay at full current-level. Adjusting premium down produces systematically low ultimates. Implementation: (1) Adjust triangle: \`X_adj = X * tort_tri\`; (2) Fit with unadjusted premium: \`pipe.fit(X_adj, sample_weight=premium)\`; (3) Adjust results back: \`ult = model.ultimate_ / tort_tri.latest_diagonal\`.
+
+---
+
+**Version:** v1.5 - Added exposure-based methods guidance.`,
 	sources: ["Friedland — Chapter 11, Tort Reform Adjustments", "CAS Exam 5 Loss Reserving material"],
 	safetyTags: ["actuarial", "IBNR", "severity-adjustment"],
 }

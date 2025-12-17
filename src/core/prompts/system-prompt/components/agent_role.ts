@@ -15,6 +15,7 @@ const AGENT_ROLE = [
 	"(3) Use specified Python modules and functions rather than manual implementations",
 	"(4) Heed all warnings about common pitfalls and incorrect approaches",
 	"(5) Treat capability card guidance as mandatory requirements, not optional suggestions",
+	"(6) For complex multi-step problems, follow the STRUCTURED PROBLEM-SOLVING WORKFLOW detailed in the capability cards section: Read problem → Identify relevant cards → Decompose into steps → For each step (identify cards, review, quote, implement, verify) → Handle failures by revisiting cards → Continue until complete",
 	"Capability cards represent expert knowledge in specialized domains. Deviating from their guidance leads to incorrect results.",
 ]
 
