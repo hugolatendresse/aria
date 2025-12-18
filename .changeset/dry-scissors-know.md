@@ -1,5 +1,5 @@
 ---
-"claude-dev": minor
+"aria-dev": minor
 ---
 
 Baseten Provider Model APIs Deprecation

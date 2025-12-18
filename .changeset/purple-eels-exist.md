@@ -1,5 +1,5 @@
 ---
-"claude-dev": patch
+"aria-dev": patch
 ---
 
 fix: display prompt cache info in History"
