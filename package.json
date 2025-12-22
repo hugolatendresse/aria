@@ -1,22 +1,21 @@
 {
-	"name": "claude-dev",
-	"displayName": "Cline",
-	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
-	"version": "3.32.7",
+	"name": "aria-dev",
+	"displayName": "Aria",
+	"description": "Autonomous coding agent able to perform actuarial work.",
+	"version": "1.0.1",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0"
 	},
 	"author": {
-		"name": "Cline Bot Inc."
+		"name": "Casualty Actuarial Society"
 	},
 	"license": "Apache-2.0",
-	"publisher": "saoudrizwan",
+	"publisher": "hugolatendresse",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/cline/cline"
+		"url": "https://github.com/hugolatendresse/aria"
 	},
-	"homepage": "https://cline.bot",
 	"categories": [
 		"AI",
 		"Chat",
@@ -26,18 +25,11 @@
 		"Testing"
 	],
 	"keywords": [
-		"cline",
-		"claude",
-		"dev",
-		"mcp",
-		"openrouter",
+		"actuarial",
 		"coding",
 		"agent",
 		"autonomous",
-		"chatgpt",
-		"sonnet",
-		"ai",
-		"llama"
+		"ai"
 	],
 	"activationEvents": [
 		"onLanguage",
@@ -48,22 +40,22 @@
 	"contributes": {
 		"walkthroughs": [
 			{
-				"id": "ClineWalkthrough",
-				"title": "Meet Cline, your new coding partner",
-				"description": "Cline codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
+				"id": "AriaWalkthrough",
+				"title": "Meet Aria, your actuarial coding partner",
+				"description": "Aria codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
 				"steps": [
 					{
 						"id": "welcome",
 						"title": "Start with a Goal, Not Just a Prompt",
-						"description": "Tell Cline what you want to achieve. It plans, asks, and then codes, like a true partner.",
+						"description": "Tell Aria what you want to achieve. It plans, asks, and then codes, like a true partner.",
 						"media": {
 							"markdown": "walkthrough/step1.md"
 						}
 					},
 					{
 						"id": "learn",
-						"title": "Let Cline Learn Your Codebase",
-						"description": "Point Cline to your project. It builds understanding to make smart, context-aware changes.",
+						"title": "Let Aria Learn Your Codebase",
+						"description": "Point Aria to your project. It builds understanding to make smart, context-aware changes.",
 						"media": {
 							"markdown": "walkthrough/step2.md"
 						}
@@ -71,7 +63,7 @@
 					{
 						"id": "advanced-features",
 						"title": "Always Use the Best AI Models",
-						"description": "Cline empowers you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
+						"description": "Aria empowers you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
 						"media": {
 							"markdown": "walkthrough/step3.md"
 						}
@@ -87,7 +79,7 @@
 					{
 						"id": "getting-started",
 						"title": "You're Always in Control",
-						"description": "Review Cline's plans and diffs. Approve changes before they happen. No surprises.",
+						"description": "Review Aria's plans and diffs. Approve changes before they happen. No surprises.",
 						"media": {
 							"markdown": "walkthrough/step5.md"
 						},
@@ -101,17 +93,17 @@
 		"viewsContainers": {
 			"activitybar": [
 				{
-					"id": "claude-dev-ActivityBar",
-					"title": "Cline",
+					"id": "aria-dev-ActivityBar",
+					"title": "Aria",
 					"icon": "assets/icons/icon.svg"
 				}
 			]
 		},
 		"views": {
-			"claude-dev-ActivityBar": [
+			"aria-dev-ActivityBar": [
 				{
 					"type": "webview",
-					"id": "claude-dev.SidebarProvider",
+					"id": "aria-dev.SidebarProvider",
 					"name": "",
 					"icon": "assets/icons/icon.svg"
 				}
@@ -146,28 +138,28 @@
 			{
 				"command": "cline.dev.createTestTasks",
 				"title": "Create Test Tasks",
-				"category": "Cline",
+				"category": "Aria",
 				"when": "cline.isDevMode"
 			},
 			{
 				"command": "cline.addToChat",
-				"title": "Add to Cline",
-				"category": "Cline"
+				"title": "Add to Aria",
+				"category": "Aria"
 			},
 			{
 				"command": "cline.addTerminalOutputToChat",
-				"title": "Add to Cline",
-				"category": "Cline"
+				"title": "Add to Aria",
+				"category": "Aria"
 			},
 			{
 				"command": "cline.focusChatInput",
 				"title": "Jump to Chat Input",
-				"category": "Cline"
+				"category": "Aria"
 			},
 			{
 				"command": "cline.generateGitCommitMessage",
-				"title": "Generate Commit Message with Cline",
-				"category": "Cline",
+				"title": "Generate Commit Message with Aria",
+				"category": "Aria",
 				"icon": {
 					"light": "assets/icons/robot_panel_light.png",
 					"dark": "assets/icons/robot_panel_dark.png"
@@ -175,29 +167,29 @@
 			},
 			{
 				"command": "cline.abortGitCommitMessage",
-				"title": "Generate Commit Message with Cline - Stop",
-				"category": "Cline",
+				"title": "Generate Commit Message with Aria - Stop",
+				"category": "Aria",
 				"icon": "$(debug-stop)"
 			},
 			{
 				"command": "cline.explainCode",
-				"title": "Explain with Cline",
-				"category": "Cline"
+				"title": "Explain with Aria",
+				"category": "Aria"
 			},
 			{
 				"command": "cline.improveCode",
-				"title": "Improve with Cline",
-				"category": "Cline"
+				"title": "Improve with Aria",
+				"category": "Aria"
 			},
 			{
 				"command": "cline.openWalkthrough",
 				"title": "Open Walkthrough",
-				"category": "Cline"
+				"category": "Aria"
 			},
 			{
 				"command": "cline.reconstructTaskHistory",
 				"title": "Reconstruct Task History",
-				"category": "Cline"
+				"category": "Aria"
 			}
 		],
 		"keybindings": [
@@ -227,27 +219,27 @@
 				{
 					"command": "cline.plusButtonClicked",
 					"group": "navigation@1",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == aria-dev.SidebarProvider"
 				},
 				{
 					"command": "cline.mcpButtonClicked",
 					"group": "navigation@2",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == aria-dev.SidebarProvider"
 				},
 				{
 					"command": "cline.historyButtonClicked",
 					"group": "navigation@3",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == aria-dev.SidebarProvider"
 				},
 				{
 					"command": "cline.accountButtonClicked",
 					"group": "navigation@5",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == aria-dev.SidebarProvider"
 				},
 				{
 					"command": "cline.settingsButtonClicked",
 					"group": "navigation@6",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == aria-dev.SidebarProvider"
 				}
 			],
 			"editor/context": [
@@ -287,7 +279,7 @@
 			]
 		},
 		"configuration": {
-			"title": "Cline",
+			"title": "Aria",
 			"properties": {}
 		}
 	},

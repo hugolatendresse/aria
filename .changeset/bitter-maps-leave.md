@@ -1,5 +1,5 @@
 ---
-"claude-dev": patch
+"aria-dev": patch
 ---
 
 Added getCwdHash proto

@@ -167,9 +167,9 @@ class NightlyPublisher {
 	 * Update package.json with nightly configuration
 	 */
 	updatePackageJson() {
-		// Replace any occurrences cline. or claude-dev with nightly name
+		// Replace any occurrences cline. or aria-dev with nightly name
 		const rawContent = fs.readFileSync(config.packageJsonPath, "utf-8")
-		const content = rawContent.replaceAll("claude-dev", config.nightlyName).replaceAll('"cline.', `"${config.nightlyName}.`)
+		const content = rawContent.replaceAll("aria-dev", config.nightlyName).replaceAll('"cline.', `"${config.nightlyName}.`)
 
 		const pkg = JSON.parse(content)
 		const currentVersion = pkg.version

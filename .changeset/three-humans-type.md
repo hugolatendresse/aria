@@ -1,5 +1,5 @@
 ---
-"claude-dev": patch
+"aria-dev": patch
 ---
 
 auto-cleanup stale default instance config
