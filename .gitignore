@@ -53,3 +53,5 @@ temp/*
 
 ## File store
 rag/experiment/docstore
+rag/docstore
+rag/core/docstore
