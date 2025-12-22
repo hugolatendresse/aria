@@ -1,11 +1,15 @@
+# install ollama, such as with `sudo snap install ollama`
 
 activate the venv
 
 mkdir rag
 cd rag
+pip install -qU langchain-classic
 pip install 'mcp[cli]' langchain langchain-community langchain-ollama chromadb sentence-transformers sqlite-vss  langchain-core langchain-text-splitters langgraph 
 ollama pull nomic-embed-text:latest
 ollama pull qwen2.5
+sudo apt-get update
+sudo apt-get install tesseract-ocr
 
 To edit cline_mcp_settings, can launch Aria with F5, click on MCP settings...
 then add this:

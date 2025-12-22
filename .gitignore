@@ -55,3 +55,4 @@ temp/*
 rag/experiment/docstore
 rag/core/
 rag/docstore/
+rag/core/docstore
