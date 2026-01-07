@@ -69,4 +69,6 @@ Include options/trade-offs when helpful, ask if plan matches, then add the exact
 
 ## {{${SystemPromptSection.SYSTEM_INFO}}}
 
+## {{${SystemPromptSection.ACTUARIAL_RAG}}}
+
 ## {{${SystemPromptSection.USER_INSTRUCTIONS}}}`

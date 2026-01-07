@@ -37,13 +37,19 @@ export interface ActuarialRagContext extends SystemPromptContext {
 export async function getActuarialRagSection(variant: PromptVariant, context: ActuarialRagContext): Promise<string | undefined> {
 	// Need a query to search
 	if (!context.userQuery) {
+		Logger.log("[ActuarialRag] No userQuery in context, skipping RAG")
 		return undefined
 	}
 
+	Logger.log(`[ActuarialRag] Processing query: "${context.userQuery.substring(0, 100)}..."`)
+
 	// Quick heuristic check - avoid API calls for clearly non-actuarial queries
 	if (!mightBenefitFromActuarialContext(context.userQuery)) {
+		Logger.log("[ActuarialRag] Query does not appear to benefit from actuarial context")
 		return undefined
 	}
+
+	Logger.log("[ActuarialRag] Query appears actuarial, proceeding with RAG search")
 
 	// Check if RAG service is initialized
 	const ragService = RagService.getInstance()

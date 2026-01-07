@@ -4,5 +4,6 @@
 
 export { RagService } from "./RagService"
 export { formatRagContext, mightBenefitFromActuarialContext } from "./ragFormatter"
-export type { RagDocument, RagIndex, RagSearchResult, RagServiceConfig } from "./types"
+export { executeRagSearchTool, getRagSystemStatus } from "./tool"
+export type { RagChildChunk, RagIndex, RagParentChunk, RagSearchResult, RagServiceConfig } from "./types"
 export { cosineSimilarity, dotProduct, euclideanDistance, normalize } from "./vectorMath"

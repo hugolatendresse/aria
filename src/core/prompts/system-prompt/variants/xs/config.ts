@@ -25,6 +25,7 @@ export const config = createVariant(ModelFamily.XS)
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.OBJECTIVE,
 		SystemPromptSection.SYSTEM_INFO,
+		SystemPromptSection.ACTUARIAL_RAG,
 		SystemPromptSection.USER_INSTRUCTIONS,
 	)
 	.tools(
@@ -33,6 +34,7 @@ export const config = createVariant(ModelFamily.XS)
 		ClineDefaultTool.FILE_NEW,
 		ClineDefaultTool.FILE_EDIT,
 		ClineDefaultTool.SEARCH,
+		ClineDefaultTool.RAG_SEARCH,
 		ClineDefaultTool.LIST_FILES,
 		ClineDefaultTool.ASK,
 		ClineDefaultTool.ATTEMPT,

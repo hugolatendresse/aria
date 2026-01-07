@@ -34,6 +34,7 @@ import { NewTaskHandler } from "./tools/handlers/NewTaskHandler"
 import { PlanModeRespondHandler } from "./tools/handlers/PlanModeRespondHandler"
 import { ReadFileToolHandler } from "./tools/handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./tools/handlers/ReportBugHandler"
+import { SearchActuarialDocsToolHandler } from "./tools/handlers/SearchActuarialDocsToolHandler"
 import { SearchFilesToolHandler } from "./tools/handlers/SearchFilesToolHandler"
 import { SummarizeTaskHandler } from "./tools/handlers/SummarizeTaskHandler"
 import { UseMcpToolHandler } from "./tools/handlers/UseMcpToolHandler"
@@ -197,6 +198,7 @@ export class ToolExecutor {
 
 		this.coordinator.register(new ListCodeDefinitionNamesToolHandler(validator))
 		this.coordinator.register(new SearchFilesToolHandler(validator))
+		this.coordinator.register(new SearchActuarialDocsToolHandler(validator))
 		this.coordinator.register(new ExecuteCommandToolHandler(validator))
 		this.coordinator.register(new UseMcpToolHandler())
 		this.coordinator.register(new AccessMcpResourceHandler())
