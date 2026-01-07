@@ -1,5 +1,6 @@
 import { SystemPromptSection } from "../templates/placeholders"
 import { getActVsPlanModeSection } from "./act_vs_plan_mode"
+import { getActuarialRagSection } from "./actuarial_rag"
 import { getAgentRoleSection } from "./agent_role"
 import { getTodoListSection } from "./auto_todo"
 import { getCapabilitiesSection } from "./capabilities"
@@ -48,5 +49,9 @@ export function getSystemPromptComponents() {
 			fn: getFeedbackSection,
 		},
 		{ id: SystemPromptSection.TASK_PROGRESS, fn: getUpdatingTaskProgress },
+		{
+			id: SystemPromptSection.ACTUARIAL_RAG,
+			fn: getActuarialRagSection,
+		},
 	]
 }

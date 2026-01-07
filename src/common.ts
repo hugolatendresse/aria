@@ -18,6 +18,7 @@ import { audioRecordingService } from "./services/dictation/AudioRecordingServic
 import { ErrorService } from "./services/error"
 import { featureFlagsService } from "./services/feature-flags"
 import { initializeDistinctId } from "./services/logging/distinctId"
+import { RagService } from "./services/rag"
 import { telemetryService } from "./services/telemetry"
 import { PostHogClientProvider } from "./services/telemetry/providers/posthog/PostHogClientProvider"
 import { ShowMessageType } from "./shared/proto/host/window"
@@ -66,6 +67,17 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 
 	// Clean up orphaned file context warnings (startup cleanup)
 	await FileContextTracker.cleanupOrphanedWarnings(context)
+
+	// Initialize RAG service for actuarial document search
+	try {
+		const ragService = RagService.getInstance()
+		await ragService.initialize(context.extensionPath)
+		Logger.log(`[RAG] Initialized with ${ragService.getDocumentCount()} actuarial documents`)
+	} catch (error) {
+		// RAG is non-critical - log the error but continue
+		Logger.log(`[RAG] Failed to initialize: ${error instanceof Error ? error.message : String(error)}`)
+		Logger.log("[RAG] Actuarial context search will be unavailable")
+	}
 
 	const webview = HostProvider.get().createWebviewProvider()
 

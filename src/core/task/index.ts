@@ -1295,6 +1295,35 @@ export class Task {
 		return { model, providerId, customPrompt }
 	}
 
+	/**
+	 * Extract the latest user query from conversation history for RAG context retrieval.
+	 * Returns the most recent user message as a plain text string.
+	 */
+	private extractLatestUserQuery(): string | undefined {
+		const conversationHistory = this.messageStateHandler.getApiConversationHistory()
+
+		// Find the most recent user message
+		for (let i = conversationHistory.length - 1; i >= 0; i--) {
+			const msg = conversationHistory[i]
+			if (msg.role === "user") {
+				// Extract text content from the message
+				if (typeof msg.content === "string") {
+					return msg.content
+				} else if (Array.isArray(msg.content)) {
+					const textParts = msg.content
+						.filter((block) => block.type === "text")
+						.map((block) => (block as { type: "text"; text: string }).text)
+						.join(" ")
+					if (textParts.length > 0) {
+						return textParts
+					}
+				}
+			}
+		}
+
+		return undefined
+	}
+
 	private getApiRequestIdSafe(): string | undefined {
 		const apiLike = this.api as Partial<{
 			getLastRequestId: () => string | undefined
@@ -1393,6 +1422,8 @@ export class Task {
 			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
 			isMultiRootEnabled: multiRootEnabled,
 			workspaceRoots,
+			// Extract latest user message for RAG context retrieval
+			userQuery: this.extractLatestUserQuery(),
 		}
 
 		// Check for relevant capability cards based on recent conversation context

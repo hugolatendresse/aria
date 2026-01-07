@@ -108,6 +108,11 @@ export interface SystemPromptContext {
 	readonly yoloModeToggled?: boolean
 	readonly isMultiRootEnabled?: boolean
 	readonly workspaceRoots?: Array<{ path: string; name: string; vcs?: string }>
+	/**
+	 * The user's current query/message for RAG context retrieval
+	 * Used by the actuarial RAG component to search for relevant documents
+	 */
+	readonly userQuery?: string
 }
 
 /**

@@ -14,9 +14,6 @@
 # - Set to False: Skip document loading and use existing vector database (for testing)
 REBUILD_VECTOR_DB = False  # Set to False after first run to test queries
 
-# Embedding model selection
-EMBEDDING_MODEL = "ollama"  # "ollama" to run locally or "gemini" to run with api key
-
 # Options: "recursive" or "unstructured"
 CHUNKING_STRATEGY = "recursive"  # works well
 # CHUNKING_STRATEGY = "unstructured" # doesn't work well
@@ -66,7 +63,7 @@ import os
 warnings.filterwarnings("ignore", message=".*Ignoring wrong pointing object.*")  # TODO this doesn't work, try with a `with`
 
 # TODO namedtuple
-embedding_function, db_file, docstore_path, parent_splitter, child_splitter = init_rag(embedding_model = EMBEDDING_MODEL, chunking_strategy=CHUNKING_STRATEGY)
+embedding_function, db_file, docstore_path, parent_splitter, child_splitter = init_rag(chunking_strategy=CHUNKING_STRATEGY)
 
 
 if REBUILD_VECTOR_DB:
