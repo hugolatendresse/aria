@@ -2,14 +2,18 @@
  * RAG (Retrieval-Augmented Generation) Service for Aria
  *
  * This service provides semantic search over actuarial documents using
- * pre-computed embeddings. It loads a pre-built index at extension activation
- * and uses the user's Gemini API key for query embeddings at runtime.
+ * pre-computed embeddings with a parent-child chunk hierarchy:
+ * - Child chunks (small, ~400 chars) are embedded and used for semantic search
+ * - Parent chunks (large, ~2000 chars) contain the actual context returned to the LLM
+ *
+ * It loads a pre-built index at extension activation and uses the user's
+ * Gemini API key for query embeddings at runtime.
  */
 
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { Logger } from "@services/logging/Logger"
-import type { RagIndex, RagSearchResult, RagServiceConfig } from "./types"
+import type { RagChildChunk, RagIndex, RagParentChunk, RagSearchResult, RagServiceConfig } from "./types"
 import { cosineSimilarity } from "./vectorMath"
 
 // Gemini embedding model - must match the one used in Python export_index.py
@@ -26,11 +30,17 @@ const DEFAULT_CONFIG: Required<RagServiceConfig> = {
 
 /**
  * RAG Service singleton for actuarial document search
+ *
+ * Uses parent-child chunk hierarchy for better search precision:
+ * 1. Query is embedded using Gemini API
+ * 2. Query embedding is compared against child chunk embeddings
+ * 3. Matching child chunks' parent chunks are returned for context
  */
 export class RagService {
 	private static instance: RagService | null = null
 
 	private index: RagIndex | null = null
+	private parentChunkMap: Map<string, RagParentChunk> = new Map()
 	private isLoading = false
 	private loadError: Error | null = null
 	private config: Required<RagServiceConfig>
@@ -90,21 +100,47 @@ export class RagService {
 			const index = JSON.parse(indexContent) as RagIndex
 
 			const loadTime = Date.now() - startTime
+
+			// Validate the index version
+			if (index.version !== 2) {
+				throw new Error(`Unsupported RAG index version: ${index.version}. Expected version 2 (parent-child hierarchy).`)
+			}
+
+			// Validate the index content
+			if (!index.parent_chunks || index.parent_chunks.length === 0) {
+				throw new Error("RAG index has no parent chunks")
+			}
+			if (!index.child_chunks || index.child_chunks.length === 0) {
+				throw new Error("RAG index has no child chunks")
+			}
+
 			Logger.log(
-				`[RagService] Loaded ${index.documents.length} documents in ${loadTime}ms ` +
+				`[RagService] Loaded ${index.parent_chunks.length} parent chunks and ${index.child_chunks.length} child chunks in ${loadTime}ms ` +
 					`(embedding model: ${index.embedding_model})`,
 			)
 
-			// Validate the index
-			if (!index.documents || index.documents.length === 0) {
-				throw new Error("RAG index is empty")
+			// Build parent chunk lookup map for fast access
+			this.parentChunkMap = new Map()
+			for (const parent of index.parent_chunks) {
+				this.parentChunkMap.set(parent.id, parent)
+			}
+
+			// Validate parent-child relationships
+			let orphanCount = 0
+			for (const child of index.child_chunks) {
+				if (!this.parentChunkMap.has(child.parent_id)) {
+					orphanCount++
+				}
+			}
+			if (orphanCount > 0) {
+				Logger.log(`[RagService] Warning: ${orphanCount} child chunks have missing parent chunks`)
 			}
 
 			// Check embedding dimensions are consistent
-			const embeddingDim = index.documents[0].embedding.length
-			const inconsistent = index.documents.filter((d) => d.embedding.length !== embeddingDim)
+			const embeddingDim = index.child_chunks[0].embedding.length
+			const inconsistent = index.child_chunks.filter((c) => c.embedding.length !== embeddingDim)
 			if (inconsistent.length > 0) {
-				Logger.log(`[RagService] Warning: ${inconsistent.length} documents have inconsistent embedding dimensions`)
+				Logger.log(`[RagService] Warning: ${inconsistent.length} child chunks have inconsistent embedding dimensions`)
 			}
 
 			this.index = index
@@ -132,7 +168,14 @@ export class RagService {
 	}
 
 	/**
-	 * Search for relevant documents using semantic similarity
+	 * Search for relevant documents using semantic similarity.
+	 *
+	 * The search process:
+	 * 1. Embed the query using Gemini API
+	 * 2. Compare query embedding against all child chunk embeddings
+	 * 3. For matching children, retrieve their parent chunks
+	 * 4. Deduplicate results (multiple children may point to same parent)
+	 * 5. Return parent chunks sorted by best matching child score
 	 *
 	 * @param query The search query
 	 * @param geminiApiKey The user's Gemini API key for embedding the query
@@ -154,20 +197,49 @@ export class RagService {
 			// Get embedding for the query using Gemini API
 			const queryEmbedding = await this.embedQuery(query, geminiApiKey)
 
-			// Compute similarity scores for all documents
-			const results: RagSearchResult[] = []
+			// Compute similarity scores for all child chunks
+			const childMatches: Array<{ child: RagChildChunk; score: number }> = []
 
-			for (const doc of this.index.documents) {
-				const score = cosineSimilarity(queryEmbedding, doc.embedding)
+			for (const child of this.index.child_chunks) {
+				const score = cosineSimilarity(queryEmbedding, child.embedding)
 
 				if (score >= searchConfig.minScore) {
-					results.push({ document: doc, score })
+					childMatches.push({ child, score })
 				}
 			}
 
-			// Sort by score descending and take top K
-			results.sort((a, b) => b.score - a.score)
-			return results.slice(0, searchConfig.topK)
+			// Sort by score descending
+			childMatches.sort((a, b) => b.score - a.score)
+
+			// Deduplicate by parent_id, keeping the best score for each parent
+			const seenParents = new Set<string>()
+			const results: RagSearchResult[] = []
+
+			for (const match of childMatches) {
+				if (seenParents.has(match.child.parent_id)) {
+					continue // Already have a result for this parent
+				}
+
+				const parentChunk = this.parentChunkMap.get(match.child.parent_id)
+				if (!parentChunk) {
+					Logger.log(`[RagService] Warning: Child chunk ${match.child.id} has missing parent ${match.child.parent_id}`)
+					continue
+				}
+
+				seenParents.add(match.child.parent_id)
+				results.push({
+					parentChunk,
+					matchedChildChunk: match.child,
+					score: match.score,
+				})
+
+				// Stop once we have enough unique parents
+				if (results.length >= searchConfig.topK) {
+					break
+				}
+			}
+
+			return results
 		} catch (error) {
 			Logger.log(`[RagService] Search failed: ${error}`)
 			throw error
@@ -198,7 +270,7 @@ export class RagService {
 			throw new Error(`Gemini embedding API error (${response.status}): ${errorText}`)
 		}
 
-		const data = await response.json()
+		const data = (await response.json()) as { embedding?: { values?: number[] } }
 
 		if (!data.embedding?.values) {
 			throw new Error("Invalid response from Gemini embedding API: missing embedding values")
@@ -208,16 +280,29 @@ export class RagService {
 	}
 
 	/**
-	 * Get the number of documents in the index
+	 * Get the number of parent documents in the index
 	 */
 	public getDocumentCount(): number {
-		return this.index?.documents.length ?? 0
+		return this.index?.parent_chunks.length ?? 0
+	}
+
+	/**
+	 * Get the number of child chunks in the index
+	 */
+	public getChildChunkCount(): number {
+		return this.index?.child_chunks.length ?? 0
 	}
 
 	/**
 	 * Get metadata about the loaded index
 	 */
-	public getIndexMetadata(): { version: number; embeddingModel: string; chunkingStrategy: string } | null {
+	public getIndexMetadata(): {
+		version: number
+		embeddingModel: string
+		chunkingStrategy: string
+		parentCount: number
+		childCount: number
+	} | null {
 		if (!this.index) {
 			return null
 		}
@@ -225,6 +310,8 @@ export class RagService {
 			version: this.index.version,
 			embeddingModel: this.index.embedding_model,
 			chunkingStrategy: this.index.chunking_strategy,
+			parentCount: this.index.parent_chunks.length,
+			childCount: this.index.child_chunks.length,
 		}
 	}
 

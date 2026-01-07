@@ -23,12 +23,12 @@ export function formatRagContext(results: RagSearchResult[], _query?: string): s
 	sections.push("")
 
 	for (let i = 0; i < results.length; i++) {
-		const { document } = results[i]
-		const sourceName = document.metadata.source_name || document.metadata.source || "Unknown Source"
-		const page = document.metadata.page ? ` (Page ${document.metadata.page})` : ""
+		const { parentChunk } = results[i]
+		const sourceName = parentChunk.metadata.source_name || parentChunk.metadata.source || "Unknown Source"
+		const page = parentChunk.metadata.page ? ` (Page ${parentChunk.metadata.page})` : ""
 
 		sections.push(`--- Reference ${i + 1}: ${sourceName}${page} ---`)
-		sections.push(document.content.trim())
+		sections.push(parentChunk.content.trim())
 		sections.push("")
 	}
 

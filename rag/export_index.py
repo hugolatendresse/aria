@@ -2,10 +2,12 @@
 """
 Export the RAG index to a JSON file for use in the Aria VS Code extension.
 
-This script:
-1. Builds/loads the vector database using Gemini embeddings
-2. Exports all parent document chunks with their embeddings to a single JSON file
-3. The JSON file can then be bundled with the VS Code extension
+This script preserves the parent-child chunk hierarchy from the RAG system:
+- Child chunks (small, ~400 chars) are embedded and used for semantic search
+- Parent chunks (large, ~2000 chars) contain the actual context returned to the LLM
+- Each child chunk has a parent_id linking to its parent chunk
+
+The JSON file can then be bundled with the VS Code extension.
 
 Usage:
     python export_index.py [--rebuild]
@@ -18,6 +20,7 @@ import json
 import os
 import sys
 import warnings
+import sqlite3
 from typing import Any
 
 # Add the rag directory to the path for imports
@@ -79,71 +82,88 @@ def get_all_parent_documents(docstore_path: str) -> dict[str, Any]:
     return documents
 
 
-def get_embeddings_from_db(db_file: str, table_name: str, embedding_function) -> dict[str, list[float]]:
+def get_child_chunks_from_db(db_file: str, table_name: str) -> list[dict[str, Any]]:
     """
-    Extract embeddings from the SQLite vector database.
+    Extract all child chunks with their metadata (including parent_id) from SQLite.
     
-    Note: We need to re-embed the parent documents since the SQLite DB
-    only stores child chunk embeddings.
+    Returns:
+        List of child chunk dictionaries with text, metadata, and embedding
     """
-    from core.create_thread_safe_connection import create_thread_safe_connection
+    # Use plain sqlite3 to read the data (sqlite_vec extension not needed for reading)
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
     
-    connection = create_thread_safe_connection(db_file)
-    cursor = connection.cursor()
-    
-    # Get all child chunks with their parent IDs
-    cursor.execute(f"SELECT rowid, text FROM {table_name}")
+    # Get all child chunks with text, metadata, and embedding
+    cursor.execute(f"SELECT rowid, text, metadata, text_embedding FROM {table_name}")
     rows = cursor.fetchall()
     
     print(f"Found {len(rows)} child chunks in vector database")
     
-    return {}
-
-
-def embed_parent_documents(documents: dict[str, Any], embedding_function) -> dict[str, list[float]]:
-    """
-    Generate embeddings for all parent documents.
-    
-    Args:
-        documents: Dictionary mapping doc IDs to document content
-        embedding_function: The Gemini embedding function
-    
-    Returns:
-        Dictionary mapping document IDs to their embedding vectors
-    """
-    print(f"Generating embeddings for {len(documents)} parent documents...")
-    
-    embeddings = {}
-    doc_ids = list(documents.keys())
-    contents = [documents[doc_id]["content"] for doc_id in doc_ids]
-    
-    # Embed in batches to avoid rate limiting
-    batch_size = 50
-    for i in range(0, len(contents), batch_size):
-        batch_contents = contents[i:i + batch_size]
-        batch_ids = doc_ids[i:i + batch_size]
+    child_chunks = []
+    for row in rows:
+        rowid, text, metadata_blob, embedding_blob = row
         
-        print(f"  Embedding batch {i // batch_size + 1}/{(len(contents) + batch_size - 1) // batch_size}...")
+        # Parse metadata JSON from blob
+        if isinstance(metadata_blob, bytes):
+            metadata = json.loads(metadata_blob.decode('utf-8'))
+        elif isinstance(metadata_blob, str):
+            metadata = json.loads(metadata_blob)
+        else:
+            metadata = {}
         
-        batch_embeddings = embedding_function.embed_documents(batch_contents)
+        # Extract parent_id from metadata (set by ParentDocumentRetriever)
+        parent_id = metadata.get("doc_id")
         
-        for doc_id, embedding in zip(batch_ids, batch_embeddings):
-            embeddings[doc_id] = embedding
+        if not parent_id:
+            print(f"Warning: Child chunk {rowid} has no parent doc_id in metadata")
+            continue
+        
+        # Parse embedding from blob
+        # sqlite_vec stores embeddings as float32 arrays
+        if embedding_blob:
+            import struct
+            # Determine number of floats (4 bytes each)
+            num_floats = len(embedding_blob) // 4
+            embedding = list(struct.unpack(f'{num_floats}f', embedding_blob))
+        else:
+            embedding = None
+        
+        if embedding is None:
+            print(f"Warning: Child chunk {rowid} has no embedding")
+            continue
+            
+        child_chunks.append({
+            "id": str(rowid),
+            "text": text,
+            "parent_id": parent_id,
+            "metadata": {
+                "source_name": metadata.get("source_name"),
+                "page": metadata.get("page"),
+            },
+            "embedding": embedding
+        })
     
-    print(f"Generated {len(embeddings)} embeddings")
-    return embeddings
+    conn.close()
+    print(f"Successfully extracted {len(child_chunks)} child chunks with embeddings")
+    return child_chunks
 
 
 def export_index(output_path: str, rebuild: bool = False):
     """
-    Export the RAG index to a JSON file.
+    Export the RAG index to a JSON file, preserving parent-child hierarchy.
+    
+    The exported index contains:
+    - parent_chunks: Large context chunks (content only, no embeddings)
+    - child_chunks: Small search chunks (with embeddings and parent_id references)
+    
+    At search time: embed query → search child chunks → return parent content
     
     Args:
         output_path: Path to write the JSON index file
         rebuild: Whether to rebuild the vector database first
     """
     print("=" * 60)
-    print("Aria RAG Index Export")
+    print("Aria RAG Index Export (Parent-Child Hierarchy)")
     print("=" * 60)
     
     # Initialize RAG components
@@ -179,33 +199,52 @@ def export_index(output_path: str, rebuild: bool = False):
             parent_splitter=parent_splitter
         )
     
-    # Get all parent documents
-    print("\nExtracting parent documents...")
-    documents = get_all_parent_documents(docstore_path)
+    # Get all parent documents from docstore
+    print("\nExtracting parent documents from docstore...")
+    parent_documents = get_all_parent_documents(docstore_path)
     
-    # Generate embeddings for parent documents
-    print("\nGenerating embeddings for parent documents...")
-    embeddings = embed_parent_documents(documents, embedding_function)
+    # Get all child chunks with embeddings from SQLite
+    print("\nExtracting child chunks with embeddings from SQLite...")
+    child_chunks = get_child_chunks_from_db(db_file, SQLITE_TABLE_NAME)
     
-    # Build the export index
-    print("\nBuilding export index...")
+    # Validate parent-child relationships
+    orphan_count = 0
+    for child in child_chunks:
+        if child["parent_id"] not in parent_documents:
+            orphan_count += 1
+    if orphan_count > 0:
+        print(f"Warning: {orphan_count} child chunks have missing parent documents")
+    
+    # Build the export index with parent-child hierarchy
+    print("\nBuilding export index with parent-child hierarchy...")
     index = {
-        "version": 1,
+        "version": 2,  # Version 2 = parent-child hierarchy
         "embedding_model": GEMINI_EMBEDDING_MODEL,
         "chunking_strategy": CHUNKING_STRATEGY,
-        "documents": []
+        "parent_chunks": [],
+        "child_chunks": []
     }
     
-    for doc_id, doc_data in documents.items():
-        if doc_id in embeddings:
-            index["documents"].append({
-                "id": doc_id,
-                "content": doc_data["content"],
-                "metadata": doc_data["metadata"],
-                "embedding": embeddings[doc_id]
-            })
+    # Add parent chunks (content only, no embeddings)
+    for doc_id, doc_data in parent_documents.items():
+        index["parent_chunks"].append({
+            "id": doc_id,
+            "content": doc_data["content"],
+            "metadata": doc_data["metadata"]
+        })
     
-    print(f"Index contains {len(index['documents'])} documents")
+    # Add child chunks (with embeddings and parent_id)
+    for child in child_chunks:
+        index["child_chunks"].append({
+            "id": child["id"],
+            "text": child["text"],
+            "parent_id": child["parent_id"],
+            "metadata": child["metadata"],
+            "embedding": child["embedding"]
+        })
+    
+    print(f"Index contains {len(index['parent_chunks'])} parent chunks")
+    print(f"Index contains {len(index['child_chunks'])} child chunks")
     
     # Write to JSON file
     print(f"\nWriting index to {output_path}...")
