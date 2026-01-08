@@ -27,28 +27,13 @@ export class SearchActuarialDocsToolHandler implements IFullyManagedTool {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		// Debug: Log the entire block object to see what we're receiving
-		console.log("[RAG Tool] Raw block object:", JSON.stringify(block, null, 2))
-		console.log("[RAG Tool] block.name:", block.name)
-		console.log("[RAG Tool] block.params type:", typeof block.params)
-		console.log("[RAG Tool] block.params:", block.params)
-
 		// Extract and validate parameters
 		const params = block.params as Record<string, unknown>
-
-		// Debug logging
-		console.log("[RAG Tool] Received params:", JSON.stringify(params, null, 2))
-		console.log("[RAG Tool] Block name:", block.name)
-		console.log("[RAG Tool] params.query type:", typeof params.query)
-		console.log("[RAG Tool] params.query value:", params.query)
-
 		const query = params.query as string
+
 		if (!query || typeof query !== "string" || query.trim().length === 0) {
-			console.log("[RAG Tool] Query validation failed - returning error")
 			return formatResponse.toolError("query parameter is required and must be a non-empty string")
 		}
-
-		console.log("[RAG Tool] Query validated successfully:", query)
 
 		// Execute the RAG search with fixed topK of 3
 		const result = await executeRagSearchTool({
