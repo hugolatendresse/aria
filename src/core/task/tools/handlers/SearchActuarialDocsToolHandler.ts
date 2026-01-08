@@ -27,24 +27,33 @@ export class SearchActuarialDocsToolHandler implements IFullyManagedTool {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		// Debug: Log the entire block object to see what we're receiving
+		console.log("[RAG Tool] Raw block object:", JSON.stringify(block, null, 2))
+		console.log("[RAG Tool] block.name:", block.name)
+		console.log("[RAG Tool] block.params type:", typeof block.params)
+		console.log("[RAG Tool] block.params:", block.params)
+
 		// Extract and validate parameters
 		const params = block.params as Record<string, unknown>
+
+		// Debug logging
+		console.log("[RAG Tool] Received params:", JSON.stringify(params, null, 2))
+		console.log("[RAG Tool] Block name:", block.name)
+		console.log("[RAG Tool] params.query type:", typeof params.query)
+		console.log("[RAG Tool] params.query value:", params.query)
+
 		const query = params.query as string
 		if (!query || typeof query !== "string" || query.trim().length === 0) {
+			console.log("[RAG Tool] Query validation failed - returning error")
 			return formatResponse.toolError("query parameter is required and must be a non-empty string")
 		}
 
-		const topK = params.top_k ? parseInt(String(params.top_k), 10) : 3
+		console.log("[RAG Tool] Query validated successfully:", query)
 
-		// Validate topK
-		if (Number.isNaN(topK) || topK < 1 || topK > 10) {
-			return formatResponse.toolError("top_k must be a number between 1 and 10")
-		}
-
-		// Execute the RAG search
+		// Execute the RAG search with fixed topK of 3
 		const result = await executeRagSearchTool({
 			query,
-			topK,
+			topK: 3,
 		})
 
 		// Determine if this is an error message

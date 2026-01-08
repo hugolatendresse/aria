@@ -84,7 +84,13 @@ export class RagService {
 		this.loadError = null
 
 		try {
-			const indexPath = path.join(extensionPath, "actuarial-index.json")
+			// In development mode, extensionPath is the workspace root
+			// In production, it's the installed extension directory
+			// Try dist/ first (dev), then root (production)
+			let indexPath = path.join(extensionPath, "dist", "actuarial-index.json")
+			if (!fs.existsSync(indexPath)) {
+				indexPath = path.join(extensionPath, "actuarial-index.json")
+			}
 
 			if (!fs.existsSync(indexPath)) {
 				throw new Error(

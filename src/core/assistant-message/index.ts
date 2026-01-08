@@ -39,6 +39,8 @@ export const toolParamNames = [
 	"needs_more_exploration",
 	"task_progress",
 	"timeout",
+	"query",
+	"top_k",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]

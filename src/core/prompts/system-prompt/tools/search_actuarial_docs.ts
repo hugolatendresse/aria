@@ -9,20 +9,14 @@ const generic: ClineToolSpec = {
 	id,
 	name: "search_actuarial_docs",
 	description:
-		"Search pre-indexed actuarial textbooks and documents for relevant information. Use this tool when the user asks about actuarial concepts, methods, or wants specific information from textbooks like Friedland, Werner & Modlin, or other actuarial references. The tool performs semantic search to find the most relevant passages.",
+		"Search pre-indexed actuarial textbooks (including Friedland, Werner & Modlin) for relevant passages. Returns verbatim text excerpts with source citations. Example: to find information about Bornhuetter-Ferguson, you would use: <search_actuarial_docs><query>Bornhuetter-Ferguson technique</query></search_actuarial_docs>. DO NOT FORGET to fill the query parameter",
 	parameters: [
 		{
 			name: "query",
 			required: true,
 			instruction:
-				"The search query describing what actuarial information you're looking for. Be specific and include relevant terms (e.g., 'Bornhuetter-Ferguson technique', 'chain ladder method', 'loss reserving').",
-			usage: "Your search query here",
-		},
-		{
-			name: "top_k",
-			required: false,
-			instruction: "Maximum number of results to return (default: 3, max: 10).",
-			usage: "3",
+				"The search terms to find in the textbooks. Include specific concepts, techniques, or phrases you want to look up. This parameter is REQUIRED and must contain your search text.",
+			usage: "Bornhuetter-Ferguson technique when it works",
 		},
 	],
 }
