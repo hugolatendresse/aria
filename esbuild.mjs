@@ -109,7 +109,7 @@ const copyWasmFiles = {
 				console.log("[build] Copied actuarial-index.json to dist")
 			} else {
 				console.warn(
-					"[build] Warning: actuarial-index.json not found. Run 'node scripts/build-rag-index.mjs' to generate it.",
+					"[build] Warning: actuarial-index.json not found. Run 'cd rag; python export_index.py --rebuild' to generate it.",
 				)
 			}
 
