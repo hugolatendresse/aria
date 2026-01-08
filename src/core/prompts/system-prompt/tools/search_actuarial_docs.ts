@@ -9,13 +9,13 @@ const generic: ClineToolSpec = {
 	id,
 	name: "search_actuarial_docs",
 	description:
-		"Search pre-indexed actuarial textbooks (including Friedland, Werner & Modlin) for relevant passages. Returns verbatim text excerpts with source citations. Example: to find information about Bornhuetter-Ferguson, you would use: <search_actuarial_docs><query>Bornhuetter-Ferguson technique</query></search_actuarial_docs>. DO NOT FORGET to fill the query parameter",
+		"Search pre-indexed actuarial textbooks (including Friedland, Werner & Modlin), ASOP, and other actuarial literature for relevant passages. Returns verbatim text excerpts with source citations. Example: to find information about Bornhuetter-Ferguson, you would use: <search_actuarial_docs><query>Bornhuetter-Ferguson technique</query></search_actuarial_docs>. DO NOT FORGET to fill the query parameter",
 	parameters: [
 		{
 			name: "query",
 			required: true,
 			instruction:
-				"The search terms to find in the textbooks. Include specific concepts, techniques, or phrases you want to look up. This parameter is REQUIRED and must contain your search text.",
+				"The search terms to find in the actuarial literature. Include specific concepts, techniques, or phrases you want to look up. This parameter is REQUIRED and must contain your search text.",
 			usage: "Bornhuetter-Ferguson technique when it works",
 		},
 	],
