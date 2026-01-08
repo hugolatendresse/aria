@@ -59,20 +59,6 @@ export function mightBenefitFromActuarialContext(query: string): boolean {
 
 	// Actuarial keywords and phrases that suggest RAG would be helpful
 	const actuarialKeywords = [
-		// General actuarial terms
-		"actuarial",
-		"actuary",
-		"insurance",
-		"reserving",
-		"reserves",
-		"claims",
-		"loss",
-		"losses",
-		"premium",
-		"premiums",
-		"underwriting",
-		"reinsurance",
-
 		// Methods and techniques
 		"bornhuetter",
 		"ferguson",
@@ -87,33 +73,11 @@ export function mightBenefitFromActuarialContext(query: string): boolean {
 		"case reserves",
 		"bulk reserves",
 
-		// Ratemaking
-		"ratemaking",
-		"rate making",
-		"pricing",
-		"rating",
-		"classification",
-		"credibility",
-		"exposure",
-		"pure premium",
-		"loss ratio",
-		"combined ratio",
-		"expense ratio",
-
-		// Statistical methods
-		"glm",
-		"generalized linear",
-		"regression",
-		"cart",
-		"classification tree",
-		"regression tree",
-		"random forest",
-		"gradient boosting",
-
 		// Specific book references
 		"friedland",
 		"werner",
 		"modlin",
+		"asop",
 
 		// Lines of business
 		"auto insurance",
