@@ -7,7 +7,7 @@
  */
 
 import { Logger } from "@services/logging/Logger"
-import { formatRagContext, mightBenefitFromActuarialContext, RagService } from "@services/rag"
+import { formatRagContext, isRagEnabled, mightBenefitFromActuarialContext, RagService } from "@services/rag"
 import { StateManager } from "@/core/storage/StateManager"
 import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
@@ -35,6 +35,12 @@ export interface ActuarialRagContext extends SystemPromptContext {
  * @returns The formatted RAG context, or undefined if not applicable
  */
 export async function getActuarialRagSection(variant: PromptVariant, context: ActuarialRagContext): Promise<string> {
+	// Check if RAG is enabled in settings
+	if (!isRagEnabled()) {
+		Logger.log("[ActuarialRag] RAG is disabled in settings")
+		return ""
+	}
+
 	// Need a query to search
 	if (!context.userQuery) {
 		Logger.log("[ActuarialRag] No userQuery in context")

@@ -1,6 +1,6 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { executeRagSearchTool } from "@services/rag"
+import { executeRagSearchTool, isRagEnabled } from "@services/rag"
 import { telemetryService } from "@/services/telemetry"
 import { ClineDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
@@ -27,6 +27,13 @@ export class SearchActuarialDocsToolHandler implements IFullyManagedTool {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		// Check if RAG is enabled
+		if (!isRagEnabled()) {
+			return formatResponse.toolError(
+				"Actuarial RAG is disabled. Enable it in Aria settings (cline.enableActuarialRag) to search actuarial documents.",
+			)
+		}
+
 		// Extract and validate parameters
 		const params = block.params as Record<string, unknown>
 		const query = params.query as string

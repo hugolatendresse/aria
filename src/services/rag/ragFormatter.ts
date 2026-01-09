@@ -19,9 +19,7 @@ export function formatRagContext(results: RagSearchResult[], _query?: string): s
 	const sections: string[] = []
 
 	sections.push("ACTUARIAL REFERENCE CONTEXT")
-	sections.push(
-		"The following excerpts from actuarial literature (textbooks, ASOP, etc.) may be relevant to the user's question:",
-	)
+	sections.push("The following excerpts from actuarial literature may be relevant to the user's question:")
 	sections.push("")
 
 	for (let i = 0; i < results.length; i++) {

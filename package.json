@@ -280,7 +280,13 @@
 		},
 		"configuration": {
 			"title": "Aria",
-			"properties": {}
+			"properties": {
+				"cline.enableActuarialRag": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Enable actuarial RAG (Retrieval-Augmented Generation) features. When enabled, Aria can search actuarial textbooks (Friedland, Werner & Modlin, etc.) and automatically inject relevant context when actuarial keywords are detected."
+				}
+			}
 		}
 	},
 	"scripts": {
