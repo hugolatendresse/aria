@@ -29,6 +29,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		SystemPromptSection.RULES,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
+		SystemPromptSection.ACTUARIAL_RAG,
 		SystemPromptSection.USER_INSTRUCTIONS,
 	)
 	.tools(
@@ -37,6 +38,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		ClineDefaultTool.FILE_NEW,
 		ClineDefaultTool.FILE_EDIT,
 		ClineDefaultTool.SEARCH,
+		ClineDefaultTool.RAG_SEARCH,
 		ClineDefaultTool.LIST_FILES,
 		ClineDefaultTool.LIST_CODE_DEF,
 		ClineDefaultTool.BROWSER,

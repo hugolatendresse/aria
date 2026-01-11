@@ -102,6 +102,17 @@ const copyWasmFiles = {
 				fs.copyFileSync(chainladderJsonPath, path.join(targetDir, "chainladder_cards.json"))
 			}
 
+			// Copy actuarial RAG index JSON file (pre-built embeddings for RAG search)
+			const ragIndexPath = path.join(__dirname, "dist", "actuarial-index.json")
+			if (fs.existsSync(ragIndexPath)) {
+				fs.copyFileSync(ragIndexPath, path.join(targetDir, "actuarial-index.json"))
+				console.log("[build] Copied actuarial-index.json to dist")
+			} else {
+				console.warn(
+					"[build] Warning: actuarial-index.json not found. Run 'cd rag; python export_index.py --rebuild' to generate it.",
+				)
+			}
+
 			// Copy language-specific WASM files
 			const languageWasmDir = path.join(__dirname, "node_modules", "tree-sitter-wasms", "out")
 			const languages = [

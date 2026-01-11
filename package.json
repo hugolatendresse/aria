@@ -2,7 +2,7 @@
 	"name": "aria-dev",
 	"displayName": "Aria",
 	"description": "Autonomous coding agent able to perform actuarial work.",
-	"version": "1.0.1",
+	"version": "1.1.0",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0"
@@ -280,7 +280,13 @@
 		},
 		"configuration": {
 			"title": "Aria",
-			"properties": {}
+			"properties": {
+				"cline.enableActuarialRag": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Enable actuarial RAG (Retrieval-Augmented Generation) features. When enabled, Aria can search actuarial textbooks (Friedland, Werner & Modlin, etc.) and automatically inject relevant context when actuarial keywords are detected."
+				}
+			}
 		}
 	},
 	"scripts": {

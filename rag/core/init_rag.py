@@ -1,33 +1,36 @@
 import os
 from core.chunking_strategies import get_splitters
-from langchain_ollama import OllamaEmbeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from dotenv import load_dotenv
 from core.get_root_path import get_root_path
 
-def init_rag(embedding_model, chunking_strategy):
+# Standardized embedding model for Aria RAG
+# Using Gemini's text-embedding-004 for both index building and query embedding
+GEMINI_EMBEDDING_MODEL = "models/text-embedding-004"
+
+
+def init_rag(chunking_strategy: str):
+    """
+    Initialize RAG components with Gemini embeddings.
+    
+    Args:
+        chunking_strategy: The chunking strategy to use ("recursive" or "unstructured")
+    
+    Returns:
+        Tuple of (embedding_function, db_file, docstore_path, parent_splitter, child_splitter)
+    """
     env_path = os.path.join(get_root_path(), '.env')
     load_dotenv(env_path)
 
     if not os.environ.get("GOOGLE_API_KEY"):
-        if embedding_model == "gemini":
-            raise ValueError('no GOOGLE_API_KEY!')
-        else:
-            print("Warning: GOOGLE_API_KEY not set. Gemini models will fail.")
-
-
-    # Select embedding model
-    if embedding_model == "gemini":
-        embedding_function = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001")
-        db_filename = "gemini_vector.db"
-    elif embedding_model == "ollama":
-        embedding_function = OllamaEmbeddings(
-            model="nomic-embed-text:latest", base_url="http://127.0.0.1:11434"
+        raise ValueError(
+            'GOOGLE_API_KEY environment variable is required. '
+            'Get your API key from https://makersuite.google.com/app/apikey'
         )
-        db_filename = "ollama_vector.db"
-    else:
-        raise ValueError(f"Unsupported EMBEDDING_MODEL option: {embedding_model}")
+
+    # Always use Gemini embeddings for consistency between index building and querying
+    embedding_function = GoogleGenerativeAIEmbeddings(model=GEMINI_EMBEDDING_MODEL)
+    db_filename = "gemini_vector.db"
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
 

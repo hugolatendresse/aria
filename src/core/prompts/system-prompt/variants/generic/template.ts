@@ -46,6 +46,10 @@ export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 ====
 
+{{${SystemPromptSection.ACTUARIAL_RAG}}}
+
+====
+
 {{${SystemPromptSection.USER_INSTRUCTIONS}}}`
 
 // MCP template removed for chainladder testing
