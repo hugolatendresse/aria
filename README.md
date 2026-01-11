@@ -1,9 +1,9 @@
 
 # Aria
 
-Meet Aria, an AI Agent you can use for **A**ctuarial **R**eserving, **I**ndications, and **A**nalysis.
+Meet Aria, your **A**I for **R**eserving, **I**ndications, and **A**nalysis—an AI agent built for actuarial tasks.
 
-Aria can answer simple questions ("When does ASOP 43 recommend doing a sensitivity analysis?") as well as perform complex tasks ("Please turn those loss runs in quarterly triangles and calculate ultimates."). Aria can create and edit files, explore large projects, use the browser, and execute terminal commands. It has access to an extensive library of actuarial knowledge that it consults before making decisions.
+Aria can answer simple questions ("When should I use the BF method over the development method?") as well as perform complex tasks ("Use the provided assumptions, loss and exposure data to calculate the indicated rate change."). Aria can create and edit files, explore large projects, use the browser, and execute terminal commands. It has access to an extensive library of actuarial knowledge that it consults before making decisions.
 
 Aria is a VS Code Extension that writes, edits, and runs code for you when needed. It is not strictly necessary to know programming to use Aria, though that might be helpful for more complex tasks. Simpler tasks can be executed fully independently. 
 
