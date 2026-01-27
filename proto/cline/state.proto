@@ -493,6 +493,11 @@ message FocusChainSettings {
   int32 remind_cline_interval = 2;
 }
 
+message Viewport {
+  int32 width = 1;
+  int32 height = 2;
+}
+
 message UpdateTerminalConnectionTimeoutResponse {
   optional int32 timeout_ms = 1;
 }

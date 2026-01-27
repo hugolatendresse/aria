@@ -105,6 +105,11 @@ export interface Settings {
 	ocaMode: string | undefined
 	hooksEnabled: boolean
 
+	// Multi-root workspace support
+	workspaceRoots: WorkspaceRoot[] | undefined
+	primaryRootIndex: number
+	multiRootEnabled: boolean
+
 	// Plan mode configurations
 	planModeApiProvider: ApiProvider
 	planModeApiModelId: string | undefined

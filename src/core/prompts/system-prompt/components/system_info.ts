@@ -63,6 +63,27 @@ export async function getSystemInfo(variant: PromptVariant, context: SystemPromp
 		workingDirInfo = info.workingDir
 	}
 
+	// Check if multi-root is enabled and we have workspace roots
+	const isMultiRoot = context.isMultiRootEnabled && context.workspaceRoots && context.workspaceRoots.length > 1
+
+	let WORKSPACE_TITLE: string
+	let workingDirInfo: string
+
+	if (isMultiRoot && context.workspaceRoots) {
+		// Multi-root workspace with feature flag enabled
+		WORKSPACE_TITLE = "Workspace Roots"
+		const rootsInfo = context.workspaceRoots
+			.map((root) => {
+				const vcsInfo = root.vcs ? ` (${root.vcs})` : ""
+				return `\n  - ${root.name}: ${root.path}${vcsInfo}`
+			})
+			.join("")
+		workingDirInfo = rootsInfo + `\n\nPrimary Working Directory: ${context.cwd}`
+	} else {
+		// Single workspace
+		WORKSPACE_TITLE = "Current Working Directory"
+		workingDirInfo = info.workingDir
+	}
 	const template = variant.componentOverrides?.[SystemPromptSection.SYSTEM_INFO]?.template || SYSTEM_INFO_TEMPLATE_TEXT
 
 	return new TemplateEngine().resolve(template, context, {
