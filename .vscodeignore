@@ -1,6 +1,8 @@
 # Default
 .vscode/**
 .vscode-test/**
+.worktrees/**
+CLAUDE.local.md
 out/
 dist-standalone/
 node_modules/
@@ -20,6 +22,9 @@ eslint-rules/**
 .husky/**
 .env
 
+# cli
+cli/**
+
 # Custom
 **/demo.gif
 .nvmrc
@@ -30,11 +35,9 @@ eslint-rules/**
 eslint-rules/
 old_docs/
 evals/
-.changie.yaml
 .codespellrc
 .mocharc.json
 buf.yaml
-.changeset/
 .clinerules/
 .venv/
 rag/

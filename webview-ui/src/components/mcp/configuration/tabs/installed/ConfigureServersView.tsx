@@ -1,11 +1,14 @@
-import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
+import { EmptyRequest } from "@shared/proto/cline/common"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { McpServiceClient, UiServiceClient } from "@/services/grpc-client"
+import { McpServiceClient } from "@/services/grpc-client"
 import ServersToggleList from "./ServersToggleList"
 
 const ConfigureServersView = () => {
-	const { mcpServers: servers, navigateToSettings } = useExtensionState()
+	const { mcpServers: servers, navigateToSettings, remoteConfigSettings } = useExtensionState()
+
+	// Check if there are remote MCP servers configured
+	const hasRemoteMCPServers = remoteConfigSettings?.remoteMCPServers && remoteConfigSettings.remoteMCPServers.length > 0
 
 	return (
 		<div style={{ padding: "16px 20px" }}>
@@ -31,6 +34,14 @@ const ConfigureServersView = () => {
 				</VSCodeLink>
 			</div>
 
+			{/* Remote config banner */}
+			{hasRemoteMCPServers && (
+				<div className="flex items-center gap-2 px-5 py-3 mb-4 bg-vscode-textBlockQuote-background border-l-[3px] border-vscode-textLink-foreground">
+					<i className="codicon codicon-lock text-sm" />
+					<span className="text-base">Your organization manages some MCP servers</span>
+				</div>
+			)}
+
 			<ServersToggleList hasTrashIcon={false} isExpandable={true} servers={servers} />
 
 			{/* Settings Section */}
@@ -48,21 +59,7 @@ const ConfigureServersView = () => {
 				</VSCodeButton>
 
 				<div style={{ textAlign: "center" }}>
-					<VSCodeLink
-						onClick={() => {
-							// First open the settings panel using direct navigation
-							navigateToSettings()
-
-							// After a short delay, send a message to scroll to browser settings
-							setTimeout(async () => {
-								try {
-									await UiServiceClient.scrollToSettings(StringRequest.create({ value: "features" }))
-								} catch (error) {
-									console.error("Error scrolling to mcp settings:", error)
-								}
-							}, 300)
-						}}
-						style={{ fontSize: "12px" }}>
+					<VSCodeLink onClick={() => navigateToSettings("features")} style={{ fontSize: "12px" }}>
 						Advanced MCP Settings
 					</VSCodeLink>
 				</div>

@@ -1,12 +1,9 @@
 import { basetenDefaultModelId, basetenModels } from "@shared/api"
-import { EmptyRequest } from "@shared/proto/cline/common"
 import { Mode } from "@shared/storage/types"
 import { VSCodeLink, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
 import React, { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
-import { useMount } from "react-use"
 import { useExtensionState } from "../../context/ExtensionStateContext"
-import { ModelsServiceClient } from "../../services/grpc-client"
 import { highlight } from "../history/HistoryView"
 import { ModelInfoView } from "./common/ModelInfoView"
 import { getModeSpecificFields, normalizeApiConfiguration } from "./utils/providerUtils"
@@ -18,7 +15,7 @@ export interface BasetenModelPickerProps {
 }
 
 const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, currentMode }) => {
-	const { apiConfiguration, basetenModels: dynamicBasetenModels, setBasetenModels } = useExtensionState()
+	const { apiConfiguration, basetenModels: dynamicBasetenModels } = useExtensionState()
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	const [searchTerm, setSearchTerm] = useState(modeFields.basetenModelId || basetenDefaultModelId)
@@ -51,20 +48,9 @@ const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, curren
 		return normalizeApiConfiguration(apiConfiguration, currentMode)
 	}, [apiConfiguration, currentMode])
 
-	useMount(() => {
-		ModelsServiceClient.refreshBasetenModels(EmptyRequest.create({}))
-			.then((response) => {
-				setBasetenModels({
-					[basetenDefaultModelId]: basetenModels[basetenDefaultModelId],
-					...response.models,
-				})
-			})
-			.catch((err) => {
-				console.error("Failed to refresh Baseten models:", err)
-			})
-	})
-
 	// Sync external changes when the modelId changes
+	// NOTE: Model list is refreshed automatically on mount or when the API key is set,
+	// no need to refresh here in this component again on mount.
 	useEffect(() => {
 		const currentModelId = modeFields.basetenModelId || basetenDefaultModelId
 		setSearchTerm(currentModelId)
@@ -221,6 +207,7 @@ const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, curren
 						}}
 						onKeyDown={handleKeyDown}
 						placeholder="Search and select a model..."
+						role="combobox"
 						style={{
 							width: "100%",
 							zIndex: BASETEN_MODEL_PICKER_Z_INDEX,
@@ -241,16 +228,17 @@ const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, curren
 					</VSCodeTextField>
 					{isDropdownVisible && (
 						<div
-							className="absolute top-[calc(100%-3px)] left-0 w-[calc(100%-2px)] max-h-[200px] overflow-y-auto border border-[var(--vscode-list-activeSelectionBackground)] rounded-b-[3px]"
+							className="absolute top-[calc(100%-3px)] left-0 w-[calc(100%-2px)] max-h-[200px] overflow-y-auto border border-(--vscode-list-activeSelectionBackground) rounded-b-[3px]"
 							ref={dropdownListRef}
+							role="listbox"
 							style={{
 								backgroundColor: "var(--vscode-dropdown-background)",
 								zIndex: BASETEN_MODEL_PICKER_Z_INDEX - 1,
 							}}>
 							{modelSearchResults.map((item, index) => (
 								<div
-									className={`px-2.5 py-1.5 cursor-pointer break-all whitespace-normal hover:bg-[var(--vscode-list-activeSelectionBackground)] ${
-										index === selectedIndex ? "bg-[var(--vscode-list-activeSelectionBackground)]" : ""
+									className={`px-2.5 py-1.5 cursor-pointer break-all whitespace-normal hover:bg-(--vscode-list-activeSelectionBackground) ${
+										index === selectedIndex ? "bg-(--vscode-list-activeSelectionBackground)" : ""
 									}`}
 									key={item.id}
 									onClick={() => {
@@ -260,7 +248,8 @@ const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, curren
 									onMouseEnter={() => setSelectedIndex(index)}
 									ref={(el: HTMLDivElement | null) => {
 										itemRefs.current[index] = el
-									}}>
+									}}
+									role="option">
 									{parseHighlightedText(item.html)}
 								</div>
 							))}
@@ -272,7 +261,7 @@ const BasetenModelPicker: React.FC<BasetenModelPickerProps> = ({ isPopup, curren
 			{hasInfo ? (
 				<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />
 			) : (
-				<p className="text-xs mt-0 text-[var(--vscode-descriptionForeground)]">
+				<p className="text-xs mt-0 text-(--vscode-descriptionForeground)">
 					The extension automatically fetches the latest list of models available on{" "}
 					<VSCodeLink className="inline text-inherit" href="https://www.baseten.co/products/model-apis/">
 						Baseten.

@@ -24,7 +24,7 @@ describe("getButtonConfig", () => {
 
 	// Test error recovery states
 	describe("Error Recovery States", () => {
-		const errorStates = ["api_req_failed", "mistake_limit_reached", "auto_approval_max_req_reached"]
+		const errorStates = ["api_req_failed", "mistake_limit_reached"]
 
 		errorStates.forEach((errorState) => {
 			it(`returns correct config for ${errorState}`, () => {
@@ -99,6 +99,7 @@ describe("getButtonConfig", () => {
 			{ ask: "followup", expectedConfig: "followup" },
 			{ ask: "browser_action_launch", expectedConfig: "browser_action_launch" },
 			{ ask: "use_mcp_server", expectedConfig: "use_mcp_server" },
+			{ ask: "use_subagents", expectedConfig: "use_subagents" },
 			{ ask: "plan_mode_respond", expectedConfig: "plan_mode_respond" },
 			{ ask: "completion_result", expectedConfig: "completion_result" },
 			{ ask: "resume_task", expectedConfig: "resume_task" },

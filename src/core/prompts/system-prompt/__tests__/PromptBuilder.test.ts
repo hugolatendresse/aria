@@ -1,6 +1,7 @@
 import { expect } from "chai"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { ModelFamily } from "@/shared/prompts"
+import { Logger } from "@/shared/services/Logger"
 import { PromptBuilder } from "../registry/PromptBuilder"
 import { SystemPromptSection } from "../templates/placeholders"
 import type { ComponentRegistry, PromptVariant, SystemPromptContext } from "../types"
@@ -44,6 +45,7 @@ describe("PromptBuilder", () => {
 	const baseVariant: PromptVariant = {
 		id: "test-model",
 		family: ModelFamily.GENERIC,
+		matcher: () => true,
 		version: 1,
 		description: "A test model",
 		tags: ["test"],
@@ -85,15 +87,15 @@ describe("PromptBuilder", () => {
 				SYSTEM_INFO_SECTION: async () => "SYSTEM INFO",
 			}
 
-			// Mock console.warn to capture and verify warnings
-			const originalWarn = console.warn
+			// Mock Logger.warn to capture and verify warnings
+			const originalWarn = Logger.warn
 			const warnSpy = {
 				calls: [] as any[],
 				warn: (...args: any[]) => {
 					warnSpy.calls.push(args)
 				},
 			}
-			console.warn = warnSpy.warn
+			Logger.warn = warnSpy.warn
 
 			try {
 				const builder = new PromptBuilder(baseVariant, mockContext, incompleteComponents)
@@ -109,8 +111,8 @@ describe("PromptBuilder", () => {
 				expect(warnSpy.calls[0][0]).to.include("Warning: Component 'CAPABILITIES_SECTION' not found")
 				expect(warnSpy.calls[1][0]).to.include("Warning: Component 'RULES_SECTION' not found")
 			} finally {
-				// Restore original console.warn
-				console.warn = originalWarn
+				// Restore original Logger.warn
+				Logger.warn = originalWarn
 			}
 		})
 
@@ -165,15 +167,15 @@ describe("PromptBuilder", () => {
 		})
 
 		it("should handle component errors gracefully", async () => {
-			// Mock console.warn to suppress warning output and verify it's called
-			const originalWarn = console.warn
+			// Mock Logger.warn to suppress warning output and verify it's called
+			const originalWarn = Logger.warn
 			const warnSpy = {
 				calls: [] as any[],
 				warn: (...args: any[]) => {
 					warnSpy.calls.push(args)
 				},
 			}
-			console.warn = warnSpy.warn
+			Logger.warn = warnSpy.warn
 
 			try {
 				const failingComponents: ComponentRegistry = {
@@ -197,8 +199,8 @@ describe("PromptBuilder", () => {
 				expect(warnSpy.calls).to.have.length(1)
 				expect(warnSpy.calls[0][0]).to.include("Failed to build component 'SYSTEM_INFO_SECTION'")
 			} finally {
-				// Restore original console.warn
-				console.warn = originalWarn
+				// Restore original Logger.warn
+				Logger.warn = originalWarn
 			}
 		})
 	})
@@ -259,6 +261,7 @@ describe("PromptBuilder", () => {
 					SystemPromptSection.CAPABILITIES,
 					SystemPromptSection.RULES,
 				)
+				.matcher(() => true)
 				.build()
 
 			// Should have auto-generated a baseTemplate
@@ -295,6 +298,7 @@ describe("PromptBuilder", () => {
 				.description("Test variant with explicit template")
 				.version(1)
 				.template(customTemplate)
+				.matcher(() => true)
 				.components(SystemPromptSection.AGENT_ROLE, SystemPromptSection.TOOL_USE)
 				.build()
 
@@ -307,6 +311,7 @@ describe("PromptBuilder", () => {
 				createVariant(ModelFamily.GENERIC)
 					.description("Test variant with empty components")
 					.version(1)
+					.matcher(() => true)
 					.components() // Empty components
 					.build()
 			}).to.throw("Component order is required")

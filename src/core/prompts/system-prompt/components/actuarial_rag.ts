@@ -6,7 +6,7 @@
  * appears to be actuarial-related.
  */
 
-import { Logger } from "@services/logging/Logger"
+import { Logger } from "@/shared/services/Logger"
 import { formatRagContext, isRagEnabled, mightBenefitFromActuarialContext, RagService } from "@services/rag"
 import { StateManager } from "@/core/storage/StateManager"
 import { SystemPromptSection } from "../templates/placeholders"

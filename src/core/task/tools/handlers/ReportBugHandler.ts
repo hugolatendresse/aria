@@ -6,6 +6,7 @@ import { createAndOpenGitHubIssue } from "@utils/github-url-utils"
 import * as os from "os"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
+import { Logger } from "@/shared/services/Logger"
 import { ClineDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
@@ -64,8 +65,8 @@ export class ReportBugHandler implements IToolHandler, IPartialBlockHandler {
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// Show notification if auto-approval is enabled
-		if (config.autoApprovalSettings.enabled && config.autoApprovalSettings.enableNotifications) {
+		// Show notification if enabled
+		if (config.autoApprovalSettings.enableNotifications) {
 			showSystemNotification({
 				subtitle: "Cline wants to create a github issue...",
 				message: `Cline is suggesting to create a github issue with the title: ${title}`,
@@ -130,7 +131,7 @@ export class ReportBugHandler implements IToolHandler, IPartialBlockHandler {
 				// This bypasses VS Code's URI handling issues with special characters
 				await createAndOpenGitHubIssue("cline", "cline", "bug_report.yml", params)
 			} catch (error) {
-				console.error(`An error occurred while attempting to report the bug: ${error}`)
+				Logger.error(`An error occurred while attempting to report the bug: ${error}`)
 			}
 
 			return formatResponse.toolResult(`The user accepted the creation of the Github issue.`)

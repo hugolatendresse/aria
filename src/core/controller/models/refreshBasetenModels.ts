@@ -1,56 +1,63 @@
+import fs from "node:fs/promises"
+import path from "node:path"
 import { ensureCacheDirectoryExists, GlobalFileNames } from "@core/storage/disk"
-import { EmptyRequest } from "@shared/proto/cline/common"
-import { OpenRouterCompatibleModelInfo, OpenRouterModelInfo } from "@shared/proto/cline/models"
+import { ANTHROPIC_MAX_THINKING_BUDGET, ModelInfo } from "@shared/api"
 import { fileExistsAtPath } from "@utils/fs"
 import { parsePrice } from "@utils/model-utils"
 import axios from "axios"
-import fs from "fs/promises"
-import path from "path"
+import { StateManager } from "@/core/storage/StateManager"
+import { getAxiosSettings } from "@/shared/net"
+import { Logger } from "@/shared/services/Logger"
 import { basetenModels } from "../../../shared/api"
 import { Controller } from ".."
 
+// Track pending refresh promise to prevent duplicate concurrent fetches
+let pendingRefresh: Promise<Record<string, ModelInfo>> | null = null
+
 /**
- * Refreshes the Baseten models and returns the updated model list
+ * Core function: Refreshes the Baseten models and returns application types
  * @param controller The controller instance
- * @param request Empty request object
- * @returns Response containing the Baseten models
+ * @returns Record of model ID to ModelInfo (application types)
  */
-export async function refreshBasetenModels(
-	controller: Controller,
-	_request: EmptyRequest,
-): Promise<OpenRouterCompatibleModelInfo> {
-	console.log("=== refreshBasetenModels called ===")
+export async function refreshBasetenModels(controller: Controller): Promise<Record<string, ModelInfo>> {
+	// Check in-memory cache first
+	const cache = StateManager.get().getModelsCache("baseten")
+	if (cache) {
+		return cache
+	}
+
+	// If a fetch is already in progress, return the same promise
+	if (pendingRefresh) {
+		return pendingRefresh
+	}
+
+	// Start new fetch and track the promise
+	pendingRefresh = (async () => {
+		try {
+			return await fetchAndCacheModels(controller)
+		} finally {
+			// Clear pending promise when done (success or error)
+			pendingRefresh = null
+		}
+	})()
+
+	return pendingRefresh
+}
+
+async function fetchAndCacheModels(controller: Controller): Promise<Record<string, ModelInfo>> {
 	const basetenModelsFilePath = path.join(await ensureCacheDirectoryExists(), GlobalFileNames.basetenModels)
 
 	// Get the Baseten API key from the controller's state
 	const basetenApiKey = controller.stateManager.getSecretKey("basetenApiKey")
 
-	const models: Record<string, Partial<OpenRouterModelInfo> & { supportedFeatures?: string[] }> = {}
+	const models: Record<string, Partial<ModelInfo> & { supportedFeatures?: string[] }> = {}
 	try {
-		if (!basetenApiKey) {
-			console.log("No Baseten API key found, using static models as fallback")
-			// Don't throw an error, just use static models, althought this might be slightly out of date
-			for (const [modelId, modelInfo] of Object.entries(basetenModels)) {
-				models[modelId] = {
-					maxTokens: modelInfo.maxTokens,
-					contextWindow: modelInfo.contextWindow,
-					supportsImages: modelInfo.supportsImages,
-					supportsPromptCache: modelInfo.supportsPromptCache,
-					inputPrice: modelInfo.inputPrice,
-					outputPrice: modelInfo.outputPrice,
-					cacheWritesPrice: (modelInfo as any).cacheWritesPrice || 0,
-					cacheReadsPrice: (modelInfo as any).cacheReadsPrice || 0,
-					description: (modelInfo as any).description || `${modelId} model`,
-				}
-			}
-		} else {
+		if (basetenApiKey) {
 			// Ensure the API key is properly formatted
 			const cleanApiKey = basetenApiKey.trim()
 			if (!cleanApiKey) {
 				throw new Error("Invalid Baseten API key format")
 			}
-
-			console.log("Fetching Baseten models with API key:", cleanApiKey.substring(0, 10) + "...")
 
 			const response = await axios.get("https://inference.baseten.co/v1/models", {
 				headers: {
@@ -59,11 +66,12 @@ export async function refreshBasetenModels(
 					"User-Agent": "Cline-VSCode-Extension",
 				},
 				timeout: 10000, // 10 second timeout
+				...getAxiosSettings(),
 			})
 
-			if (response.data?.data) {
-				const rawModels = response.data.data
+			const rawModels = response?.data?.data
 
+			if (rawModels && Array.isArray(rawModels)) {
 				for (const rawModel of rawModels) {
 					// Filter out non-chat models and validate model capabilities
 					if (!isValidChatModel(rawModel)) {
@@ -72,8 +80,11 @@ export async function refreshBasetenModels(
 
 					// Check if we have static pricing information for this model
 					const staticModelInfo = basetenModels[rawModel.id as keyof typeof basetenModels]
+					const supportThinking = rawModel?.supported_features?.some(
+						(p: string) => p === "reasoning_effort" || p === "reasoning",
+					)
 
-					const modelInfo: Partial<OpenRouterModelInfo> & { supportedFeatures?: string[] } = {
+					const modelInfo: Partial<ModelInfo> & { supportedFeatures?: string[] } = {
 						maxTokens: rawModel.max_completion_tokens || staticModelInfo?.maxTokens,
 						contextWindow: rawModel.context_length || staticModelInfo?.contextWindow,
 						supportsImages: false, // Baseten model APIs does not support image input
@@ -84,18 +95,25 @@ export async function refreshBasetenModels(
 						cacheReadsPrice: staticModelInfo?.cacheReadsPrice || 0,
 						description: generateModelDescription(rawModel, staticModelInfo),
 						supportedFeatures: rawModel.supported_features || [],
+						supportsReasoning: supportThinking || false,
+						// If thinking is supported, set maxBudget with a default value as a placeholder
+						// to ensure it has a valid thinkingConfig that lets the application know thinking is supported.
+						thinkingConfig: supportThinking ? { maxBudget: ANTHROPIC_MAX_THINKING_BUDGET } : undefined,
 					}
 
 					models[rawModel.id] = modelInfo
 				}
-			} else {
-				console.error("Invalid response from Baseten API")
 			}
+			// Cache the fetched models to disk
 			await fs.writeFile(basetenModelsFilePath, JSON.stringify(models))
-			console.log("Baseten models fetched and saved:", Object.keys(models))
+		}
+
+		// If no API key is set or models is empty, throw an error to trigger fallback
+		if (Object.keys(models).length === 0) {
+			throw new Error("No Baseten API key set or no models fetched")
 		}
 	} catch (error) {
-		console.error("Error fetching Baseten models:", error)
+		Logger.error("Error fetching Baseten models:", error)
 
 		// Provide more specific error messages
 		let errorMessage = "Unknown error occurred"
@@ -115,19 +133,17 @@ export async function refreshBasetenModels(
 			errorMessage = error.message
 		}
 
-		console.error("Baseten API Error:", errorMessage)
+		Logger.error("Baseten API Error:", errorMessage)
 
 		// If we failed to fetch models, try to read cached models first
 		const cachedModels = await readBasetenModels()
 		if (cachedModels && Object.keys(cachedModels).length > 0) {
-			console.log("Using cached Baseten models")
 			// Use all cached models (no filtering)
 			for (const [modelId, modelInfo] of Object.entries(cachedModels)) {
 				models[modelId] = modelInfo
 			}
 		} else {
 			// Fall back to static models from shared/api.ts
-			console.log("Using static Baseten models as fallback")
 			for (const [modelId, modelInfo] of Object.entries(basetenModels)) {
 				models[modelId] = {
 					maxTokens: modelInfo.maxTokens,
@@ -139,14 +155,16 @@ export async function refreshBasetenModels(
 					cacheWritesPrice: (modelInfo as any).cacheWritesPrice || 0,
 					cacheReadsPrice: (modelInfo as any).cacheReadsPrice || 0,
 					description: (modelInfo as any).description || `${modelId} model`,
+					supportsReasoning: modelInfo.supportsReasoning || false,
+					thinkingConfig: modelInfo.supportsReasoning ? { maxBudget: ANTHROPIC_MAX_THINKING_BUDGET } : undefined,
 				}
 			}
 		}
 	}
 
-	// Convert the Record<string, Partial<OpenRouterModelInfo>> to Record<string, OpenRouterModelInfo>
+	// Convert the Record<string, Partial<ModelInfo>> to Record<string, ModelInfo>
 	// by filling in any missing required fields with defaults
-	const typedModels: Record<string, OpenRouterModelInfo> = {}
+	const typedModels: Record<string, ModelInfo> = {}
 	for (const [key, model] of Object.entries(models)) {
 		typedModels[key] = {
 			maxTokens: model.maxTokens ?? 8192,
@@ -158,18 +176,22 @@ export async function refreshBasetenModels(
 			cacheWritesPrice: model.cacheWritesPrice ?? 0,
 			cacheReadsPrice: model.cacheReadsPrice ?? 0,
 			description: model.description ?? "",
-			tiers: model.tiers ?? [],
-			// Note: supportedFeatures is preserved as custom property but not part of OpenRouterModelInfo proto
+			tiers: model.tiers,
+			supportsReasoning: model.supportsReasoning || false,
+			thinkingConfig: model.supportsReasoning ? { maxBudget: ANTHROPIC_MAX_THINKING_BUDGET } : undefined,
 		}
 	}
 
-	return OpenRouterCompatibleModelInfo.create({ models: typedModels })
+	// Store in StateManager's in-memory cache
+	StateManager.get().setModelsCache("baseten", typedModels)
+
+	return typedModels
 }
 
 /**
- * Reads cached Baseten models from disk
+ * Reads cached Baseten models from disk (application types)
  */
-async function readBasetenModels(): Promise<Record<string, Partial<OpenRouterModelInfo>> | undefined> {
+async function readBasetenModels(): Promise<Record<string, Partial<ModelInfo>> | undefined> {
 	const basetenModelsFilePath = path.join(await ensureCacheDirectoryExists(), GlobalFileNames.basetenModels)
 	const fileExists = await fileExistsAtPath(basetenModelsFilePath)
 	if (fileExists) {
@@ -177,7 +199,7 @@ async function readBasetenModels(): Promise<Record<string, Partial<OpenRouterMod
 			const fileContents = await fs.readFile(basetenModelsFilePath, "utf8")
 			return JSON.parse(fileContents)
 		} catch (error) {
-			console.error("Error reading cached Baseten models:", error)
+			Logger.error("Error reading cached Baseten models:", error)
 			return undefined
 		}
 	}

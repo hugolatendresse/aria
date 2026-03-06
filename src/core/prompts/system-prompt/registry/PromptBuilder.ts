@@ -1,7 +1,7 @@
+import { Logger } from "@/shared/services/Logger"
 import type { ClineDefaultTool } from "@/shared/tools"
-import { getModelFamily } from "../"
 import { ClineToolSet } from "../registry/ClineToolSet"
-import type { ClineToolSpec } from "../spec"
+import { type ClineToolSpec, resolveInstruction } from "../spec"
 import { STANDARD_PLACEHOLDERS } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { ComponentRegistry, PromptVariant, SystemPromptContext } from "../types"
@@ -35,7 +35,7 @@ export class PromptBuilder {
 		for (const componentId of componentOrder) {
 			const componentFn = this.components[componentId]
 			if (!componentFn) {
-				console.warn(`Warning: Component '${componentId}' not found`)
+				Logger.warn(`Warning: Component '${componentId}' not found`)
 				continue
 			}
 
@@ -45,7 +45,7 @@ export class PromptBuilder {
 					sections[componentId] = result
 				}
 			} catch (error) {
-				console.warn(`Warning: Failed to build component '${componentId}':`, error)
+				Logger.warn(`Warning: Failed to build component '${componentId}':`, error)
 			}
 		}
 
@@ -62,7 +62,7 @@ export class PromptBuilder {
 		// Add standard system placeholders
 		placeholders[STANDARD_PLACEHOLDERS.CWD] = this.context.cwd || process.cwd()
 		placeholders[STANDARD_PLACEHOLDERS.SUPPORTS_BROWSER] = this.context.supportsBrowserUse || false
-		placeholders[STANDARD_PLACEHOLDERS.MODEL_FAMILY] = getModelFamily(this.context.providerInfo)
+		placeholders[STANDARD_PLACEHOLDERS.MODEL_FAMILY] = this.variant.family
 		placeholders[STANDARD_PLACEHOLDERS.CURRENT_DATE] = new Date().toISOString().split("T")[0]
 
 		// Add all component sections
@@ -94,7 +94,10 @@ export class PromptBuilder {
 			.trim() // Remove leading/trailing whitespace
 			.replace(/====+\s*$/, "") // Remove trailing ==== after trim
 			.replace(/\n====+\s*\n+\s*====+\n/g, "\n====\n") // Remove empty sections between separators
-			.replace(/====+\n(?!\n)([^\n])/g, (match, nextChar, offset, string) => {
+			.replace(/====\s*\n\s*====\s*\n/g, "====\n") // Remove consecutive empty sections
+			.replace(/^##\s*$[\r\n]*/gm, "") // Remove empty section headers (## with no content)
+			.replace(/\n##\s*$[\r\n]*/gm, "") // Remove empty section headers that appear mid-document
+			.replace(/====+\n(?!\n)([^\n])/g, (match, _nextChar, offset, string) => {
 				// Add extra newline after ====+ if not already followed by a newline
 				// Exception: preserve single newlines when ====+ appears to be part of diff-like content
 				// Look for patterns like "SEARCH\n=======\n" or ";\n=======\n" (diff markers)
@@ -111,6 +114,8 @@ export class PromptBuilder {
 				const isDiffLike = /SEARCH|REPLACE|\+\+\+\+\+\+\+|-------/.test(beforeContext + afterContext)
 				return isDiffLike ? match : prevChar + "\n\n" + match.substring(1).replace(/\n/, "")
 			})
+			.replace(/\n\s*\n\s*\n/g, "\n\n") // Clean up any multiple empty lines created by header removal
+			.trim() // Final trim to remove any whitespace added by regex operations
 	}
 
 	getBuildMetadata(): {
@@ -127,32 +132,15 @@ export class PromptBuilder {
 		}
 	}
 
+	private static getEnabledTools(variant: PromptVariant, context: SystemPromptContext): ClineToolSpec[] {
+		return ClineToolSet.getEnabledToolSpecs(variant, context)
+	}
+
 	public static async getToolsPrompts(variant: PromptVariant, context: SystemPromptContext) {
-		let resolvedTools: ReturnType<typeof ClineToolSet.getTools> = []
+		const enabledTools = PromptBuilder.getEnabledTools(variant, context)
 
-		// If the variant explicitly lists tools, resolve each by id with fallback to GENERIC
-		if (variant?.tools?.length) {
-			const requestedIds = [...variant.tools]
-			resolvedTools = ClineToolSet.getToolsForVariantWithFallback(variant.family, requestedIds)
-
-			// Preserve requested order
-			resolvedTools = requestedIds
-				.map((id) => resolvedTools.find((t) => t.config.id === id))
-				.filter((t): t is NonNullable<typeof t> => Boolean(t))
-		} else {
-			// Otherwise, use all tools registered for the variant, or generic if none
-			resolvedTools = ClineToolSet.getTools(variant.family)
-			// Sort by id for stable ordering
-			resolvedTools = resolvedTools.sort((a, b) => a.config.id.localeCompare(b.config.id))
-		}
-
-		// Filter by context requirements
-		const enabledTools = resolvedTools.filter(
-			(tool) => !tool.config.contextRequirements || tool.config.contextRequirements(context),
-		)
-
-		const ids = enabledTools.map((tool) => tool.config.id)
-		return Promise.all(enabledTools.map((tool) => PromptBuilder.tool(tool.config, ids, context)))
+		const ids = enabledTools.map((tool) => tool.id)
+		return Promise.all(enabledTools.map((tool) => PromptBuilder.tool(tool, ids, context)))
 	}
 
 	public static tool(config: ClineToolSpec, registry: ClineDefaultTool[], context: SystemPromptContext): string {
@@ -160,7 +148,8 @@ export class PromptBuilder {
 		if (!config.parameters?.length && !config.description?.length) {
 			return ""
 		}
-		const title = `## ${config.id}`
+		const displayName = config.name || config.id
+		const title = `## ${displayName}`
 		const description = [`Description: ${config.description}`]
 
 		if (!config.parameters?.length) {
@@ -197,21 +186,22 @@ export class PromptBuilder {
 		const sections = [
 			title,
 			description.join("\n"),
-			PromptBuilder.buildParametersSection(filteredParams),
-			PromptBuilder.buildUsageSection(config.id, filteredParams),
+			PromptBuilder.buildParametersSection(filteredParams, context),
+			PromptBuilder.buildUsageSection(displayName, filteredParams),
 		]
 
 		return sections.filter(Boolean).join("\n")
 	}
 
-	private static buildParametersSection(params: any[]): string {
+	private static buildParametersSection(params: any[], context: SystemPromptContext): string {
 		if (!params.length) {
 			return "Parameters: None"
 		}
 
 		const paramList = params.map((p) => {
 			const requiredText = p.required ? "required" : "optional"
-			return `- ${p.name}: (${requiredText}) ${p.instruction}`
+			const instruction = resolveInstruction(p.instruction, context)
+			return `- ${p.name}: (${requiredText}) ${instruction}`
 		})
 
 		return ["Parameters:", ...paramList].join("\n")

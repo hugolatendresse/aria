@@ -2,8 +2,12 @@
 	"name": "aria-dev",
 	"displayName": "Aria",
 	"description": "Autonomous coding agent able to perform actuarial work.",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"icon": "assets/icons/icon.png",
+	"workspaces": [
+		".",
+		"cli"
+	],
 	"engines": {
 		"vscode": "^1.84.0"
 	},
@@ -33,11 +37,21 @@
 	],
 	"activationEvents": [
 		"onLanguage",
+		"onUri",
 		"onStartupFinished",
 		"workspaceContains:evals.env"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
+		"icons": {
+			"cline-icon": {
+				"description": "cline",
+				"default": {
+					"fontPath": "assets/icons/cline-bot.woff",
+					"fontCharacter": "\\e900"
+				}
+			}
+		},
 		"walkthroughs": [
 			{
 				"id": "AriaWalkthrough",
@@ -142,6 +156,12 @@
 				"when": "cline.isDevMode"
 			},
 			{
+				"command": "cline.dev.expireMcpOAuthTokens",
+				"title": "Expire MCP OAuth Tokens (for testing)",
+				"category": "Cline",
+				"when": "cline.isDevMode"
+			},
+			{
 				"command": "cline.addToChat",
 				"title": "Add to Aria",
 				"category": "Aria"
@@ -182,6 +202,24 @@
 				"category": "Aria"
 			},
 			{
+				"command": "cline.jupyterGenerateCell",
+				"title": "Generate Jupyter Cell with Cline",
+				"category": "Cline",
+				"icon": "$(sparkle)"
+			},
+			{
+				"command": "cline.jupyterExplainCell",
+				"title": "Explain Jupyter Cell with Cline",
+				"category": "Cline",
+				"icon": "$(question)"
+			},
+			{
+				"command": "cline.jupyterImproveCell",
+				"title": "Improve Jupyter Cell with Cline",
+				"category": "Cline",
+				"icon": "$(lightbulb)"
+			},
+			{
 				"command": "cline.openWalkthrough",
 				"title": "Open Walkthrough",
 				"category": "Aria"
@@ -190,9 +228,26 @@
 				"command": "cline.reconstructTaskHistory",
 				"title": "Reconstruct Task History",
 				"category": "Aria"
+			},
+			{
+				"command": "cline.reviewComment.reply",
+				"title": "Reply",
+				"category": "Cline",
+				"enablement": "!commentIsEmpty"
+			},
+			{
+				"command": "cline.reviewComment.addToChat",
+				"title": "Add to Cline Chat",
+				"category": "Cline",
+				"icon": "$(link-external)"
 			}
 		],
 		"keybindings": [
+			{
+				"command": "editor.action.submitComment",
+				"key": "enter",
+				"when": "commentEditorFocused && commentController == cline-ai-review && !commentIsEmpty"
+			},
 			{
 				"command": "cline.addToChat",
 				"key": "cmd+'",
@@ -267,14 +322,51 @@
 					"when": "config.git.enabled && scmProvider == git && cline.isGeneratingCommit"
 				}
 			],
+			"notebook/toolbar": [
+				{
+					"command": "cline.jupyterGenerateCell",
+					"group": "navigation/add@1",
+					"when": "notebookType == 'jupyter-notebook'"
+				}
+			],
+			"notebook/cell/title": [
+				{
+					"command": "cline.jupyterExplainCell",
+					"group": "inline@1",
+					"when": "notebookType == 'jupyter-notebook'"
+				},
+				{
+					"command": "cline.jupyterImproveCell",
+					"group": "inline@2",
+					"when": "notebookType == 'jupyter-notebook'"
+				}
+			],
 			"commandPalette": [
 				{
 					"command": "cline.generateGitCommitMessage",
-					"when": "config.git.enabled && scmProvider == git && !cline.isGeneratingCommit"
+					"when": "config.git.enabled && !cline.isGeneratingCommit"
 				},
 				{
 					"command": "cline.abortGitCommitMessage",
-					"when": "config.git.enabled && scmProvider == git && cline.isGeneratingCommit"
+					"when": "config.git.enabled && cline.isGeneratingCommit"
+				},
+				{
+					"command": "cline.reviewComment.reply",
+					"when": "false"
+				}
+			],
+			"comments/commentThread/context": [
+				{
+					"command": "cline.reviewComment.reply",
+					"group": "inline",
+					"when": "commentController == cline-ai-review"
+				}
+			],
+			"comments/commentThread/title": [
+				{
+					"command": "cline.reviewComment.addToChat",
+					"group": "inline",
+					"when": "commentController == cline-ai-review"
 				}
 			]
 		},
@@ -293,36 +385,41 @@
 		"vscode:prepublish": "npm run package",
 		"compile": "npm run check-types && npm run lint && node esbuild.mjs",
 		"compile-standalone": "npm run check-types && npm run lint && node esbuild.mjs --standalone",
-		"compile-standalone-cli": "npm run check-types && npm run lint && node esbuild.mjs --standalone",
-		"compile-cli": "scripts/build-cli.sh",
-		"download-node": "node scripts/download-node.mjs",
-		"download-ripgrep": "node scripts/download-ripgrep.mjs",
+		"compile-standalone-npm": "npm run protos && npm run check-types && npm run lint && node esbuild.mjs --standalone",
+		"cli:link": "cd cli && npm run link",
+		"cli:build": "npm run protos && cd cli && npm run build",
+		"cli:run": "node cli/dist/cli.mjs",
+		"cli:build:production": "cd cli && npm run build:production",
+		"cli:watch": "cd cli && npm run watch",
+		"cli:test": "cd cli && npm run test",
 		"test:install": "bash scripts/test-install.sh",
-		"dev:cli:watch": "node scripts/dev-cli-watch.mjs",
+		"cli:dev": "cd cli && npm run dev",
 		"postcompile-standalone": "node scripts/package-standalone.mjs",
-		"postcompile-standalone-cli": "node scripts/package-standalone.mjs --target=cli",
-		"watch": "npm-run-all -p watch:*",
+		"postcompile-standalone-npm": "node scripts/package-npm.mjs",
+		"dev": "npm run protos && npm run watch",
+		"watch": "npx npm-run-all -p watch:*",
 		"watch:esbuild": "node esbuild.mjs --watch",
 		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
 		"package": "npm run check-types && npm run build:webview && npm run lint && node esbuild.mjs --production",
 		"protos": "node scripts/build-proto.mjs",
-		"protos-go": "node scripts/build-go-proto.mjs",
-		"cli-providers": "node scripts/cli-providers.mjs",
+		"protos-python": "node scripts/build-python-proto.mjs",
+		"download-ripgrep": "node scripts/download-ripgrep.mjs",
 		"postprotos": "biome format src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched",
 		"clean:build": "rimraf dist dist-standalone webview-ui/build src/generated out/",
 		"clean:deps": "rimraf node_modules webview-ui/node_modules",
 		"clean:all": "npm run clean:build && npm run clean:deps",
 		"compile-tests": "node ./scripts/build-tests.js",
 		"watch-tests": "tsc -p . -w --outDir out",
-		"check-types": "npm run protos && npx tsc --noEmit && cd webview-ui && npx tsc -b --noEmit",
-		"lint": "biome lint --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && buf lint",
+		"check-types": "npm run protos && npx tsc --noEmit && cd webview-ui && npx tsc --noEmit && cd ../cli && npx tsc --noEmit",
+		"lint": "biome lint --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && npm run lint:proto",
+		"lint:proto": "bash ./scripts/proto-lint.sh",
 		"format": "biome format --changed --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error",
 		"format:fix": "biome check --changed --no-errors-on-unmatched --files-ignore-unknown=true --write",
 		"fix:all": "biome check --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe",
-		"ci:check-all": "npm-run-all -p check-types lint format",
+		"ci:check-all": "npx npm-run-all -p check-types lint format",
 		"ci:build": "npm run protos && npm run build:webview && node esbuild.mjs && npm run compile-tests",
 		"pretest": "npm run compile && npm run compile-tests && npm run compile-standalone && npm run lint",
-		"test": "npm-run-all test:unit test:integration",
+		"test": "npx npm-run-all test:unit test:integration",
 		"test:integration": "vscode-test",
 		"test:unit": "cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha",
 		"test:coverage": "vscode-test --coverage",
@@ -340,32 +437,42 @@
 		"publish:marketplace": "vsce publish --allow-package-secrets sendgrid && ovsx publish",
 		"publish:marketplace:prerelease": "vsce publish --allow-package-secrets sendgrid --pre-release && ovsx publish --pre-release",
 		"publish:marketplace:nightly": "node ./scripts/publish-nightly.mjs",
-		"prepare": "husky",
-		"changeset": "changeset",
-		"version-packages": "changeset version",
+		"prepare": "npx husky",
 		"docs": "cd docs && npm run dev",
 		"docs:check-links": "cd docs && npm run check",
 		"docs:rename-file": "cd docs && npm run rename",
-		"report-issue": "node scripts/report-issue.js"
+		"report-issue": "node scripts/report-issue.js",
+		"storybook": "cd webview-ui && npm run storybook",
+		"cli:unlink": "cd cli && npm run unlink",
+		"eval:smoke:build": "npm run cli:build && npm run cli:link",
+		"eval:smoke:run": "npx tsx evals/smoke-tests/run-smoke-tests.ts",
+		"eval:smoke": "npm run eval:smoke:build && npm run eval:smoke:run",
+		"eval:smoke:ci": "npm run eval:smoke:build && npm run eval:smoke:run -- --trials 1 --parallel"
 	},
 	"lint-staged": {
+		"src/shared/storage/state-keys.ts": [
+			"node scripts/generate-state-proto.mjs",
+			"git add proto/cline/state.proto"
+		],
 		"*": [
 			"biome check --write --staged --no-errors-on-unmatched --files-ignore-unknown=true"
 		]
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.1.4",
+		"@biomejs/biome": "^2.3.14",
 		"@bufbuild/buf": "^1.54.0",
-		"@changesets/cli": "^2.27.12",
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/chai": "^5.0.1",
 		"@types/clone-deep": "^4.0.4",
 		"@types/diff": "^5.2.1",
 		"@types/get-folder-size": "^3.0.4",
+		"@types/js-yaml": "^4.0.9",
 		"@types/mocha": "^10.0.7",
 		"@types/node": "20.x",
 		"@types/pdf-parse": "^1.1.4",
+		"@types/picomatch": "^4.0.2",
 		"@types/proxyquire": "^1.3.31",
+		"@types/shell-quote": "^1.7.5",
 		"@types/should": "^11.2.0",
 		"@types/sinon": "^17.0.4",
 		"@types/turndown": "^5.0.5",
@@ -377,6 +484,7 @@
 		"chai": "^4.3.10",
 		"chalk": "5.6.2",
 		"cross-env": "^10.1.0",
+		"dotenv": "^17.2.3",
 		"esbuild": "^0.25.0",
 		"grpc-tools": "^1.13.0",
 		"husky": "^9.1.7",
@@ -399,16 +507,17 @@
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.37.0",
 		"@anthropic-ai/vertex-sdk": "^0.6.4",
-		"@aws-sdk/client-bedrock-runtime": "^3.840.0",
-		"@aws-sdk/credential-providers": "^3.840.0",
+		"@aws-sdk/client-bedrock-runtime": "^3.922.0",
+		"@aws-sdk/credential-providers": "^3.922.0",
+		"@azure/identity": "^4.13.0",
 		"@bufbuild/protobuf": "^2.2.5",
 		"@cerebras/cerebras_cloud_sdk": "^1.35.0",
 		"@google-cloud/vertexai": "^1.9.3",
-		"@google/genai": "^1.11.0",
+		"@google/genai": "^1.30.0",
 		"@grpc/grpc-js": "^1.9.15",
 		"@grpc/reflection": "^1.0.4",
 		"@mistralai/mistralai": "^1.5.0",
-		"@modelcontextprotocol/sdk": "^1.11.1",
+		"@modelcontextprotocol/sdk": "^1.25.1",
 		"@opentelemetry/api": "^1.9.0",
 		"@opentelemetry/core": "^2.1.0",
 		"@opentelemetry/exporter-logs-otlp-grpc": "^0.56.0",
@@ -428,14 +537,16 @@
 		"@opentelemetry/sdk-trace-base": "^2.1.0",
 		"@opentelemetry/sdk-trace-node": "^1.30.1",
 		"@opentelemetry/semantic-conventions": "^1.37.0",
-		"@playwright/test": "^1.53.2",
-		"@sap-ai-sdk/ai-api": "^1.17.0",
-		"@sap-ai-sdk/orchestration": "^1.17.0",
-		"@sentry/browser": "^9.12.0",
+		"@playwright/test": "^1.55.1",
+		"@sap-ai-sdk/ai-api": "^2.7.0",
+		"@sap-ai-sdk/orchestration": "^2.7.0",
+		"@sap-cloud-sdk/connectivity": "^4.2.0",
 		"@streamparser/json": "^0.0.22",
+		"@tailwindcss/vite": "^4.1.14",
 		"@types/uuid": "^10.0.0",
 		"@vscode/codicons": "^0.0.36",
 		"archiver": "^7.0.1",
+		"aws4fetch": "^1.0.20",
 		"axios": "^1.12.0",
 		"better-sqlite3": "^12.4.1",
 		"cheerio": "^1.0.0",
@@ -447,44 +558,54 @@
 		"exceljs": "^4.4.0",
 		"execa": "^9.5.2",
 		"fast-deep-equal": "^3.1.3",
-		"firebase": "^11.2.0",
 		"fzf": "^0.5.2",
 		"get-folder-size": "^5.0.0",
 		"globby": "^14.0.2",
 		"grpc-health-check": "^2.0.2",
-		"https-proxy-agent": "^7.0.6",
 		"iconv-lite": "^0.6.3",
 		"ignore": "^7.0.3",
 		"image-size": "^2.0.2",
 		"isbinaryfile": "^5.0.2",
 		"jschardet": "^3.1.4",
-		"jwt-decode": "^4.0.0",
-		"mammoth": "^1.8.0",
+		"json5": "^2.2.3",
+		"mammoth": "^1.11.0",
+		"nanoid": "^5.1.6",
 		"nice-grpc": "^2.1.12",
 		"node-machine-id": "^1.1.12",
 		"ollama": "^0.5.13",
 		"open": "^10.1.2",
 		"open-graph-scraper": "^6.9.0",
-		"openai": "^4.83.0",
+		"openai": "^6.21.0",
 		"os-name": "^6.0.0",
+		"p-mutex": "^1.0.0",
 		"p-timeout": "^6.1.4",
 		"p-wait-for": "^5.0.2",
 		"pdf-parse": "^1.1.1",
+		"picomatch": "^4.0.3",
 		"posthog-node": "^5.8.0",
 		"puppeteer-chromium-resolver": "^23.0.0",
 		"puppeteer-core": "^23.4.0",
 		"reconnecting-eventsource": "^1.6.4",
 		"serialize-error": "^11.0.3",
+		"shell-quote": "^1.8.3",
 		"simple-git": "^3.27.0",
 		"strip-ansi": "^7.1.2",
+		"tailwindcss": "^4.1.14",
 		"tree-sitter-wasms": "^0.1.11",
 		"ts-morph": "^25.0.1",
 		"turndown": "^7.2.0",
 		"ulid": "^2.4.0",
+		"undici": "^7.16.0",
 		"uuid": "^11.1.0",
 		"vscode-uri": "^3.1.0",
 		"web-tree-sitter": "^0.22.6",
 		"zod": "^3.24.2"
+	},
+	"overrides": {
+		"tar-fs": ">=3.1.1",
+		"tar": "^7.5.2",
+		"vite": "^7.1.11",
+		"js-yaml": "^4.1.1"
 	},
 	"c8": {
 		"reporter": [

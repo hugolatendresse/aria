@@ -1,5 +1,675 @@
 # Changelog
 
+## [3.71.0]
+
+### Added
+
+- Added GPT-5.4 models for ChatGPT subscription users
+- Hooks: Added a `Notification` hook for attention and completion boundaries
+
+### Fixed
+
+- Handle streamable HTTP MCP reconnects more reliably after disconnects
+
+## [3.70.0]
+
+### Added
+
+- New Cline API docs: Getting Started, Auth, Chat Completions, Models, Errors, and SDK Examples
+- Hook payloads now include `model.provider` and `model.slug` 
+- Token/cost updates now happen immediately as usage chunks arrive, not after tool execution
+
+### Fixed
+
+- Improve subagent context compaction logic
+- Subagent stream retry delay increased to reduce noise from transient failures
+- State serialization errors are now caught and logged instead of crashing
+- Removed incorrect `max_tokens` from OpenRouter requests
+
+### Changed
+
+- Windows test cleanup now retries on locked files and applies per-test timeouts
+- Updated hooks docs 
+
+
+## [3.69.0]
+
+### Added
+
+- Add `User-Agent` header to requests sent to the Cline backend
+- Add default auto-tag workflow for publish release flow
+- Show Cline SDK docs on the Cline page
+
+### Fixed
+
+- Retry nested git restore and prevent silent `.git_disabled` leftovers in checkpoints
+- Prevent Chinese filename escaping in diff view
+- Trigger auto-compaction on OpenRouter context overflow errors
+- Restore GPT-OSS native file editing on OpenAI-compatible models
+
+### Changed
+
+- Update Cline SDK docs
+- Improve hooks support for Windows PowerShell
+
+## [3.68.0]
+
+### Added
+
+- Add dynamic Cline provider model fetching from Cline endpoint
+- Add additional Markdown formatting in CLI
+- Add focus indicator on action buttons in extension
+
+### Fixed
+
+- Clear all OCA secrets on auth refresh failure to prevent re-auth loops
+- Resolve "Could not find the file context" error in Explain Changes
+- Use `JSON_SCHEMA` for `yaml.load` to prevent unsafe deserialization
+- Fetch model info from API in CLI headless auth for Cline and Vercel providers
+- Generate commit message from staged changes only when staging exists
+- Update stale `maxTokens` values for Claude 3.7+ models across Anthropic, Bedrock, Vertex, and SAP AI Core
+- Use `model.info.maxTokens` for OpenRouter instead of hardcoded `8192`
+
+### Changed
+
+- Increase timeout for a flaky test to reduce short-term test instability
+
+## [3.67.1]
+
+### Added
+
+- Added Cline SDK API interface for programmatic access to Cline features and tools, enabling integration into custom applications.
+- Added Codex 5.3 model support
+
+### Fixed
+
+- Fix OpenAI Codex by setting `store` to `false`
+- Use `isLocatedInPath()` instead of string matching for path containment checks
+
+## [3.67.0]
+
+### Added
+
+- Add support for skills and optional modelId in subagent configuration
+- Add AgentConfigLoader for file-based agent configs
+- Add Responses API support for OpenAI native provider
+- Preconnect websocket to reduce response latency
+- Fetch featured models from backend with local fallback
+- Add /q command to quit CLI
+- Add MCP enterprise configuration details
+- Pull Cline's recommended models from internal endpoint
+- Add dynamic flag to adjust banner cache duration
+
+### Fixed
+
+- Fix reasoning delta crash on usage-only stream chunks
+- Fix OpenAI tool ID transformation restricted to native provider only
+- Fix auth check for ACP mode
+- Fix CLI yolo mode to not persist yolo setting to disk
+- Fix inline focus-chain slider within its feature row
+- Fix Gemini 3.1 Pro compatibility
+- Fix Cline auth with ACP flag
+
+### Changed
+
+- Move PR skill to .agents/skills
+- SambaNova provider: update models list
+- Remove changeset-converter GitHub Action and npm run changeset
+
+## [3.66.0]
+
+### Added
+
+- Gemini-3.1 Pro Preview
+
+
+## [3.65.0]
+
+### Added
+
+- Add /skills slash command to CLI for viewing and managing installed skills
+
+### Fixed
+
+- Fix aggressive context compaction caused by accidental clicks on the context window progress bar silently setting a very low auto-condense threshold
+- Fix infinite retry loop when write_to_file fails with missing content parameter.
+- Fixed default claude model
+
+## [3.64.0]
+
+### Added
+- Added sonnet 4.6
+
+
+## [3.63.0]
+
+### Added
+
+- added zai GLM 5 Free promo
+
+### Fixed
+
+- Restore reasoning trace visibility in chat and improve the thinking row UX so reasoning is visible, then collapsible after completion.
+
+## [3.62.0]
+
+### Fixed
+
+- Banners now display immediately when opening the extension instead of requiring user interaction first
+- Resolved 17 security vulnerabilities including high-severity DoS issues in dependencies (body-parser, axios, qs, tar, and others)
+
+## [3.61.0]
+
+- UI/UX fixes with minimax model family
+
+## [3.60.0]
+
+- Fixes for Minimax model family
+
+## [3.59.0]
+
+- Added Minimax 2.5 Free Promo
+- Fixed Response chaining for OpenAI's Responses API
+
+## [3.58.0]
+
+### Added
+
+- Subagent: replace legacy subagents with the native `use_subagents` tool
+- Bundle `endpoints.json` support so packaged distributions can ship required endpoints out-of-the-box
+- Amazon Bedrock: support parallel tool calling
+- New "double-check completion" experimental feature to verify work before marking tasks complete
+- CLI: new task controls/flags including custom `--thinking` token budget and `--max-consecutive-mistakes` for yolo runs
+- Remote config: new UI/options (including connection/test buttons) and support for syncing deletion of remotely configured MCP servers
+- Vertex / Claude Code: add 1M context model options for Claude Opus 4.6
+- ZAI/GLM: add GLM-5
+
+### Fixed
+
+- CLI: handle stdin redirection correctly in CI/headless environments
+- CLI: preserve OAuth callback paths during auth redirects
+- VS Code Web: generate auth callback URLs via `vscode.env.asExternalUri` (OAuth callback reliability)
+- Terminal: surface command exit codes in results and improve long-running `execute_command` timeout behavior
+- UI: add loading indicator and fix `api_req_started` rendering
+- Task streaming: prevent duplicate streamed text rows after completion
+- API: preserve selected Vercel model when model metadata is missing
+- Telemetry: route PostHog networking through proxy-aware shared fetch and ensure telemetry flushes on shutdown
+- CI: increase Windows E2E test timeout to reduce flakiness
+
+### Changed
+
+- Settings/model UX: move "reasoning effort" into model configuration and expose it in settings
+- CLI provider selection: limit provider list to those remotely configured
+- UI: consolidate ViewHeader component/styling across views
+- Tools: add auto-approval support for `attempt_completion` commands
+- Remotely configured MCP server schema now supports custom headers
+
+## [3.57.1]
+
+### Fixed
+
+- Fixed Opus 4.6 for bedrock provider
+
+## [3.57.0]
+
+### Added
+
+- Cline CLI 2.0 now available. Install with `npm install -g cline`
+- Anthopic Opus 4.6
+- Minimax-2.1 and Kimi-k2.5 now available for free for a limited time promo
+- Codex-5.3 through ChatGPT subscription
+
+### Fixed
+
+- Fix read file tool to support reading large files
+- Fix decimal input crash in OpenAI Compatible price fields (#8129)
+- Fix build complete handlers when updating the api config
+- Fixed missing provider from list
+- Fixed Favorite Icon / Star from getting clipped in the task history view
+
+### Changed
+
+- Make skills always enabled and remove feature toggle setting
+
+## [3.56.0]
+
+### Added
+
+- **CLI authentication:** Added Vercel AI Gateway and Cline API key provider support for headless CI/automation workflows
+- **New model:** Added Kimi-K2.5 model to Moonshot provider (262K context, image support, prompt caching)
+- **Prompt variant:** Added Trinity Large prompt variant for improved tool-calling support
+- **OpenTelemetry:** Added support for custom headers on metrics and logs endpoints
+- **Social links:** Added community icons (X, Discord, GitHub, Reddit, LinkedIn) to the What's New modal
+
+### Fixed
+
+- **LiteLLM:** Fixed thinking configuration not appearing for reasoning-capable models
+- **OpenTelemetry:** Fixed endpoint path handling (no longer incorrectly appends `/v1/logs` or `/v1/metrics`) and ensured logs are sent regardless of VSCode telemetry settings
+- **CLI auth:** Fixed `cline auth` displaying incorrect provider information after configuration
+
+### Changed
+
+- **Hooks:** Hook scripts now run from the workspace repository root instead of filesystem root
+- **Default settings:** Enabled multi-root workspaces, parallel tool calling, and skills by default; disabled strict plan mode by default
+- **Settings UI:** Refreshed feature settings section with collapsible design
+
+## [3.55.0]
+
+- Add new model: Arcee Trinity Large Preview
+- Add new model: Moonshot Kimi K2.5
+- Add MCP prompts support - prompts from connected MCP servers now appear in slash command autocomplete as `/mcp:<server>:<prompt>`
+
+## [3.54.0]
+
+### Added
+
+- Native tool calls support for Ollama provider
+- Sonnet 4.5 is now the default Amazon Bedrock model id
+
+### Fixed
+
+- Prevent infinite retry loops when replace_in_file fails repeatedly. The system now detects repeated failures and provides better guidance to break out of retry cycles.
+- Skip diff error UI handling during streaming to prevent flickering. Error handling is deferred until streaming completes.
+- Strip notebook cell outputs when extracting text content from Jupyter notebooks, significantly reducing context size sent to the LLM.
+- Throttle diff view updates during streaming to reduce UI flickering and improve performance.
+
+### Changed
+
+- Removed Mistral's Devstral-2512 free from the free models list
+- Removed deprecated zai-glm-4.6 model from Cerebras provider
+
+## [3.53.1]
+
+### Fixed
+
+- Bug in responses API
+
+## [3.53.0]
+
+### Fixed
+
+- Removed grok model from free tier
+
+## [3.52.0]
+
+### Added
+
+- Users with ChatGPT Plus or Pro subscriptions can now use GPT-5 models directly through Cline without needing an API key. Authentication is handled via OAuth through OpenAI's authentication system.
+- Grok models are now moving out of free tier and into paid plans.
+- Introduces comprehensive Jupyter Notebook support for Cline, enabling AI-assisted editing of `.ipynb` files with full cell-level context awareness.
+
+### Fixed
+
+- Bugs in DiffViewProvider for file editing
+- Ollama's recommended models to use correct identifiers
+
+## [3.51.0]
+
+### Added
+
+- Adding OpenAI gpt-5.2-codex model to the model picker
+
+## [3.50.0]
+
+### Added
+
+- Add gpt-5.2-codex OpenAI model support
+- Add create-pull-request skill
+
+### Fixed
+
+- Fix the selection of remotely configured providers
+- Fix act_mode_respond to prevent consecutive calls
+- Fix invalid tool call IDs when switching between model formats
+
+## [3.49.1]
+
+### Added
+
+- Add telemetry to track usage of skills feature
+- Add version headers to Cline backend requests
+- Phase in Responses API usage instead of defaulting for every supported model
+
+### Fixed
+
+- Fix workflow slash command search to be case-insensitive
+- Fix model display in ModelPickerModal when using LiteLLM
+- Fix LiteLLM model fetching with default base URL
+- Fix crash when OpenAI-compatible APIs send usage chunks with empty or null choices arrays at end of streaming
+- Fix model ID for Kat Coder Pro Free model
+
+## [3.49.0]
+
+- Enable configuring an OTEL collector at runtime
+- Removing Minimax-2.1 from free model list as the free trial has ended
+- Improved image display in MCP responses
+- Auto-sync remote MCP servers from remote config to local settings
+
+## [3.48.0]
+
+### Added
+
+- Add Skills system for reusable, on-demand agent instructions
+- Add new websearch tooling in Cline provider
+- Add zai-glm-4.7 to Cerebras model list
+- Add model refresh and improve reasoning support for Vercel AI Gateway
+
+### Fixed
+
+- Revert #8341 due to regressions in diff view/document truncation (see #8423, #8429)
+- Fixed extension crash when using context menu selector
+
+## [3.47.0]
+
+### Added
+
+- Added experimental support for Background Edits (allows editing files in background without opening the diff view)
+- Updated free model to MiniMax M2.1 (replacing MiniMax M2)
+- Added support for Azure based identity authentication in OpenAI Compatible provider and Azure OpenAI
+- Add `supportsReasoning` property to Baseten models
+
+### Fixed
+
+- Prevent expired token usage in authenticated requests
+- Exclude binary files without extensions from diffs
+- Preserve file endings and trailing newlines
+- Fix Cerebras rate limiting
+- Fix Auto Compact for Claude Code provider
+- Make Workspace and Favorites history filters independent
+- Fix remote MCP server connection failures (404 response handling)
+- Disable native tool calling for Deepseek 3.2 speciale
+- Show notification instead of opening sidebar on update
+- Fix Baseten model selector
+
+### Refactored
+
+- Modify prompts for parallel tool usage in Claude and Gemini 3 models
+
+## [3.46.1]
+
+### Fixed
+
+- Remove GLM 4.6 from free models
+
+## [3.46.0]
+
+### Added
+
+- Added GLM 4.7 model
+- Enhanced background terminal execution with command tracking, log file output, zombie process prevention (10-minute timeout), and clickable log paths in UI
+- Apply Patch tool for GPT-5+ models (replacing current diff edit tools)
+
+### Fixed
+
+- Duplicate error messages during streaming for Diff Edit tool when Parallel Tool Calling is not enabled
+- Banner carousel styling and dismiss functionality
+- Typos in Gemini system prompt overrides
+- Model picker favorites ordering, star toggle, and keyboard navigation for OpenRouter and Vercel AI Gateway providers
+- Fetch remote config values from the cache
+
+### Refactored
+
+- Anthropic handler to use metadata for reasoning support
+- Bedrock provider to use metadata for reasoning support
+
+## [3.45.1]
+
+- Fixed MCP settings race condition where toggling auto-approve or changing timeout settings would cause the UI to flash and revert
+
+## [3.45.0]
+
+- Added Gemini 3 Flash Preview model
+
+## [3.44.2]
+
+- Polished the model picker UI with checkmarks for selected models, tooltips on Plan/Act tabs, and consistent arrow pointers across all popup modals
+- Improved WhatsNew modal responsiveness and cleaned up redundant UI elements
+- Fixed GLM models outputting garbled text in thinking tags—reasoning is now properly disabled for these models
+
+## [3.44.1]
+
+- Fixed a critical bug where local MCP servers stopped connecting after v3.42.0—all user-configured stdio-based MCP servers should now work again
+- Fixed remotely configured API keys not being extracted correctly for enterprise users
+- Added support for dynamic tool instructions that adapt based on runtime context, laying groundwork for future context-aware features
+
+## [3.44.0]
+
+## Added
+
+- Updating minor version to show a proper banner for the release
+
+## [3.43.1]
+
+### Patch Changes
+
+- Fix GLM-4.6 Model reference id
+
+## [3.43.0]
+
+### Added
+
+- GLM-4.6
+- kat-coder-pro
+- Add parsing of env variable patterns to the mcpconfig.json
+
+### Fixed
+
+- TLS Proxy support issues for VSCode
+- Add supportsReasoning flag to OpenAI reasoning models
+- Fix thinking not available for some models in the OpenAI provider
+- Fix invalid signature field issues when switching between Gemini and Anthropic providers
+- Extract OpenRouter model filtering into reusable utility and use it in different model pickers
+- Fix a11y for auto approve checkbox
+- Improve ModelPickerModal provider list layout
+
+### Refactored
+
+- Migrate WhatsNewModal to new shared dialogue component
+
+## [3.42.0]
+
+### Added
+
+- Expose `getAvailableSlashCommands` rpc endpoint to UI clients
+- Made slash command menu and context menu accessible and screenreader-friendly
+- Made expanding/collapsing UI components accessible
+
+### Fixed
+
+- Devstral OpenRouter model ID and routing issues
+- Incorrect pricing display for Devstral model in the extension
+
+## [3.41.0]
+
+### Added
+
+- OpenAI GPT-5.2
+- Devstral-2512 (formerly stealth model "Microwave")
+- Improvements to chat modal model picker
+- Amazon Nova 2 Lite
+- DeepSeek 3.2 to native tool calling allow list
+- Responses API support for Codex models in OpenAI provider (requires native tool calling)
+- Xmas Special Santa Cline
+- Welcome screen UI enhancements
+
+### Fixed
+
+- Initial checkpoint commit now non-blocking for improved responsiveness in large repositories
+- Gemini Vertex models erroring when thinking parameters are not supported
+- Restrictive file permissions for secrets.json
+- Ollama streaming requests not aborting when task is cancelled
+
+### Refactored
+
+- OpenAI provider to centralize temperature configuration and include missing GPT-5 model settings
+- OpenAI native handler to use metadata for model capabilities
+- Vertex provider to use metadata for model capabilities
+
+## [3.40.2]
+
+- Fix logout on network errors during token refresh (e.g., opening laptop while offline)
+
+## [3.40.1]
+
+- Fix cost calculation display for Anthropic API requests
+
+## [3.40.0]
+
+- Fix highlighted text flashing when task header is collapsed
+- Add X-Cerebras-3rd-Party-Integration header to Cerebras API requests
+- Add microwave family system prompt configuration
+- Remove tooltips from auto approve menu
+- Fix Standalone, ensure cwd is the install dir to find resources reliably
+- Fix a bug where terminal commands with double quotes are broken when "Terminal Execution Mode" is set to "Background Exec"
+- Add support for slash commands anywhere in a message, not just at the beginning. This matches the behavior of @ mentions for a more flexible input experience.
+- Add bottom padding to the last message to fix last response text getting cut off by auto approve settings bar.
+- Add default thinking level for Gemini 3 Pro models in Gemini provider
+
+## [3.39.2]
+
+- Fix for microwave model and thinking settings
+
+## [3.39.1]
+
+- Fix Openrouter and Cline Provider model info
+
+## [3.39.0]
+
+- Add Explain Changes feature
+- Add microwave Stealth model
+- Add Tabbed Model Picker with Recommended and Free tabs
+- Add support to View remote rules and workflows in the editor
+- Enable NTC (Native Tool Calling) by default
+- Bug fixes and improvements for LiteLLM provider
+
+## [3.38.3]
+
+- Task export feature now opens the task directory, allowing easy access to the full task files
+- Add Grok 4.1 and Grok Code to XAI provider
+- Enabled native tool calling for Baseten and Kimi K2 models
+- Add thinking level to Gemini 3.0 Pro preview
+- Expanded Hooks functionality
+- Removed Task Timeline from Task Header
+- Bug fix for slash commands
+- Bug fixes for Vertex provider
+- Bug fixes for thinking/reasoning issues across multiple providers when using native tool calling
+- Bug fixes for terminal usage on Windows devices
+
+## [3.38.2]
+
+- Add Claude Opus 4.5
+
+## [3.38.1]
+
+### Fixed
+
+- Fixed handling of 'signature' field in sanitizeAnthropicContentBlock to properly preserve it when thinking is enabled, as required by Anthropic's API.
+
+## [3.38.0]
+
+### Added
+
+- Gemini 3 Pro Preview model
+- AquaVoice Avalon model for voice-to-text dictation
+
+### Fixed
+
+- Automatic context truncation when AWS Bedrock token usage rate limits are exceeded
+- Removed new_task tool from system prompts, updated slash command prompts, and added helper function for native tool calling validation
+
+## [3.37.1]
+
+- Comprehensive changes to better support GPT 5.1 - System prompt, tools, deep-planning, focus chain, etc.
+- Add AGENTS.md support
+- feat(models): Add free minimax/mimax-m2 model to the model picker
+
+## [3.37.0]
+
+### Added
+
+- GPT-5.1 with model-specific prompting: tailored system prompts, tool usage, focus chain, and deep-planning optimizations
+- Nous Research provider with Hermes 4 model family and custom system prompts
+- Switched to Aqua Voice's Avalon model in speech to text transcription
+- Added Linux support for speech to text
+- Model-family breakouts for deep-planning prompting, laying groundwork for enhanced slash commands
+- Expanded HTTP proxy support throughout the codebase
+- Improved focus chain prompting for frontier models (Anthropic, OpenAI, Gemini, xAI)
+
+### Fixed
+
+- Duplicate tool results prevention through existence checking
+- XML entity escaping in model content processor
+- Commit message generation in command palette
+- OpenAI Compatible provider temperature parameter type conversion
+
+## Documentation
+
+- Added missing proto generation step in CONTRIBUTING.md
+- New `npm run dev` script for streamlined terminal workflow (fixes #7335)
+
+## [3.36.1]
+
+- fix: remove native tool calling support from Gemini and XAI provider due to invalid tool names issues
+- fix: disable native tool callings for grok code models
+- Add MCP tool usage to GLM
+- Removes reasoning_details content field from Anthropic providers
+
+## [3.36.0]
+
+- Add: Hooks allow you to inject custom logic into Cline's workflow
+- Add: new provider AIhubmix
+- Add: Use http_proxy, https_proxy and no_proxy in JetBrains
+- Fix: Oca Token Refresh logic
+- Fix: issues where assistant message with empty content is added to conversation history
+- Fix: bug where the checkbox shows in the model selector dropdown
+- Fix: Switch from defaultUserAgentProvider to customUserAgent for Bedrock
+- Fix: support for `<think>` tags for better compatibility with open-source models
+- Fix: refinements to the GLM-4.6 system prompt
+
+## [3.35.1]
+
+- Add: Hicap API integration as provider
+- Fix: enable Add Header button in OpenAICompatibleProvider UI
+- Fix: Remove orphaned tool_results after truncation and empty content field issues in native tool call
+- Fix: render model description in markdown
+
+## [3.35.0]
+
+- Add native tool calling support with configurable setting.
+- Auto-approve is now always-on with a redesigned expanding menu. Settings simplified and notifications moved to General Settings.
+- added zai-glm-4.6 as a Cerebras model
+- Created GPT5 family specific system prompt template
+- Fix: show reasoning budget slider to models with valid thinking config
+- Requesty base URL, and API key fixes
+- Delete all Auth Tokens when logging out
+- Support for <think> tags for models that prefer that over <thinking>
+
+## [3.34.1]
+
+- Added support for MiniMax provider with MiniMax-M2 model
+- Remove Cline/code-supernova-1-million model
+- Changes to allow users to manually enter model names (eg. presets) when using OpenRouter
+
+## [3.34.0]
+
+- Cline Teams is now free through 2025 for unlimited users. Includes Jetbrains, RBAC, centralized billing and more.
+- Use the “exacto” versions of GLM-4.6, Kimi-K2, and Qwen3-Coder in the Cline provider for the best balance of cost, speed, accuracy and tool-calling.
+
+## [3.33.1]
+
+- Fix CLI installation copy text
+
+## [3.33.0]
+
+- Added Cline CLI (Preview)
+- Added Subagent support (Experimental)
+- Added Multi-Root Workspaces support (Enable in feature settings)
+- Add auto-retry with exponential backof for failed API requests
+
+## [3.32.8]
+
+- Add Claude Haiku 4.5 support
+
 ## [3.32.7]
 
 - Add JP and Global inference profile options to AWS Bedrock

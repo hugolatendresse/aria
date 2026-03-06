@@ -1,4 +1,3 @@
-import { Anthropic } from "@anthropic-ai/sdk"
 import {
 	internationalZAiDefaultModelId,
 	internationalZAiModelId,
@@ -9,11 +8,15 @@ import {
 	mainlandZAiModels,
 } from "@shared/api"
 import OpenAI from "openai"
+import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
+import { ClineStorageMessage } from "@/shared/messages/content"
+import { createOpenAIClient } from "@/shared/net"
 import { version as extensionVersion } from "../../../../package.json"
 import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
 
 interface ZAiHandlerOptions extends CommonApiHandlerOptions {
 	zaiApiLine?: string
@@ -38,7 +41,7 @@ export class ZAiHandler implements ApiHandler {
 				throw new Error("Z AI API key is required")
 			}
 			try {
-				this.client = new OpenAI({
+				this.client = createOpenAIClient({
 					baseURL: this.useChinaApi() ? "https://open.bigmodel.cn/api/paas/v4" : "https://api.z.ai/api/paas/v4",
 					apiKey: this.options.zaiApiKey,
 					defaultHeaders: {
@@ -57,22 +60,22 @@ export class ZAiHandler implements ApiHandler {
 	getModel(): { id: mainlandZAiModelId | internationalZAiModelId; info: ModelInfo } {
 		const modelId = this.options.apiModelId
 		if (this.useChinaApi()) {
+			const id = modelId && modelId in mainlandZAiModels ? (modelId as mainlandZAiModelId) : mainlandZAiDefaultModelId
 			return {
-				id: (modelId as mainlandZAiModelId) ?? mainlandZAiDefaultModelId,
-				info: mainlandZAiModels[modelId as mainlandZAiModelId] ?? mainlandZAiModels[mainlandZAiDefaultModelId],
+				id,
+				info: mainlandZAiModels[id],
 			}
-		} else {
-			return {
-				id: (modelId as internationalZAiModelId) ?? internationalZAiDefaultModelId,
-				info:
-					internationalZAiModels[modelId as internationalZAiModelId] ??
-					internationalZAiModels[internationalZAiDefaultModelId],
-			}
+		}
+		const id =
+			modelId && modelId in internationalZAiModels ? (modelId as internationalZAiModelId) : internationalZAiDefaultModelId
+		return {
+			id,
+			info: internationalZAiModels[id],
 		}
 	}
 
 	@withRetry()
-	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: ClineStorageMessage[], tools?: OpenAITool[]): ApiStream {
 		const client = this.ensureClient()
 		const model = this.getModel()
 		const openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -85,15 +88,22 @@ export class ZAiHandler implements ApiHandler {
 			messages: openAiMessages,
 			stream: true,
 			stream_options: { include_usage: true },
+			...getOpenAIToolParams(tools),
 		})
 
+		const toolCallProcessor = new ToolCallProcessor()
+
 		for await (const chunk of stream) {
-			const delta = chunk.choices[0]?.delta
+			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
 				yield {
 					type: "text",
 					text: delta.content,
 				}
+			}
+
+			if (delta?.tool_calls) {
+				yield* toolCallProcessor.processToolCallDeltas(delta.tool_calls)
 			}
 
 			if (chunk.usage) {

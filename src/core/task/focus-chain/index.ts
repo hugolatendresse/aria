@@ -2,6 +2,7 @@ import { FocusChainSettings } from "@shared/FocusChainSettings"
 import * as chokidar from "chokidar"
 import * as fs from "fs/promises"
 import { telemetryService } from "@/services/telemetry"
+import { Logger } from "@/shared/services/Logger"
 import { ClineSay } from "../../../shared/ExtensionMessage"
 import { Mode } from "../../../shared/storage/types"
 import { writeFile } from "../../../utils/fs"
@@ -14,6 +15,7 @@ import {
 	extractFocusChainListFromText,
 	getFocusChainFilePath,
 } from "./file-utils"
+import { FocusChainPrompts } from "./prompts"
 import { parseFocusChainListCounts } from "./utils"
 
 export interface FocusChainDependencies {
@@ -86,12 +88,12 @@ export class FocusChainManager {
 					await this.postStateToWebview()
 				})
 				.on("error", (error) => {
-					console.error(`[Task ${this.taskId}] Failed to watch focus chain file:`, error)
+					Logger.error(`[Task ${this.taskId}] Failed to watch focus chain file:`, error)
 				})
 
-			console.log(`[Task ${this.taskId}] Todo file watcher initialized`)
+			Logger.log(`[Task ${this.taskId}] Todo file watcher initialized`)
 		} catch (error) {
-			console.error(`[Task ${this.taskId}] Failed to setup todo file watcher:`, error)
+			Logger.error(`[Task ${this.taskId}] Failed to setup todo file watcher:`, error)
 		}
 	}
 
@@ -121,13 +123,13 @@ export class FocusChainManager {
 						await this.postStateToWebview()
 						telemetryService.captureFocusChainListWritten(this.taskId)
 					} else {
-						console.log(
+						Logger.log(
 							`[Task ${this.taskId}] Focus Chain List: File watcher triggered but content unchanged, skipping update`,
 						)
 					}
 				}
 			} catch (error) {
-				console.error(`[Task ${this.taskId}] Error updating focuss chain list from markdown file:`, error)
+				Logger.error(`[Task ${this.taskId}] Error updating focuss chain list from markdown file:`, error)
 			}
 		}, 300)
 	}
@@ -139,71 +141,6 @@ export class FocusChainManager {
 	 * @returns string - Formatted markdown instructions for focus chain list management, varies by context
 	 */
 	public generateFocusChainInstructions(): string {
-		// Prompt for initial list creation
-		const listInstructionsInitial = `\n
-# TODO LIST CREATION REQUIRED - ACT MODE ACTIVATED\n
-\n
-**You've just switched from PLAN MODE to ACT MODE!**\n
-\n
-** IMMEDIATE ACTION REQUIRED:**\n
-1. Create a comprehensive todo list in your NEXT tool call\n
-2. Use the task_progress parameter to provide the list\n
-3. Format each item using markdown checklist syntax:\n
-	- [ ] For tasks to be done\n
-	- [x] For any tasks already completed\n
-\n
-**Your todo list should include:**\n
-   - All major implementation steps\n
-   - Testing and validation tasks\n
-   - Documentation updates if needed\n
-   - Final verification steps\n
-\n
-**Example format:**\n\
-   - [ ] Set up project structure\n
-   - [ ] Implement core functionality\n
-   - [ ] Add error handling\n-
-   - [ ] Write tests\n
-   - [ ] Test implementation\n
-   - [ ] Document changes\n
-\n
-**Remember:** Keeping the todo list updated helps track progress and ensures nothing is missed.`
-
-		// For when recommending but not requiring a list
-		const listInstructionsRecommended = `\n
-1. Include the task_progress parameter in your next tool call\n
-2. Create a comprehensive checklist of all steps needed\n
-3. Use markdown format: - [ ] for incomplete, - [x] for complete\n
-\n
-**Benefits of creating a todo list now:**\n
-	- Clear roadmap for implementation\n
-	- Progress tracking throughout the task\n
-	- Nothing gets forgotten or missed\n
-	- Users can see, monitor, and edit the plan\n
-\n
-**Example structure:**\n\`\`\`\n
-- [ ] Analyze requirements\n
-- [ ] Set up necessary files\n
-- [ ] Implement main functionality\n
-- [ ] Handle edge cases\n
-- [ ] Test the implementation\n
-- [ ] Verify results\n\`\`\`\n
-\n
-Keeping the todo list updated helps track progress and ensures nothing is missed.`
-
-		// Prompt for reminders to update the list periodically
-		const listInstrunctionsReminder = `\n
-1. To create or update a todo list, include the task_progress parameter in the next tool call\n
-2. Review each item and update its status:\n
-   - Mark completed items with: - [x]\n
-   - Keep incomplete items as: - [ ]\n
-   - Add new items if you discover additional steps\n
-3. Modify the list as needed:\n
-		- Add any new steps you've discovered\n
-		- Reorder if the sequence has changed\n
-4. Ensure the list accurately reflects the current state\n
-\n
-**Remember:** Keeping the todo list updated helps track progress and ensures nothing is missed.`
-
 		// If list exists already exists, we need to remind it to update rather than demand initialization
 		if (this.taskState.currentFocusChainChecklist) {
 			// Parse the current list for counts/stats
@@ -224,7 +161,7 @@ Keeping the todo list updated helps track progress and ensures nothing is missed
 				\n
 				${this.taskState.currentFocusChainChecklist}\n
 				${userHasUpdatedList}\n
-				${listInstrunctionsReminder}\n
+				${FocusChainPrompts.reminder}\n
 			`
 
 				// If there are no user changes, proceed with reminders based on list progress
@@ -243,17 +180,9 @@ Keeping the todo list updated helps track progress and ensures nothing is missed
 				}
 				// Every item on the list has been completed. Hooray!
 				else if (completedItems === totalItems && totalItems > 0) {
-					progressBasedMessageStub = `\n\n**🎉 EXCELLENT! All ${totalItems} items have been completed!**
-
-**Completed Items:**
-${this.taskState.currentFocusChainChecklist}
-
-**Next Steps:**
-- If the task is fully complete and meets all requirements, use attempt_completion
-- If you've discovered additional work that wasn't in the original scope (new features, improvements, edge cases, etc.), create a new task_progress list with those items
-- If there are related tasks or follow-up items the user might want, you can suggest them in a new checklist
-
-**Remember:** Only use attempt_completion if you're confident the task is truly finished. If there's any remaining work, create a new focus chain list to track it.`
+					progressBasedMessageStub = FocusChainPrompts.completed
+						.replace("{{totalItems}}", totalItems.toString())
+						.replace("{{currentFocusChainChecklist}}", this.taskState.currentFocusChainChecklist)
 				}
 
 				// Return with progress-based stub
@@ -262,39 +191,26 @@ ${this.taskState.currentFocusChainChecklist}
 				${listCurrentProgress}\n
 				${this.taskState.currentFocusChainChecklist}\n
 				\n
-				${listInstrunctionsReminder}\n
+				${FocusChainPrompts.reminder}\n
 				${progressBasedMessageStub}\n
 				`
 			}
 		}
 		// When switching from Plan to Act, request that a new list be generated
 		else if (this.taskState.didRespondToPlanAskBySwitchingMode) {
-			return `${listInstructionsInitial}`
+			return `${FocusChainPrompts.initial}`
 		}
 
 		// When in plan mode, lists are optional. TODO - May want to improve this soft prompt approach in a future version
 		else if (this.stateManager.getGlobalSettingsKey("mode") === "plan") {
-			return `\n
-# Todo List (Optional - Plan Mode)\n
-\n
-While in PLAN MODE, if you've outlined concrete steps or requirements for the user, you may include a preliminary todo list using the task_progress parameter.\n
-Reminder on how to use the task_progress parameter:\n
-${listInstrunctionsReminder}`
+			return FocusChainPrompts.planModeReminder
 		} else {
 			// Check if we're early in the task
 			const isEarlyInTask = this.taskState.apiRequestCount < 10
 			if (isEarlyInTask) {
-				return `\n
-# TODO LIST RECOMMENDED
-When starting a new task, it is recommended to create a todo list.
-\n
-${listInstructionsRecommended}\n`
+				return FocusChainPrompts.recommended
 			} else {
-				return `\n
-# TODO LIST \n
-You've made ${this.taskState.apiRequestCount} API requests without a todo list. Consider creating one to track remaining work.\n
-\n
-${listInstrunctionsReminder}\n`
+				return FocusChainPrompts.apiRequestCount.replace("{{apiRequestCount}}", this.taskState.apiRequestCount.toString())
 			}
 		}
 	}
@@ -321,7 +237,7 @@ ${listInstrunctionsReminder}\n`
 			return null
 		} catch (error) {
 			// File doesn't exist or can't be read, return null
-			console.log(`[Task ${this.taskId}] focus chain list: Could not load from markdown file: ${error}`)
+			Logger.log(`[Task ${this.taskId}] focus chain list: Could not load from markdown file: ${error}`)
 			return null
 		}
 	}
@@ -341,7 +257,7 @@ ${listInstrunctionsReminder}\n`
 			const fileContent = createFocusChainMarkdownContent(this.taskId, todoList)
 			await writeFile(todoFilePath, fileContent, "utf8")
 		} catch (error) {
-			console.error(`[Task ${this.taskId}] focus chain list: FILE WRITE FAILED - Error:`, error)
+			Logger.error(`[Task ${this.taskId}] focus chain list: FILE WRITE FAILED - Error:`, error)
 			throw error
 		}
 	}
@@ -365,7 +281,7 @@ ${listInstrunctionsReminder}\n`
 			if (taskProgress && taskProgress.trim()) {
 				const previousList = this.taskState.currentFocusChainChecklist
 				this.taskState.currentFocusChainChecklist = taskProgress.trim()
-				console.debug(
+				Logger.debug(
 					`[Task ${this.taskId}] focus chain list: LLM provided focus chain list update via task_progress parameter. Length ${previousList?.length || 0} > ${this.taskState.currentFocusChainChecklist.length}`,
 				)
 
@@ -389,10 +305,10 @@ ${listInstrunctionsReminder}\n`
 					// Send the task_progress message to the UI immediately
 					await this.say("task_progress", taskProgress.trim())
 				} catch (error) {
-					console.error(`[Task ${this.taskId}] focus chain list: Failed to write to markdown file:`, error)
+					Logger.error(`[Task ${this.taskId}] focus chain list: Failed to write to markdown file:`, error)
 					// Fall back to creating a task_progress message directly if file write fails
 					await this.say("task_progress", taskProgress.trim())
-					console.log(`[Task ${this.taskId}] focus chain list: Sent fallback task_progress message to UI`)
+					Logger.log(`[Task ${this.taskId}] focus chain list: Sent fallback task_progress message to UI`)
 				}
 			} else {
 				// No model update provided, check if markdown file exists and load it
@@ -404,11 +320,11 @@ ${listInstrunctionsReminder}\n`
 					// Create a task_progress message to display the focus chain list in the UI
 					await this.say("task_progress", markdownTodoList)
 				} else {
-					console.debug(`[Task ${this.taskId}] focus chain list: No valid task progress to update with`)
+					Logger.debug(`[Task ${this.taskId}] focus chain list: No valid task progress to update with`)
 				}
 			}
 		} catch (error) {
-			console.error(`[Task ${this.taskId}] focus chain list: Error in updateFCListFromToolResponse:`, error)
+			Logger.error(`[Task ${this.taskId}] focus chain list: Error in updateFCListFromToolResponse:`, error)
 		}
 	}
 
@@ -448,17 +364,26 @@ ${listInstrunctionsReminder}\n`
 	/**
 	 * Analyzes the current focus chain list for incomplete items when a task is marked as complete.
 	 * Captures telemetry data about unfinished progress items to help improve the focus chain system.
+	 * @param modelId The model ID being used (for telemetry)
+	 * @param provider The API provider being used (for telemetry)
 	 * @requires this.focusChainSettings.enabled and this.taskState.currentFocusChainChecklist to exist
 	 * @returns void - Sends telemetry data if incomplete items found, no return value
 	 */
-	public checkIncompleteProgressOnCompletion() {
+	public checkIncompleteProgressOnCompletion(modelId: string, provider: string) {
 		if (this.focusChainSettings.enabled && this.taskState.currentFocusChainChecklist) {
 			const { totalItems, completedItems } = parseFocusChainListCounts(this.taskState.currentFocusChainChecklist)
 
 			// Only track if there are items and not all are marked as completed
 			if (totalItems > 0 && completedItems < totalItems) {
 				const incompleteItems = totalItems - completedItems
-				telemetryService.captureFocusChainIncompleteOnCompletion(this.taskId, totalItems, completedItems, incompleteItems)
+				telemetryService.captureFocusChainIncompleteOnCompletion(
+					this.taskId,
+					totalItems,
+					completedItems,
+					incompleteItems,
+					modelId,
+					provider,
+				)
 			}
 		}
 	}

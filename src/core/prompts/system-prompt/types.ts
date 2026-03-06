@@ -7,6 +7,7 @@ import type { McpHub } from "@/services/mcp/McpHub"
 import type { BrowserSettings } from "@/shared/BrowserSettings"
 import type { FocusChainSettings } from "@/shared/FocusChainSettings"
 import { ModelFamily } from "@/shared/prompts"
+import type { SkillMetadata } from "@/shared/skills"
 import { ClineDefaultTool } from "@/shared/tools"
 import type { ClineToolSpec } from "./spec"
 import { SystemPromptSection } from "./templates/placeholders"
@@ -30,6 +31,7 @@ export interface PromptVariant {
 	readonly labels: Readonly<Record<string, number>> // Immutable labels mapping
 	readonly family: ModelFamily // Model family enum
 	readonly description: string // Brief description of the variant
+	readonly matcher: (context: SystemPromptContext) => boolean // Function to determine if this variant should be used for the given providerInfo
 
 	// Prompt configuration
 	readonly config: PromptConfig // Model-specific config
@@ -53,6 +55,7 @@ export interface MutablePromptVariant {
 	labels: Record<string, number>
 	family: ModelFamily
 	description?: string
+	matcher?: (providerInfo: ApiProviderInfo) => boolean
 	config: PromptConfig
 	baseTemplate?: string
 	componentOrder: SystemPromptSection[]
@@ -92,20 +95,28 @@ export interface SystemPromptContext {
 	readonly providerInfo: ApiProviderInfo
 	readonly cwd?: string
 	readonly ide: string
+	readonly editorTabs?: {
+		readonly open?: readonly string[]
+		readonly visible?: readonly string[]
+	}
 	readonly supportsBrowserUse?: boolean
 	readonly mcpHub?: McpHub
+	readonly skills?: SkillMetadata[]
 	readonly focusChainSettings?: FocusChainSettings
 	readonly globalClineRulesFileInstructions?: string
 	readonly localClineRulesFileInstructions?: string
 	readonly localCursorRulesFileInstructions?: string
 	readonly localCursorRulesDirInstructions?: string
 	readonly localWindsurfRulesFileInstructions?: string
+	readonly localAgentsRulesFileInstructions?: string
 	readonly clineIgnoreInstructions?: string
 	readonly preferredLanguageInstructions?: string
 	readonly browserSettings?: BrowserSettings
 	readonly isTesting?: boolean
 	readonly runtimePlaceholders?: Readonly<Record<string, unknown>>
 	readonly yoloModeToggled?: boolean
+	readonly subagentsEnabled?: boolean
+	readonly clineWebToolsEnabled?: boolean
 	readonly isMultiRootEnabled?: boolean
 	readonly workspaceRoots?: Array<{ path: string; name: string; vcs?: string }>
 	/**
@@ -113,6 +124,13 @@ export interface SystemPromptContext {
 	 * Used by the actuarial RAG component to search for relevant documents
 	 */
 	readonly userQuery?: string
+	readonly isSubagentsEnabledAndCliInstalled?: boolean
+	readonly isCliSubagent?: boolean
+	readonly isSubagentRun?: boolean
+	readonly isCliEnvironment?: boolean
+	readonly enableNativeToolCalls?: boolean
+	readonly enableParallelToolCalling?: boolean
+	readonly terminalExecutionMode?: "vscodeTerminal" | "backgroundExec"
 }
 
 /**
@@ -185,6 +203,7 @@ export interface VariantBuilder {
 	version(version: number): this
 	tags(...tags: string[]): this
 	labels(labels: Record<string, number>): this
+	matcher(matcherFn: (providerInfo: ApiProviderInfo) => boolean): this
 	template(baseTemplate: string): this
 	components(...sections: SystemPromptSection[]): this
 	overrideComponent(section: SystemPromptSection, override: ConfigOverride): this
@@ -255,7 +274,7 @@ export interface VariantSchema {
 export const TASK_PROGRESS_PARAMETER = {
 	name: "task_progress",
 	required: false,
-	instruction: `A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)`,
+	instruction: `A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)`,
 	usage: "Checklist here (optional)",
 	dependencies: [ClineDefaultTool.TODO],
 }

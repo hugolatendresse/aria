@@ -1,8 +1,9 @@
-import { Anthropic } from "@anthropic-ai/sdk"
 import { ModelInfo, requestyDefaultModelId, requestyDefaultModelInfo } from "@shared/api"
 import { calculateApiCostOpenAI } from "@utils/cost"
 import OpenAI from "openai"
-import { toRequestyServiceStringUrl } from "@/shared/providers/requesty"
+import { toRequestyServiceStringUrl } from "@/shared/clients/requesty"
+import { ClineStorageMessage } from "@/shared/messages/content"
+import { createOpenAIClient } from "@/shared/net"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
@@ -41,7 +42,7 @@ export class RequestyHandler implements ApiHandler {
 				throw new Error("Requesty API key is required")
 			}
 			try {
-				this.client = new OpenAI({
+				this.client = createOpenAIClient({
 					baseURL: toRequestyServiceStringUrl(this.options.requestyBaseUrl),
 					apiKey: this.options.requestyApiKey,
 					defaultHeaders: {
@@ -57,7 +58,7 @@ export class RequestyHandler implements ApiHandler {
 	}
 
 	@withRetry()
-	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: ClineStorageMessage[]): ApiStream {
 		const client = this.ensureClient()
 		const model = this.getModel()
 
@@ -76,6 +77,9 @@ export class RequestyHandler implements ApiHandler {
 				? { thinking: { type: "enabled", budget_tokens: thinkingBudget } }
 				: { thinking: { type: "disabled" } }
 		const thinkingArgs =
+			model.id.includes("claude-opus-4-6") ||
+			model.id.includes("claude-sonnet-4-6") ||
+			model.id.includes("claude-4.6-sonnet") ||
 			model.id.includes("claude-3-7-sonnet") ||
 			model.id.includes("claude-sonnet-4") ||
 			model.id.includes("claude-opus-4") ||
@@ -97,7 +101,7 @@ export class RequestyHandler implements ApiHandler {
 		let lastUsage: any
 
 		for await (const chunk of stream) {
-			const delta = chunk.choices[0]?.delta
+			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
 				yield {
 					type: "text",

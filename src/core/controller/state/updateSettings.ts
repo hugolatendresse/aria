@@ -1,22 +1,20 @@
 import { buildApiHandler } from "@core/api"
-
 import { Empty } from "@shared/proto/cline/common"
-import {
-	PlanActMode,
-	McpDisplayMode as ProtoMcpDisplayMode,
-	OpenaiReasoningEffort as ProtoOpenaiReasoningEffort,
-	UpdateSettingsRequest,
-} from "@shared/proto/cline/state"
+import { PlanActMode, McpDisplayMode as ProtoMcpDisplayMode, UpdateSettingsRequest } from "@shared/proto/cline/state"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { OpenaiReasoningEffort } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
+import { ClineEnv } from "@/config"
+import { fetchRemoteConfig } from "@/core/storage/remote-config/fetch"
+import { clearRemoteConfig } from "@/core/storage/remote-config/utils"
 import { HostProvider } from "@/hosts/host-provider"
-import { TerminalInfo } from "@/integrations/terminal/TerminalRegistry"
 import { McpDisplayMode } from "@/shared/McpDisplayMode"
 import { ShowMessageType } from "@/shared/proto/host/window"
+import { Logger } from "@/shared/services/Logger"
 import { telemetryService } from "../../../services/telemetry"
 import { BrowserSettings as SharedBrowserSettings } from "../../../shared/BrowserSettings"
 import { Controller } from ".."
+import { accountLogoutClicked } from "../account/accountLogoutClicked"
 
 /**
  * Updates multiple extension settings in a single request
@@ -26,6 +24,11 @@ import { Controller } from ".."
  */
 export async function updateSettings(controller: Controller, request: UpdateSettingsRequest): Promise<Empty> {
 	try {
+		if (request.clineEnv !== undefined) {
+			ClineEnv.setEnvironment(request.clineEnv)
+			await accountLogoutClicked(controller, Empty.create())
+		}
+
 		if (request.apiConfiguration) {
 			const protoApiConfiguration = request.apiConfiguration
 
@@ -38,6 +41,8 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 				actModeApiProvider: protoApiConfiguration.actModeApiProvider
 					? convertProtoToApiProvider(protoApiConfiguration.actModeApiProvider)
 					: undefined,
+				planModeReasoningEffort: protoApiConfiguration.planModeReasoningEffort as OpenaiReasoningEffort | undefined,
+				actModeReasoningEffort: protoApiConfiguration.actModeReasoningEffort as OpenaiReasoningEffort | undefined,
 			}
 
 			controller.stateManager.setApiConfiguration(convertedApiConfigurationFromProto)
@@ -65,11 +70,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 		// Update checkpoints setting
 		if (request.enableCheckpointsSetting !== undefined) {
 			controller.stateManager.setGlobalState("enableCheckpointsSetting", request.enableCheckpointsSetting)
-		}
-
-		// Update MCP marketplace setting
-		if (request.mcpMarketplaceEnabled !== undefined) {
-			controller.stateManager.setGlobalState("mcpMarketplaceEnabled", request.mcpMarketplaceEnabled)
 		}
 
 		// Update MCP responses collapsed setting
@@ -102,29 +102,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("mode", mode)
 		}
 
-		if (request.openaiReasoningEffort !== undefined) {
-			// Convert proto enum to string type
-			let reasoningEffort: OpenaiReasoningEffort
-			switch (request.openaiReasoningEffort) {
-				case ProtoOpenaiReasoningEffort.LOW:
-					reasoningEffort = "low"
-					break
-				case ProtoOpenaiReasoningEffort.MEDIUM:
-					reasoningEffort = "medium"
-					break
-				case ProtoOpenaiReasoningEffort.HIGH:
-					reasoningEffort = "high"
-					break
-				case ProtoOpenaiReasoningEffort.MINIMAL:
-					reasoningEffort = "minimal"
-					break
-				default:
-					throw new Error(`Invalid OpenAI reasoning effort value: ${request.openaiReasoningEffort}`)
-			}
-
-			controller.stateManager.setGlobalState("openaiReasoningEffort", reasoningEffort)
-		}
-
 		if (request.preferredLanguage !== undefined) {
 			controller.stateManager.setGlobalState("preferredLanguage", request.preferredLanguage)
 		}
@@ -144,6 +121,18 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("terminalOutputLineLimit", Number(request.terminalOutputLineLimit))
 		}
 
+		if (request.vscodeTerminalExecutionMode !== undefined && request.vscodeTerminalExecutionMode !== "") {
+			controller.stateManager.setGlobalState(
+				"vscodeTerminalExecutionMode",
+				request.vscodeTerminalExecutionMode === "backgroundExec" ? "backgroundExec" : "vscodeTerminal",
+			)
+		}
+
+		// Update max consecutive mistakes
+		if (request.maxConsecutiveMistakes !== undefined) {
+			controller.stateManager.setGlobalState("maxConsecutiveMistakes", Number(request.maxConsecutiveMistakes))
+		}
+
 		// Update strict plan mode setting
 		if (request.strictPlanModeEnabled !== undefined) {
 			controller.stateManager.setGlobalState("strictPlanModeEnabled", request.strictPlanModeEnabled)
@@ -156,15 +145,31 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("yoloModeToggled", request.yoloModeToggled)
 		}
 
-		if (request.dictationSettings !== undefined) {
-			// Convert from protobuf format (snake_case) to TypeScript format (camelCase)
-			const dictationSettings = {
-				featureEnabled: request.dictationSettings.featureEnabled ?? true,
-				dictationEnabled: request.dictationSettings.dictationEnabled ?? true,
-				dictationLanguage: request.dictationSettings.dictationLanguage ?? "en",
+		// Update cline web tools setting
+		if (request.clineWebToolsEnabled !== undefined) {
+			if (controller.task) {
+				telemetryService.captureClineWebToolsToggle(controller.task.ulid, request.clineWebToolsEnabled)
 			}
-			controller.stateManager.setGlobalState("dictationSettings", dictationSettings)
+			controller.stateManager.setGlobalState("clineWebToolsEnabled", request.clineWebToolsEnabled)
 		}
+
+		// Update worktrees setting
+		if (request.worktreesEnabled !== undefined) {
+			controller.stateManager.setGlobalState("worktreesEnabled", request.worktreesEnabled)
+		}
+
+		// Update subagents setting
+		if (request.subagentsEnabled !== undefined) {
+			const wasEnabled = controller.stateManager.getGlobalSettingsKey("subagentsEnabled") ?? false
+			const isEnabled = !!request.subagentsEnabled
+			controller.stateManager.setGlobalState("subagentsEnabled", isEnabled)
+
+			// Capture telemetry when setting changes
+			if (wasEnabled !== isEnabled) {
+				telemetryService.captureSubagentToggle(isEnabled)
+			}
+		}
+
 		// Update auto-condense setting
 		if (request.useAutoCondense !== undefined) {
 			if (controller.task) {
@@ -251,14 +256,15 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("defaultTerminalProfile", profileId)
 
 			let closedCount = 0
-			let busyTerminals: TerminalInfo[] = []
+			let busyTerminalsCount = 0
 
 			// Update the terminal manager of the current task if it exists
 			if (controller.task) {
 				// Call the updated setDefaultTerminalProfile method that returns closed terminal info
-				const result = controller.task.terminalManager.setDefaultTerminalProfile(profileId)
+				// Use `as any` to handle type incompatibility between VSCode's TerminalInfo and standalone TerminalInfo
+				const result = controller.task.terminalManager.setDefaultTerminalProfile(profileId) as any
 				closedCount = result.closedCount
-				busyTerminals = result.busyTerminals
+				busyTerminalsCount = result.busyTerminals?.length ?? 0
 
 				// Show information message if terminals were closed
 				if (closedCount > 0) {
@@ -270,10 +276,10 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 				}
 
 				// Show warning if there are busy terminals that couldn't be closed
-				if (busyTerminals.length > 0) {
+				if (busyTerminalsCount > 0) {
 					const message =
-						`${busyTerminals.length} busy ${busyTerminals.length === 1 ? "terminal has" : "terminals have"} a different profile. ` +
-						`Close ${busyTerminals.length === 1 ? "it" : "them"} to use the new profile for all commands.`
+						`${busyTerminalsCount} busy ${busyTerminalsCount === 1 ? "terminal has" : "terminals have"} a different profile. ` +
+						`Close ${busyTerminalsCount === 1 ? "it" : "them"} to use the new profile for all commands.`
 					HostProvider.window.showMessage({
 						type: ShowMessageType.WARNING,
 						message,
@@ -282,17 +288,51 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			}
 		}
 
-		if (request.autoCondenseThreshold !== undefined) {
-			const threshold = Math.min(1, Math.max(0, request.autoCondenseThreshold)) // Clamp to 0-1 range
-			controller.stateManager.setGlobalState("autoCondenseThreshold", threshold)
+		if (request.backgroundEditEnabled !== undefined) {
+			controller.stateManager.setGlobalState("backgroundEditEnabled", !!request.backgroundEditEnabled)
 		}
 
 		if (request.multiRootEnabled !== undefined) {
 			controller.stateManager.setGlobalState("multiRootEnabled", !!request.multiRootEnabled)
 		}
 
-		if (request.hooksEnabled !== undefined) {
-			controller.stateManager.setGlobalState("hooksEnabled", !!request.hooksEnabled)
+		if (request.nativeToolCallEnabled !== undefined) {
+			controller.stateManager.setGlobalState("nativeToolCallEnabled", !!request.nativeToolCallEnabled)
+			if (controller.task) {
+				telemetryService.captureFeatureToggle(
+					controller.task.ulid,
+					"native-tool-call",
+					request.nativeToolCallEnabled,
+					controller.task.api.getModel().id,
+				)
+			}
+		}
+
+		if (request.enableParallelToolCalling !== undefined) {
+			controller.stateManager.setGlobalState("enableParallelToolCalling", !!request.enableParallelToolCalling)
+		}
+
+		if (request.optOutOfRemoteConfig !== undefined) {
+			const hadOptedOut = controller.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig")
+			const isOptingOut = !!request.optOutOfRemoteConfig
+			const isReenablingRemoteConfig = !isOptingOut && hadOptedOut
+
+			// Update now so any subsequent function can access the updated value
+			controller.stateManager.setGlobalState("optOutOfRemoteConfig", isOptingOut)
+
+			if (isOptingOut && !hadOptedOut) {
+				clearRemoteConfig()
+			} else if (isReenablingRemoteConfig) {
+				// Fire-and-forget: We don't need to await here
+				// The function catches any errors and posts the updated state to the webview
+				// The immediate state update below shows the user's intent (opted-in),
+				// and we apply the actual config afterwards without blocking the settings update
+				fetchRemoteConfig(controller)
+			}
+		}
+
+		if (request.doubleCheckCompletionEnabled !== undefined) {
+			controller.stateManager.setGlobalState("doubleCheckCompletionEnabled", request.doubleCheckCompletionEnabled)
 		}
 
 		// Post updated state to webview
@@ -300,7 +340,7 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 
 		return Empty.create()
 	} catch (error) {
-		console.error("Failed to update settings:", error)
+		Logger.error("Failed to update settings:", error)
 		throw error
 	}
 }

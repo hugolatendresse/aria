@@ -1,21 +1,25 @@
 import { CLAUDE_SONNET_1M_SUFFIX, openRouterDefaultModelId } from "@shared/api"
 import { StringRequest } from "@shared/proto/cline/common"
-import { Mode } from "@shared/storage/types"
+import type { Mode } from "@shared/storage/types"
 import { VSCodeLink, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
-import React, { KeyboardEvent, memo, useEffect, useMemo, useRef, useState } from "react"
-import { useRemark } from "react-remark"
+import type React from "react"
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
 import styled from "styled-components"
-import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
 import { highlight } from "../history/HistoryView"
 import { ContextWindowSwitcher } from "./common/ContextWindowSwitcher"
 import { ModelInfoView } from "./common/ModelInfoView"
-import FeaturedModelCard from "./FeaturedModelCard"
+import ReasoningEffortSelector from "./ReasoningEffortSelector"
 import ThinkingBudgetSlider from "./ThinkingBudgetSlider"
-import { getModeSpecificFields, normalizeApiConfiguration } from "./utils/providerUtils"
+import {
+	filterOpenRouterModelIds,
+	getModeSpecificFields,
+	normalizeApiConfiguration,
+	supportsReasoningEffortForModelId,
+} from "./utils/providerUtils"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
 // Star icon for favorites
@@ -42,29 +46,11 @@ const StarIcon = ({ isFavorite, onClick }: { isFavorite: boolean; onClick: (e: R
 export interface OpenRouterModelPickerProps {
 	isPopup?: boolean
 	currentMode: Mode
+	showProviderRouting?: boolean
 }
 
-// Featured models for Cline provider
-const featuredModels = [
-	{
-		id: "anthropic/claude-sonnet-4.5",
-		description: "Recommended for agentic coding in Cline",
-		label: "New",
-	},
-	{
-		id: "x-ai/grok-code-fast-1",
-		description: "Advanced model with 262K context for complex coding",
-		label: "Free",
-	},
-	{
-		id: "cline/code-supernova-1-million",
-		description: "Stealth coding model with image support",
-		label: "Free",
-	},
-]
-
-const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, currentMode }) => {
-	const { handleModeFieldsChange } = useApiConfigurationHandlers()
+const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, currentMode, showProviderRouting }) => {
+	const { handleModeFieldsChange, handleFieldChange } = useApiConfigurationHandlers()
 	const { apiConfiguration, favoritedModelIds, openRouterModels, refreshOpenRouterModels } = useExtensionState()
 	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
 	const [searchTerm, setSearchTerm] = useState(modeFields.openRouterModelId || openRouterDefaultModelId)
@@ -93,10 +79,13 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 	}
 
 	const { selectedModelId, selectedModelInfo } = useMemo(() => {
-		return normalizeApiConfiguration(apiConfiguration, currentMode)
+		const selected = normalizeApiConfiguration(apiConfiguration, currentMode)
+		return selected
 	}, [apiConfiguration, currentMode])
 
-	useMount(refreshOpenRouterModels)
+	useMount(() => {
+		refreshOpenRouterModels()
+	})
 
 	// Sync external changes when the modelId changes
 	useEffect(() => {
@@ -119,15 +108,8 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 
 	const modelIds = useMemo(() => {
 		const unfilteredModelIds = Object.keys(openRouterModels).sort((a, b) => a.localeCompare(b))
-
-		if (modeFields.apiProvider === "cline") {
-			// For Cline provider: exclude :free models
-			return unfilteredModelIds.filter((id) => !id.includes(":free"))
-		} else {
-			// For OpenRouter provider: exclude Cline-specific models
-			return unfilteredModelIds.filter((id) => !id.startsWith("cline/"))
-		}
-	}, [openRouterModels, modeFields.apiProvider])
+		return filterOpenRouterModelIds(unfilteredModelIds, "openrouter")
+	}, [openRouterModels])
 
 	const searchableItems = useMemo(() => {
 		return modelIds.map((id) => ({
@@ -182,6 +164,10 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 				if (selectedIndex >= 0 && selectedIndex < modelSearchResults.length) {
 					handleModelChange(modelSearchResults[selectedIndex].id)
 					setIsDropdownVisible(false)
+				} else {
+					// User typed a custom model ID
+					handleModelChange(searchTerm)
+					setIsDropdownVisible(false)
 				}
 				break
 			case "Escape":
@@ -215,21 +201,34 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 		}
 	}, [selectedIndex])
 
+	const selectedModelIdLower = selectedModelId?.toLowerCase() || ""
+	const showReasoningEffort = useMemo(() => supportsReasoningEffortForModelId(selectedModelId), [selectedModelId])
+
 	const showBudgetSlider = useMemo(() => {
+		if (showReasoningEffort) {
+			return false
+		}
 		return (
 			Object.entries(openRouterModels)?.some(([id, m]) => id === selectedModelId && m.thinkingConfig) ||
-			selectedModelId?.toLowerCase().includes("claude-sonnet-4.5") ||
-			selectedModelId?.toLowerCase().includes("claude-sonnet-4") ||
-			selectedModelId?.toLowerCase().includes("claude-opus-4.1") ||
-			selectedModelId?.toLowerCase().includes("claude-opus-4") ||
-			selectedModelId?.toLowerCase().includes("claude-3-7-sonnet") ||
-			selectedModelId?.toLowerCase().includes("claude-3.7-sonnet") ||
-			selectedModelId?.toLowerCase().includes("claude-3.7-sonnet:thinking")
+			selectedModelIdLower.includes("claude-opus-4.6") ||
+			selectedModelIdLower.includes("claude-haiku-4.5") ||
+			selectedModelIdLower.includes("claude-4.5-haiku") ||
+			selectedModelIdLower.includes("claude-sonnet-4.6") ||
+			selectedModelIdLower.includes("claude-sonnet-4-6") ||
+			selectedModelIdLower.includes("claude-4.6-sonnet") ||
+			selectedModelIdLower.includes("claude-sonnet-4.5") ||
+			selectedModelIdLower.includes("claude-sonnet-4") ||
+			selectedModelIdLower.includes("claude-opus-4.1") ||
+			selectedModelIdLower.includes("claude-opus-4") ||
+			selectedModelIdLower.includes("claude-opus-4.5") ||
+			selectedModelIdLower.includes("claude-3-7-sonnet") ||
+			selectedModelIdLower.includes("claude-3.7-sonnet") ||
+			selectedModelIdLower.includes("claude-3.7-sonnet:thinking")
 		)
-	}, [selectedModelId])
+	}, [openRouterModels, selectedModelId, selectedModelIdLower, showReasoningEffort])
 
 	return (
-		<div style={{ width: "100%" }}>
+		<div style={{ width: "100%", paddingBottom: 2 }}>
 			<style>
 				{`
 				.model-item-highlight {
@@ -243,27 +242,14 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 					<span style={{ fontWeight: 500 }}>Model</span>
 				</label>
 
-				{modeFields.apiProvider === "cline" && (
-					<div style={{ marginBottom: "6px", marginTop: 4 }}>
-						{featuredModels.map((model) => (
-							<FeaturedModelCard
-								description={model.description}
-								isSelected={selectedModelId === model.id}
-								key={model.id}
-								label={model.label}
-								modelId={model.id}
-								onClick={() => {
-									handleModelChange(model.id)
-									setIsDropdownVisible(false)
-								}}
-							/>
-						))}
-					</div>
-				)}
-
 				<DropdownWrapper ref={dropdownRef}>
 					<VSCodeTextField
 						id="model-search"
+						onBlur={() => {
+							if (searchTerm !== selectedModelId) {
+								handleModelChange(searchTerm)
+							}
+						}}
 						onFocus={() => setIsDropdownVisible(true)}
 						onInput={(e) => {
 							setSearchTerm((e.target as HTMLInputElement)?.value.toLowerCase() || "")
@@ -271,6 +257,7 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 						}}
 						onKeyDown={handleKeyDown}
 						placeholder="Search and select a model..."
+						role="combobox"
 						style={{
 							width: "100%",
 							zIndex: OPENROUTER_MODEL_PICKER_Z_INDEX,
@@ -296,7 +283,7 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 						)}
 					</VSCodeTextField>
 					{isDropdownVisible && (
-						<DropdownList ref={dropdownListRef}>
+						<DropdownList ref={dropdownListRef} role="listbox">
 							{modelSearchResults.map((item, index) => {
 								const isFavorite = (favoritedModelIds || []).includes(item.id)
 								return (
@@ -308,7 +295,8 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 											setIsDropdownVisible(false)
 										}}
 										onMouseEnter={() => setSelectedIndex(index)}
-										ref={(el) => (itemRefs.current[index] = el)}>
+										ref={(el) => (itemRefs.current[index] = el)}
+										role="option">
 										<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 											<span dangerouslySetInnerHTML={{ __html: item.html }} />
 											<StarIcon
@@ -327,6 +315,22 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 						</DropdownList>
 					)}
 				</DropdownWrapper>
+
+				{/* Context window switcher for Claude Opus 4.6 */}
+				<ContextWindowSwitcher
+					base1mModelId={`anthropic/claude-opus-4.6${CLAUDE_SONNET_1M_SUFFIX}`}
+					base200kModelId="anthropic/claude-opus-4.6"
+					onModelChange={handleModelChange}
+					selectedModelId={selectedModelId}
+				/>
+
+				{/* Context window switcher for Claude Sonnet 4.6 */}
+				<ContextWindowSwitcher
+					base1mModelId={`anthropic/claude-sonnet-4.6${CLAUDE_SONNET_1M_SUFFIX}`}
+					base200kModelId="anthropic/claude-sonnet-4.6"
+					onModelChange={handleModelChange}
+					selectedModelId={selectedModelId}
+				/>
 
 				{/* Context window switcher for Claude Sonnet 4.5 */}
 				<ContextWindowSwitcher
@@ -348,8 +352,16 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 			{hasInfo ? (
 				<>
 					{showBudgetSlider && <ThinkingBudgetSlider currentMode={currentMode} />}
+					{showReasoningEffort && <ReasoningEffortSelector currentMode={currentMode} />}
 
-					<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />
+					<ModelInfoView
+						isPopup={isPopup}
+						modelInfo={selectedModelInfo}
+						onProviderSortingChange={(value) => handleFieldChange("openRouterProviderSorting", value)}
+						providerSorting={apiConfiguration?.openRouterProviderSorting}
+						selectedModelId={selectedModelId}
+						showProviderRouting={showProviderRouting}
+					/>
 				</>
 			) : (
 				<p
@@ -364,9 +376,9 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 					</VSCodeLink>
 					If you're unsure which model to choose, Cline works best with{" "}
 					<VSCodeLink
-						onClick={() => handleModelChange("anthropic/claude-sonnet-4.5")}
+						onClick={() => handleModelChange("anthropic/claude-sonnet-4.6")}
 						style={{ display: "inline", fontSize: "inherit" }}>
-						anthropic/claude-sonnet-4.5.
+						anthropic/claude-sonnet-4.6.
 					</VSCodeLink>
 					You can also try searching "free" for no-cost options currently available.
 				</p>
@@ -412,158 +424,3 @@ const DropdownItem = styled.div<{ isSelected: boolean }>`
 		background-color: var(--vscode-list-activeSelectionBackground);
 	}
 `
-
-// Markdown
-
-const StyledMarkdown = styled.div`
-	font-family:
-		var(--vscode-font-family),
-		system-ui,
-		-apple-system,
-		BlinkMacSystemFont,
-		"Segoe UI",
-		Roboto,
-		Oxygen,
-		Ubuntu,
-		Cantarell,
-		"Open Sans",
-		"Helvetica Neue",
-		sans-serif;
-	font-size: 12px;
-	color: var(--vscode-descriptionForeground);
-
-	p,
-	li,
-	ol,
-	ul {
-		line-height: 1.25;
-		margin: 0;
-	}
-
-	ol,
-	ul {
-		padding-left: 1.5em;
-		margin-left: 0;
-	}
-
-	p {
-		white-space: pre-wrap;
-	}
-
-	a {
-		text-decoration: none;
-	}
-	a {
-		&:hover {
-			text-decoration: underline;
-		}
-	}
-`
-
-export const ModelDescriptionMarkdown = memo(
-	({
-		markdown,
-		key,
-		isExpanded,
-		setIsExpanded,
-		isPopup,
-	}: {
-		markdown?: string
-		key: string
-		isExpanded: boolean
-		setIsExpanded: (isExpanded: boolean) => void
-		isPopup?: boolean
-	}) => {
-		const [reactContent, setMarkdown] = useRemark()
-		// const [isExpanded, setIsExpanded] = useState(false)
-		const [showSeeMore, setShowSeeMore] = useState(false)
-		const textContainerRef = useRef<HTMLDivElement>(null)
-		const textRef = useRef<HTMLDivElement>(null)
-
-		useEffect(() => {
-			setMarkdown(markdown || "")
-		}, [markdown, setMarkdown])
-
-		useEffect(() => {
-			if (textRef.current && textContainerRef.current) {
-				const { scrollHeight } = textRef.current
-				const { clientHeight } = textContainerRef.current
-				const isOverflowing = scrollHeight > clientHeight
-				setShowSeeMore(isOverflowing)
-				// if (!isOverflowing) {
-				// 	setIsExpanded(false)
-				// }
-			}
-		}, [reactContent, setIsExpanded])
-
-		return (
-			<StyledMarkdown key={key} style={{ display: "inline-block", marginBottom: 0 }}>
-				<div
-					ref={textContainerRef}
-					style={{
-						overflowY: isExpanded ? "auto" : "hidden",
-						position: "relative",
-						wordBreak: "break-word",
-						overflowWrap: "anywhere",
-					}}>
-					<div
-						ref={textRef}
-						style={{
-							display: "-webkit-box",
-							WebkitLineClamp: isExpanded ? "unset" : 3,
-							WebkitBoxOrient: "vertical",
-							overflow: "hidden",
-							// whiteSpace: "pre-wrap",
-							// wordBreak: "break-word",
-							// overflowWrap: "anywhere",
-						}}>
-						{reactContent}
-					</div>
-					{!isExpanded && showSeeMore && (
-						<div
-							style={{
-								position: "absolute",
-								right: 0,
-								bottom: 0,
-								display: "flex",
-								alignItems: "center",
-							}}>
-							<div
-								style={{
-									width: 30,
-									height: "1.2em",
-									background: "linear-gradient(to right, transparent, var(--vscode-sideBar-background))",
-								}}
-							/>
-							<VSCodeLink
-								onClick={() => setIsExpanded(true)}
-								style={{
-									// cursor: "pointer",
-									// color: "var(--vscode-textLink-foreground)",
-									fontSize: "inherit",
-									paddingRight: 0,
-									paddingLeft: 3,
-									backgroundColor: isPopup ? CODE_BLOCK_BG_COLOR : "var(--vscode-sideBar-background)",
-								}}>
-								See more
-							</VSCodeLink>
-						</div>
-					)}
-				</div>
-				{/* {isExpanded && showSeeMore && (
-				<div
-					style={{
-						cursor: "pointer",
-						color: "var(--vscode-textLink-foreground)",
-						marginLeft: "auto",
-						textAlign: "right",
-						paddingRight: 2,
-					}}
-					onClick={() => setIsExpanded(false)}>
-					See less
-				</div>
-			)} */}
-			</StyledMarkdown>
-		)
-	},
-)

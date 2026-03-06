@@ -1,3 +1,4 @@
+import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { useMemo } from "react"
 import CodeAccordian from "../common/CodeAccordian"
 
@@ -89,7 +90,15 @@ const SearchResultsDisplay: React.FC<SearchResultsDisplayProps> = ({
 				border: "1px solid var(--vscode-editorGroup-border)",
 			}}>
 			<div
+				aria-label={isExpanded ? "Collapse search results" : "Expand search results"}
 				onClick={onToggleExpand}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault()
+						e.stopPropagation()
+						onToggleExpand()
+					}
+				}}
 				style={{
 					color: "var(--vscode-descriptionForeground)",
 					display: "flex",
@@ -100,7 +109,8 @@ const SearchResultsDisplay: React.FC<SearchResultsDisplayProps> = ({
 					WebkitUserSelect: "none",
 					MozUserSelect: "none",
 					msUserSelect: "none",
-				}}>
+				}}
+				tabIndex={0}>
 				<span>/</span>
 				<span
 					style={{
@@ -112,12 +122,11 @@ const SearchResultsDisplay: React.FC<SearchResultsDisplayProps> = ({
 					{path + (filePattern ? `/(${filePattern})` : "")}
 				</span>
 				<div style={{ flexGrow: 1 }}></div>
-				<span
-					className={`codicon codicon-chevron-${isExpanded ? "up" : "down"}`}
-					style={{
-						fontSize: 13.5,
-						margin: "1px 0",
-					}}></span>
+				{isExpanded ? (
+					<ChevronDownIcon size={16} style={{ margin: "1px 0" }} />
+				) : (
+					<ChevronRightIcon size={16} style={{ margin: "1px 0" }} />
+				)}
 			</div>
 
 			{isExpanded && (

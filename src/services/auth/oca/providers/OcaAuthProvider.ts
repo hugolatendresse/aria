@@ -2,7 +2,8 @@ import { OcaAuthState, OcaUserInfo } from "@shared/proto/cline/oca_account"
 import axios from "axios"
 import { jwtDecode } from "jwt-decode"
 import { Controller } from "@/core/controller"
-import { getAxiosSettings } from "@/services/auth/oca/utils/utils"
+import { getAxiosSettings } from "@/shared/net"
+import { Logger } from "@/shared/services/Logger"
 import type { OcaConfig } from "../utils/types"
 import { generateCodeVerifier, generateRandomString, pkceChallengeFromVerifier } from "../utils/utils"
 
@@ -85,10 +86,15 @@ export class OcaAuthProvider {
 	}
 
 	async retrieveOcaAuthState(controller: Controller): Promise<OcaAuthState | null> {
+		// First Check the existing access token
+		const existingAuthState = await this.getExistingAuthState(controller)
+		if (existingAuthState) {
+			return existingAuthState
+		}
+		// Otherwise, try to refresh using the refresh token
 		const userRefreshToken = controller.stateManager.getSecretKey("ocaRefreshToken")
 		if (!userRefreshToken) {
-			// Try getting the
-			console.error("No stored authentication credential found.")
+			Logger.error("No stored authentication credential found.")
 			return null
 		}
 		try {
@@ -97,7 +103,7 @@ export class OcaAuthProvider {
 			if (!idcs_url || !client_id) {
 				throw new Error("IDCS URL or Client ID are not configured")
 			}
-			const discovery = await axios.get(`${idcs_url}/.well-known/openid-configuration`, { ...getAxiosSettings() })
+			const discovery = await axios.get(`${idcs_url}/.well-known/openid-configuration`, getAxiosSettings())
 			const tokenEndpoint = discovery.data.token_endpoint
 			const params: any = {
 				grant_type: "refresh_token",
@@ -109,6 +115,14 @@ export class OcaAuthProvider {
 				...getAxiosSettings(),
 			})
 			const accessToken = tokenResponse.data.access_token
+			const refreshToken = tokenResponse.data.refresh_token
+			if (refreshToken) {
+				controller.stateManager.setSecret("ocaRefreshToken", refreshToken)
+				controller.stateManager.setSecret("ocaApiKey", accessToken)
+			} else {
+				Logger.warn("No refresh token received during OCA token refresh.")
+				throw new OcaRefreshError("No refresh token received during OCA token refresh.")
+			}
 			const userInfo: OcaUserInfo = await this.getUserAccountInfo(accessToken)
 			return { user: userInfo, apiKey: accessToken }
 		} catch (err: unknown) {
@@ -119,7 +133,7 @@ export class OcaAuthProvider {
 			const desc = data?.error_description || (isAxios ? (err as any).message : undefined)
 			const invalidGrant = (status === 400 && code === "invalid_grant") || status === 401
 
-			console.error("OCA refresh failed", { status, code, desc })
+			Logger.error("OCA refresh failed", { status, code, desc })
 
 			throw new OcaRefreshError(desc || "OCA refresh failed", status, code, invalidGrant, data)
 		}
@@ -170,7 +184,7 @@ export class OcaAuthProvider {
 			}
 			const { code_verifier, nonce, redirect_uri } = entry
 			OcaAuthProvider.pkceStateMap.delete(state)
-			const discovery = await axios.get(`${idcs_url}/.well-known/openid-configuration`, { ...getAxiosSettings() })
+			const discovery = await axios.get(`${idcs_url}/.well-known/openid-configuration`, getAxiosSettings())
 			const tokenEndpoint = discovery.data.token_endpoint
 			const params: any = {
 				grant_type: "authorization_code",
@@ -208,7 +222,7 @@ export class OcaAuthProvider {
 			// Step 4: Return only the access_token for downstream use
 			return { user: userInfo, apiKey: accessToken }
 		} catch (error) {
-			console.error("oca sign-in error", "error")
+			Logger.error("oca sign-in error", "error")
 			throw error
 		}
 	}
@@ -216,5 +230,10 @@ export class OcaAuthProvider {
 	clearAuth(controller: Controller): void {
 		controller.stateManager.setSecret("ocaApiKey", undefined)
 		controller.stateManager.setSecret("ocaRefreshToken", undefined)
+		// Clear legacy OCA secrets that may persist from older Cline versions.
+		// These are not in SecretKeys (to avoid proto field number changes) but
+		// may exist in users' secret storage and cause auth loops if not cleared.
+		controller.stateManager.setSecret("ocaAccessToken" as any, undefined)
+		controller.stateManager.setSecret("ocaTokenSet" as any, undefined)
 	}
 }

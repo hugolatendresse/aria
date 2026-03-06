@@ -1,3 +1,4 @@
+import { Logger } from "@/shared/services/Logger"
 import type { CapabilityCard } from "./card_registry"
 
 const MAX_CARDS = 10
@@ -48,9 +49,8 @@ export function detectCards(userTurns: string[], registry: CapabilityCard[]): De
 
 	if (hits.length > MAX_CARDS) {
 		const selected = sorted.slice(0, MAX_CARDS)
-		console.log(
-			`[CARDS] Detected ${hits.length}, selected ${selected.length}:`,
-			selected.map((d) => `${d.card.id}(${d.score})`).join(", "),
+		Logger.log(
+			`[CARDS] Detected ${hits.length}, selected ${selected.length}: ${selected.map((d) => `${d.card.id}(${d.score})`).join(", ")}`,
 		)
 	}
 

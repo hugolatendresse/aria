@@ -13,24 +13,28 @@ export interface FeatureFlagsSettings {
 	timeout?: number
 }
 
+type JsonType =
+	| string
+	| number
+	| boolean
+	| null
+	| {
+			[key: string]: JsonType
+	  }
+	| Array<JsonType>
+	| JsonType[]
+export type FeatureFlagPayload = string | number | boolean | { [key: string]: JsonType } | JsonType[] | null
+export type FeatureFlagsAndPayloads = {
+	featureFlags?: Record<string, FeatureFlagPayload>
+	featureFlagPayloads?: Record<string, FeatureFlagPayload>
+}
+
 /**
  * Abstract interface for feature flags providers
  * Any feature flags provider must implement this interface
  */
 export interface IFeatureFlagsProvider {
-	/**
-	 * Get a feature flag value
-	 * @param flagName The feature flag key
-	 * @returns Promise resolving to the flag value (boolean, string, or undefined)
-	 */
-	getFeatureFlag(flagName: string): Promise<boolean | string | undefined>
-
-	/**
-	 * Get the feature flag payload for advanced use cases
-	 * @param flagName The feature flag key
-	 * @returns Promise resolving to the feature flag payload or null if not found
-	 */
-	getFeatureFlagPayload(flagName: string): Promise<unknown>
+	getAllFlagsAndPayloads(options: { flagKeys?: string[] }): Promise<FeatureFlagsAndPayloads | undefined>
 
 	/**
 	 * Check if the provider is enabled and ready
