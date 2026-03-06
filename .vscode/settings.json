@@ -30,5 +30,7 @@
 	},
 	"[python]": {
 		"editor.defaultFormatter": "ms-python.autopep8"
-	}
+	},
+	// Disable auto-forwarding ports to prevent Simple Browser from opening the Vite dev server
+	"remote.autoForwardPorts": false
 }

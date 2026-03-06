@@ -9,7 +9,7 @@ export const Tab = ({ className, children, ...props }: TabProps) => (
 )
 
 export const TabHeader = ({ className, children, ...props }: TabProps) => (
-	<div className={`px-5 py-2.5 border-b border-[var(--vscode-panel-border)] ${className}`} {...props}>
+	<div className={`px-5 py-2.5 border-b border-(--vscode-panel-border) ${className}`} {...props}>
 		{children}
 	</div>
 )
@@ -18,9 +18,8 @@ export const TabContent = ({ className, children, ...props }: TabProps) => {
 	const onWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
 		const target = e.target as HTMLElement
 
-		// Prevent scrolling if the target is a listbox or option
-		// (e.g. selects, dropdowns, etc).
-		if (target.role === "listbox" || target.role === "option") {
+		// Prevent scrolling if the target or any of its ancestors is a listbox or option
+		if (target.closest('[role="listbox"], [role="combobox"], [role="option"]')) {
 			return
 		}
 

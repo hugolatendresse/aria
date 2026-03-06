@@ -1,0 +1,30 @@
+{
+	"model": "opus",
+	"defaultMode": "bypassPermissions",
+	"permissions": {
+		"allow": [
+			"Bash",
+			"Read",
+			"Edit",
+			"Write",
+			"WebFetch",
+			"WebSearch",
+			"Grep",
+			"Glob",
+			"LS",
+			"MultiEdit"
+		]
+	},
+	"hooks": {
+		"SessionStart": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/hooks/claude-code-for-web-setup.sh"
+					}
+				]
+			}
+		]
+	}
+}

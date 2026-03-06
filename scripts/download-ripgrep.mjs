@@ -11,7 +11,7 @@ import fs from "fs"
 import https from "https"
 import path from "path"
 import { pipeline } from "stream/promises"
-import tar from "tar"
+import * as tar from "tar"
 import { promisify } from "util"
 import { createGunzip } from "zlib"
 
@@ -40,6 +40,13 @@ const PLATFORMS = [
 		name: "linux-x64",
 		archiveName: `ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl.tar.gz`,
 		url: `https://github.com/BurntSushi/ripgrep/releases/download/${RIPGREP_VERSION}/ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl.tar.gz`,
+		binaryPath: "rg",
+		isZip: false,
+	},
+	{
+		name: "linux-arm64",
+		archiveName: `ripgrep-${RIPGREP_VERSION}-aarch64-unknown-linux-gnu.tar.gz`,
+		url: `https://github.com/BurntSushi/ripgrep/releases/download/${RIPGREP_VERSION}/ripgrep-${RIPGREP_VERSION}-aarch64-unknown-linux-gnu.tar.gz`,
 		binaryPath: "rg",
 		isZip: false,
 	},

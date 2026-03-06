@@ -2,9 +2,9 @@
  * RAG search tool for exposing actuarial document search to the AI
  */
 
-import { Logger } from "@services/logging/Logger"
 import * as vscode from "vscode"
 import { StateManager } from "@/core/storage/StateManager"
+import { Logger } from "@/shared/services/Logger"
 import { RagService } from "./RagService"
 import { formatRagContext } from "./ragFormatter"
 

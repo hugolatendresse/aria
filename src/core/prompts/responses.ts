@@ -4,6 +4,8 @@ import * as path from "path"
 import { Mode } from "@/shared/storage/types"
 import { ClineIgnoreController, LOCK_TEXT_SYMBOL } from "../ignore/ClineIgnoreController"
 
+const CONTEXT_WINDOW_WARNING_THRESHOLD_PERCENT = 50
+
 export const formatResponse = {
 	duplicateFileReadNotice: () =>
 		`[[NOTE] This file read has been removed to save space in the context window. Refer to the latest file read for the most up to date version of this file.]`,
@@ -11,15 +13,8 @@ export const formatResponse = {
 	contextTruncationNotice: () =>
 		`[NOTE] Some previous conversation history with the user has been removed to maintain optimal context window length. The initial user task has been retained for continuity, while intermediate conversation history has been removed. Keep this in mind as you continue assisting the user. Pay special attention to the user's latest messages.`,
 
-	processFirstUserMessageForTruncation: (originalContent: string) => {
-		const MAX_CHARS = 400_000
-
-		if (originalContent.length <= MAX_CHARS) {
-			return originalContent
-		}
-
-		const truncated = originalContent.substring(0, MAX_CHARS)
-		return truncated + "\n\n[[NOTE] This message was truncated past this point to preserve context window space.]"
+	processFirstUserMessageForTruncation: () => {
+		return "[Continue assisting the user!]"
 	},
 
 	condense: () =>
@@ -32,10 +27,13 @@ export const formatResponse = {
 	clineIgnoreError: (path: string) =>
 		`Access to ${path} is blocked by the .clineignore file settings. You must try to continue in the task without using this file, or ask the user to update the .clineignore file.`,
 
-	noToolsUsed: () =>
+	permissionDeniedError: (reason: string) =>
+		`Command execution blocked by CLINE_COMMAND_PERMISSIONS: ${reason}. You must try a different approach or ask the user to update the permission settings.`,
+
+	noToolsUsed: (usingNativeToolCalls: boolean) =>
 		`[ERROR] You did not use a tool in your previous response! Please retry with a tool use.
 
-${toolUseInstructionsReminder}
+${usingNativeToolCalls ? "" : toolUseInstructionsReminder}
 
 # Next Steps
 
@@ -47,11 +45,56 @@ Otherwise, if you have not completed the task and do not need additional informa
 	tooManyMistakes: (feedback?: string) =>
 		`You seem to be having trouble proceeding. The user has provided the following feedback to help guide you:\n<feedback>\n${feedback}\n</feedback>`,
 
-	autoApprovalMaxReached: (feedback?: string) =>
-		`Auto-approval limit reached. The user has provided the following feedback to help guide you:\n<feedback>\n${feedback}\n</feedback>`,
-
 	missingToolParameterError: (paramName: string) =>
 		`Missing value for required parameter '${paramName}'. Please retry with complete response.\n\n${toolUseInstructionsReminder}`,
+
+	/**
+	 * Specialized error for write_to_file when the 'content' parameter is missing.
+	 * Provides progressive guidance based on how many times this has happened consecutively,
+	 * and includes token budget awareness to help the model understand output constraints.
+	 */
+	writeToFileMissingContentError: (relPath: string, consecutiveFailures: number, contextUsagePercent?: number): string => {
+		const baseError = `Failed to write to '${relPath}': The 'content' parameter was empty. This typically happens when the file content is too large to generate in a single response, or when output token limits are reached before the content parameter is fully written.`
+
+		const contextWarning =
+			contextUsagePercent !== undefined && contextUsagePercent > CONTEXT_WINDOW_WARNING_THRESHOLD_PERCENT
+				? `\n\nWarning: Context window is ${contextUsagePercent}% full. The remaining output budget may be insufficient for large file writes. You MUST use a strategy that produces smaller outputs.`
+				: ""
+
+		if (consecutiveFailures >= 3) {
+			// After 3+ failures, be very directive — stop trying write_to_file entirely
+			return (
+				`${baseError}${contextWarning}\n\n` +
+				`CRITICAL: You have failed to write this file ${consecutiveFailures} times in a row. You MUST change your approach — do NOT retry write_to_file for this file again.\n\n` +
+				`Required action — choose ONE of these strategies:\n` +
+				`1. **Create an empty file first, then use replace_in_file** to add content in small sections (recommended)\n` +
+				`2. **Break the file into multiple smaller files** if architecturally appropriate\n` +
+				`3. **Write a minimal skeleton** using write_to_file (just imports, class/function signatures, no implementations), then use replace_in_file to fill in each section one at a time\n\n` +
+				`Each replace_in_file call should add no more than 50-100 lines of content at a time.`
+			)
+		}
+		if (consecutiveFailures >= 2) {
+			// After 2 failures, strongly suggest alternative approaches
+			return (
+				`${baseError}${contextWarning}\n\n` +
+				`This is your ${consecutiveFailures}${consecutiveFailures === 2 ? "nd" : "rd"} failed attempt. The file content is likely too large to generate in one response. You must use a different strategy:\n\n` +
+				`Recommended approaches:\n` +
+				`1. **Use write_to_file with a minimal skeleton** (just the structure — imports, class/function signatures, no implementations), then use replace_in_file to fill in each section incrementally\n` +
+				`2. **Use replace_in_file with smaller chunks** — if the file already exists, make targeted edits instead of rewriting the entire file\n` +
+				`3. **Break the task into smaller steps** — write one function or section at a time\n\n` +
+				`Do NOT attempt to write the full file content in a single write_to_file call again.`
+			)
+		}
+		// First failure — provide helpful guidance
+		return (
+			`${baseError}${contextWarning}\n\n` +
+			`Suggestions:\n` +
+			`- If the file is large, try breaking down the task into smaller steps. Write a skeleton first, then fill in sections using replace_in_file.\n` +
+			`- If the file already exists, prefer replace_in_file to make targeted edits instead of rewriting the entire file.\n` +
+			`- Ensure the 'content' parameter contains the complete file content before closing the tool tag.\n\n` +
+			toolUseInstructionsReminder
+		)
+	},
 
 	invalidMcpToolArgumentError: (serverName: string, toolName: string) =>
 		`Invalid JSON argument used with ${serverName} for ${toolName}. Please retry with a properly formatted JSON argument.`,
@@ -143,11 +186,11 @@ Otherwise, if you have not completed the task and do not need additional informa
 			return `${clineIgnoreParsed.join(
 				"\n",
 			)}\n\n(File list truncated. Use list_files on specific subdirectories if you need to explore further.)`
-		} else if (clineIgnoreParsed.length === 0 || (clineIgnoreParsed.length === 1 && clineIgnoreParsed[0] === "")) {
-			return "No files found."
-		} else {
-			return clineIgnoreParsed.join("\n")
 		}
+		if (clineIgnoreParsed.length === 0 || (clineIgnoreParsed.length === 1 && clineIgnoreParsed[0] === "")) {
+			return "No files found."
+		}
+		return clineIgnoreParsed.join("\n")
 	},
 
 	createPrettyPatch: (filename = "file", oldStr?: string, newStr?: string) => {
@@ -257,6 +300,9 @@ Otherwise, if you have not completed the task and do not need additional informa
 	cursorRulesLocalDirectoryInstructions: (cwd: string, content: string) =>
 		`# .cursor/rules\n\nThe following is provided by a root-level .cursor/rules directory where the user has specified instructions for this working directory (${cwd.toPosix()})\n\n${content}`,
 
+	agentsRulesLocalFileInstructions: (cwd: string, content: string) =>
+		`# AGENTS.md\n\nThe following is provided by AGENTS.md files found recursively throughout this working directory (${cwd.toPosix()}) where the user has specified instructions. Nested AGENTS.md will be combined below, and you should only apply the instructions for each AGENTS.md file that is directly applicable to the current task, i.e. if you are reading or writing to a file in that directory.\n\n${content}`,
+
 	fileContextWarning: (editedFiles: string[]): string => {
 		const fileCount = editedFiles.length
 		const fileVerb = fileCount === 1 ? "file has" : "files have"
@@ -291,21 +337,16 @@ const formatImagesIntoBlocks = (images?: string[]): Anthropic.ImageBlockParam[] 
 }
 
 const toolUseInstructionsReminder = `# Reminder: Instructions for Tool Use
-
 Tool uses are formatted using XML-style tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Here's the structure:
-
 <tool_name>
 <parameter1_name>value1</parameter1_name>
 <parameter2_name>value2</parameter2_name>
 ...
 </tool_name>
-
 For example:
-
 <attempt_completion>
 <result>
 I have completed the task...
 </result>
 </attempt_completion>
-
 Always adhere to this format for all tool uses to ensure proper parsing and execution.`

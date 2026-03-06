@@ -1,5 +1,7 @@
 import axios from "axios"
+import { getAxiosSettings } from "@/shared/net"
 import { SapAiCoreModelDeployment, SapAiCoreModelsRequest, SapAiCoreModelsResponse } from "@/shared/proto/cline/models"
+import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
 interface Token {
@@ -33,6 +35,7 @@ async function getToken(clientId: string, clientSecret: string, tokenUrl: string
 	const url = tokenUrl.replace(/\/+$/, "") + "/oauth/token"
 	const response = await axios.post(url, payload, {
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		...getAxiosSettings(),
 	})
 	const token = response.data as Token
 	token.expires_at = Date.now() + token.expires_in * 1000
@@ -65,7 +68,7 @@ async function fetchAiCoreDeploymentsAndOrchestration(
 	const url = `${baseUrl}/v2/lm/deployments?$top=10000&$skip=0`
 
 	try {
-		const response = await axios.get(url, { headers })
+		const response = await axios.get(url, { headers, ...getAxiosSettings() })
 		const allDeployments = response.data.resources
 
 		// Filter running deployments
@@ -90,7 +93,7 @@ async function fetchAiCoreDeploymentsAndOrchestration(
 
 		return { deployments, orchestrationAvailable }
 	} catch (error) {
-		console.error("Error fetching deployments:", error)
+		Logger.error("Error fetching deployments:", error)
 		throw new Error("Failed to fetch deployments")
 	}
 }
@@ -139,7 +142,7 @@ export async function getSapAiCoreModels(
 			orchestrationAvailable,
 		})
 	} catch (error) {
-		console.error("Error fetching SAP AI Core models:", error)
+		Logger.error("Error fetching SAP AI Core models:", error)
 		return SapAiCoreModelsResponse.create({
 			deployments: [],
 			orchestrationAvailable: false,

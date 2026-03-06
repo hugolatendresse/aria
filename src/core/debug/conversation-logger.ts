@@ -1,6 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import * as fs from "fs"
 import * as path from "path"
+import { Logger } from "@/shared/services/Logger"
 
 export interface ConversationTurn {
 	timestamp: string
@@ -112,11 +113,14 @@ export class ConversationLogger {
 			.map((block) => {
 				if (block.type === "text") {
 					return block.text
-				} else if (block.type === "image") {
+				}
+				if (block.type === "image") {
 					return `[Image: ${block.source.type}]`
-				} else if (block.type === "tool_use") {
+				}
+				if (block.type === "tool_use") {
 					return `[Tool Use: ${block.name}]`
-				} else if (block.type === "tool_result") {
+				}
+				if (block.type === "tool_result") {
 					return `[Tool Result: ${block.tool_use_id}]`
 				}
 				return ""
@@ -199,9 +203,9 @@ export class ConversationLogger {
 			})
 
 			fs.writeFileSync(filepath, lines.join("\n"), "utf8")
-			console.log(`[CONVERSATION DEBUG] Saved to: ${filepath}`)
+			Logger.log(`[CONVERSATION DEBUG] Saved to: ${filepath}`)
 		} catch (error) {
-			console.error("[CONVERSATION DEBUG] Failed to save:", error)
+			Logger.log(`[CONVERSATION DEBUG] Failed to save: ${error}`)
 		}
 	}
 

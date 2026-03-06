@@ -8,6 +8,7 @@ import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
+import { getModelInfo } from "../utils/AiOutputTelemetry"
 
 export class SearchActuarialDocsToolHandler implements IFullyManagedTool {
 	readonly name = ClineDefaultTool.RAG_SEARCH
@@ -65,10 +66,12 @@ export class SearchActuarialDocsToolHandler implements IFullyManagedTool {
 		)
 
 		// Capture telemetry
+		const { providerId } = getModelInfo(config)
 		telemetryService.captureToolUsage(
 			config.ulid,
 			block.name,
 			config.api.getModel().id,
+			providerId,
 			true, // auto-approved (no user approval needed for searches)
 			!isError,
 			{

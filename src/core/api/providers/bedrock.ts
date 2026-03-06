@@ -1,6 +1,7 @@
-import { Anthropic } from "@anthropic-ai/sdk"
 // Import proper AWS SDK types
-import type { ContentBlock, Message } from "@aws-sdk/client-bedrock-runtime"
+
+import type { Tool as AnthropicTool } from "@anthropic-ai/sdk/resources/index"
+import type { ContentBlock, Message, ToolConfiguration } from "@aws-sdk/client-bedrock-runtime"
 import {
 	BedrockRuntimeClient,
 	ConversationRole,
@@ -9,12 +10,16 @@ import {
 	InvokeModelWithResponseStreamCommand,
 } from "@aws-sdk/client-bedrock-runtime"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
-import { BedrockModelId, bedrockDefaultModelId, bedrockModels, CLAUDE_SONNET_1M_SUFFIX, ModelInfo } from "@shared/api"
-import { calculateApiCostOpenAI } from "@utils/cost"
-import { ApiHandler, CommonApiHandlerOptions } from "../"
+import { type BedrockModelId, bedrockDefaultModelId, bedrockModels, CLAUDE_SONNET_1M_SUFFIX, type ModelInfo } from "@shared/api"
+import { calculateApiCostOpenAI, calculateApiCostQwen } from "@utils/cost"
+import { ExtensionRegistryInfo } from "@/registry"
+import type { ClineStorageMessage } from "@/shared/messages/content"
+import { Logger } from "@/shared/services/Logger"
+import type { ClineTool } from "@/shared/tools"
+import type { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToR1Format } from "../transform/r1-format"
-import { ApiStream } from "../transform/stream"
+import type { ApiStream } from "../transform/stream"
 
 export interface AwsBedrockHandlerOptions extends CommonApiHandlerOptions {
 	apiModelId?: string
@@ -60,13 +65,18 @@ interface ContentBlockStart {
 	start?: {
 		type?: string
 		thinking?: string
+		signature?: string
+		toolUse?: ToolUseStart
 	}
 	contentBlock?: {
 		type?: string
 		thinking?: string
+		signature?: string
 	}
 	type?: string
 	thinking?: string
+	// Redacted thinking block data
+	data?: string
 }
 
 // Define types for stream response deltas
@@ -76,14 +86,28 @@ interface ContentBlockDelta {
 		type?: string
 		thinking?: string
 		text?: string
+		signature?: string
 		reasoningContent?: {
 			text?: string
 		}
+		toolUse?: ToolUseDelta
 	}
 }
 
+// Tool use types returned by Bedrock ConverseStream API.
+// The @aws-sdk/client-bedrock-runtime types don't fully cover these
+// fields in the streaming response, so we define them here.
+interface ToolUseStart {
+	toolUseId: string
+	name: string
+}
+
+interface ToolUseDelta {
+	input: string
+}
+
 // Define types for supported content types
-type SupportedContentType = "text" | "image" | "thinking"
+type SupportedContentType = "text" | "image" | "thinking" | "redacted_thinking" | "document"
 
 interface ContentItem {
 	type: SupportedContentType
@@ -103,13 +127,22 @@ interface CachePointContentBlock {
 
 // Define provider options type based on AWS SDK patterns
 interface ProviderChainOptions {
+	clientConfig?: { userAgentAppId?: string }
 	ignoreCache?: boolean
 	profile?: string
 }
 
-// a special jp inference profile was created for sonnet 4.5
+// a special jp inference profile was created for sonnet 4.6, opus 4.6, sonnet 4.5 & haiku 4.5
 // https://docs.aws.amazon.com/bedrock/latest/userguide/inference-profiles-support.html
-const JP_SUPPORTED_CRIS_MODELS = ["anthropic.claude-sonnet-4-5-20250929-v1:0", "anthropic.claude-sonnet-4-5-20250929-v1:0:1m"]
+const JP_SUPPORTED_CRIS_MODELS = [
+	"anthropic.claude-sonnet-4-6",
+	"anthropic.claude-sonnet-4-6:1m",
+	"anthropic.claude-opus-4-6-v1",
+	"anthropic.claude-opus-4-6-v1:1m",
+	"anthropic.claude-sonnet-4-5-20250929-v1:0",
+	"anthropic.claude-sonnet-4-5-20250929-v1:0:1m",
+	"anthropic.claude-haiku-4-5-20251001-v1:0",
+]
 
 // https://docs.anthropic.com/en/api/claude-on-amazon-bedrock
 export class AwsBedrockHandler implements ApiHandler {
@@ -120,7 +153,7 @@ export class AwsBedrockHandler implements ApiHandler {
 	}
 
 	@withRetry({ maxRetries: 4 })
-	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: ClineStorageMessage[], tools?: ClineTool[]): ApiStream {
 		// cross region inference requires prefixing the model id with the region
 		const rawModelId = await this.getModelId()
 
@@ -140,23 +173,29 @@ export class AwsBedrockHandler implements ApiHandler {
 
 		// Check if this is an Amazon Nova model
 		if (baseModelId.includes("amazon.nova")) {
-			yield* this.createNovaMessage(systemPrompt, messages, modelId, model)
+			yield* this.createNovaMessage(systemPrompt, messages, modelId, model, tools)
 			return
 		}
 
 		if (baseModelId.includes("openai")) {
-			yield* this.createOpenAIMessage(systemPrompt, messages, modelId, model)
+			yield* this.createOpenAIMessage(systemPrompt, messages, modelId, model, tools)
+			return
+		}
+
+		// Check if this is a Qwen model
+		if (baseModelId.includes("qwen")) {
+			yield* this.createQwenMessage(systemPrompt, messages, modelId, model, tools)
 			return
 		}
 
 		// Check if this is a Deepseek model
 		if (baseModelId.includes("deepseek")) {
-			yield* this.createDeepseekMessage(systemPrompt, messages, modelId, model)
+			yield* this.createDeepseekMessage(systemPrompt, messages, modelId, model, tools)
 			return
 		}
 
 		// Default: Use Anthropic Converse API for all Anthropic models
-		yield* this.createAnthropicMessage(systemPrompt, messages, modelId, model, enable1mContextWindow)
+		yield* this.createAnthropicMessage(systemPrompt, messages, modelId, model, enable1mContextWindow, tools)
 	}
 
 	getModel(): { id: string; info: ModelInfo } {
@@ -204,7 +243,12 @@ export class AwsBedrockHandler implements ApiHandler {
 		sessionToken?: string
 	}> {
 		// Configure provider options
-		const providerOptions: ProviderChainOptions = {}
+		const providerOptions: ProviderChainOptions = {
+			clientConfig: {
+				// set the inner sts client userAgentAppId
+				userAgentAppId: `cline#${ExtensionRegistryInfo.version}`,
+			},
+		}
 		const useProfile =
 			(this.options.awsAuthentication === undefined && this.options.awsUseProfile) ||
 			this.options.awsAuthentication === "profile"
@@ -263,7 +307,12 @@ export class AwsBedrockHandler implements ApiHandler {
 				},
 			}
 		}
+
+		// TODO: Add proxy support for AWS SDK
+		// AWS SDK uses a different architecture than fetch-based SDKs.
+		// To add proxy support, we need to provide a custom requestHandler.
 		return new BedrockRuntimeClient({
+			userAgentAppId: `cline#${ExtensionRegistryInfo.version}`,
 			region: this.getRegion(),
 			...auth,
 			...(this.options.awsBedrockEndpoint && { endpoint: this.options.awsBedrockEndpoint }),
@@ -326,13 +375,16 @@ export class AwsBedrockHandler implements ApiHandler {
 	}
 
 	/**
-	 * Creates a message using the Deepseek R1 model through AWS Bedrock
+	 * Creates a message using the Deepseek R1 model through AWS Bedrock.
+	 * DeepSeek R1 uses InvokeModelWithResponseStream (not the Converse API)
+	 * and does not support native tool calling, so tools are intentionally unused.
 	 */
 	private async *createDeepseekMessage(
 		systemPrompt: string,
-		messages: Anthropic.Messages.MessageParam[],
+		messages: ClineStorageMessage[],
 		modelId: string,
 		model: { id: string; info: ModelInfo },
+		_tools?: ClineTool[],
 	): ApiStream {
 		// Get Bedrock client with proper credentials
 		const client = await this.getBedrockClient()
@@ -431,7 +483,7 @@ export class AwsBedrockHandler implements ApiHandler {
 							}
 						}
 					} catch (error) {
-						console.error("Error parsing Deepseek response chunk:", error)
+						Logger.error("Error parsing Deepseek response chunk:", error)
 						// Propagate the error by yielding a text response with error information
 						yield {
 							type: "text",
@@ -468,7 +520,7 @@ export class AwsBedrockHandler implements ApiHandler {
 	 * First uses convertToR1Format to merge consecutive messages with the same role,
 	 * then converts to the string format that DeepSeek R1 expects
 	 */
-	private formatDeepseekR1Prompt(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): string {
+	private formatDeepseekR1Prompt(systemPrompt: string, messages: ClineStorageMessage[]): string {
 		// First use convertToR1Format to merge consecutive messages with the same role
 		const r1Messages = convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
 
@@ -501,7 +553,7 @@ export class AwsBedrockHandler implements ApiHandler {
 	 * Estimates token count based on text length (approximate)
 	 * Note: This is a rough estimation, as the actual token count depends on the tokenizer
 	 */
-	private estimateInputTokens(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): number {
+	private estimateInputTokens(systemPrompt: string, messages: ClineStorageMessage[]): number {
 		// For Deepseek R1, we estimate the token count of the formatted prompt
 		// The formatted prompt includes special tokens and consistent formatting
 		const formattedPrompt = this.formatDeepseekR1Prompt(systemPrompt, messages)
@@ -517,6 +569,42 @@ export class AwsBedrockHandler implements ApiHandler {
 	}
 
 	/**
+	 * Converts Cline's tool definitions (Anthropic format with `input_schema`) to the
+	 * Bedrock Converse API `ToolConfiguration` shape. Returns `undefined` when no tools
+	 * are provided so callers can conditionally spread into the command params.
+	 */
+	private mapClineToolsToBedrockToolConfig(tools?: ClineTool[]): ToolConfiguration | undefined {
+		if (!tools || tools.length === 0) {
+			return undefined
+		}
+
+		const isAnthropicTool = (tool: ClineTool): tool is AnthropicTool => "input_schema" in tool
+
+		const bedrockTools = tools.filter(isAnthropicTool).map((tool) => {
+			return {
+				toolSpec: {
+					name: tool.name,
+					description: tool.description || tool.name || "Tool",
+					inputSchema: {
+						json: tool.input_schema,
+					},
+				},
+			}
+		})
+
+		if (bedrockTools.length === 0) {
+			return undefined
+		}
+
+		const toolConfig: ToolConfiguration = {
+			tools: bedrockTools as unknown as ToolConfiguration["tools"],
+			toolChoice: { auto: {} },
+		}
+
+		return toolConfig
+	}
+
+	/**
 	 * Executes a Converse API stream command and handles the response
 	 * Common implementation for both Anthropic and Nova models
 	 */
@@ -529,10 +617,11 @@ export class AwsBedrockHandler implements ApiHandler {
 				// Buffer content by contentBlockIndex to handle multi-block responses correctly
 				const contentBuffers: Record<number, string> = {}
 				const blockTypes = new Map<number, "reasoning" | "text">()
+				const activeToolCalls: Map<number, { toolUseId: string; name: string }> = new Map()
 
 				for await (const chunk of response.stream) {
 					// Debug logging to see actual response structure
-					// console.log("Bedrock chunk:", JSON.stringify(chunk, null, 2))
+					// Logger.log("Bedrock chunk:", JSON.stringify(chunk, null, 2))
 
 					// Handle thinking response in additionalModelResponseFields (LangChain format)
 					const metadata = chunk.metadata as ExtendedMetadata | undefined
@@ -544,6 +633,7 @@ export class AwsBedrockHandler implements ApiHandler {
 									yield {
 										type: "reasoning",
 										reasoning: reasoningBlock.text,
+										...(reasoningBlock.signature ? { signature: reasoningBlock.signature } : {}),
 									}
 								}
 							}
@@ -578,6 +668,16 @@ export class AwsBedrockHandler implements ApiHandler {
 						const blockStart = chunk.contentBlockStart as ContentBlockStart
 						const blockIndex = chunk.contentBlockStart.contentBlockIndex
 
+						if (blockStart.start?.toolUse) {
+							const toolUse = blockStart.start.toolUse
+							if (toolUse.toolUseId && toolUse.name && blockIndex !== undefined) {
+								activeToolCalls.set(blockIndex, {
+									toolUseId: toolUse.toolUseId,
+									name: toolUse.name,
+								})
+							}
+						}
+
 						// Check for thinking block in various possible formats
 						if (
 							blockStart.start?.type === "thinking" ||
@@ -586,15 +686,31 @@ export class AwsBedrockHandler implements ApiHandler {
 						) {
 							if (blockIndex !== undefined) {
 								blockTypes.set(blockIndex, "reasoning")
+								// Capture signature if provided at block start
+								const signature = blockStart.start?.signature || blockStart.contentBlock?.signature || undefined
 								// Initialize content if provided
 								const initialContent =
 									blockStart.start?.thinking || blockStart.contentBlock?.thinking || blockStart.thinking || ""
-								if (initialContent) {
+								if (initialContent || signature) {
 									yield {
 										type: "reasoning",
-										reasoning: initialContent,
+										reasoning: initialContent || "",
+										...(signature ? { signature } : {}),
 									}
 								}
+							}
+						}
+
+						// Handle redacted thinking blocks
+						if (
+							blockStart.start?.type === "redacted_thinking" ||
+							blockStart.contentBlock?.type === "redacted_thinking" ||
+							blockStart.type === "redacted_thinking"
+						) {
+							yield {
+								type: "reasoning",
+								reasoning: "[Redacted thinking block]",
+								...(blockStart.data ? { redacted_data: blockStart.data } : {}),
 							}
 						}
 					}
@@ -613,8 +729,16 @@ export class AwsBedrockHandler implements ApiHandler {
 							const blockType = blockTypes.get(blockIndex)
 							const delta = chunk.contentBlockDelta.delta as ContentBlockDelta["delta"]
 
+							// Handle signature delta - used to send thinking block signatures
+							if (delta?.type === "signature_delta" && delta?.signature) {
+								yield {
+									type: "reasoning",
+									reasoning: "", // reasoning text already sent via thinking_delta
+									signature: delta.signature,
+								}
+							}
 							// Handle thinking delta (Anthropic SDK format)
-							if (delta?.type === "thinking_delta" || delta?.thinking) {
+							else if (delta?.type === "thinking_delta" || delta?.thinking) {
 								const thinkingContent = delta.thinking || delta.text || ""
 								if (thinkingContent) {
 									yield {
@@ -629,6 +753,22 @@ export class AwsBedrockHandler implements ApiHandler {
 									yield {
 										type: "reasoning",
 										reasoning: reasoningText,
+									}
+								}
+							} else if (delta?.toolUse?.input !== undefined) {
+								const toolCall = activeToolCalls.get(blockIndex)
+								const toolInput = delta.toolUse.input
+								if (toolCall && typeof toolInput === "string") {
+									yield {
+										type: "tool_calls",
+										tool_call: {
+											call_id: toolCall.toolUseId,
+											function: {
+												id: toolCall.toolUseId,
+												name: toolCall.name,
+												arguments: toolInput,
+											},
+										},
 									}
 								}
 							} else if (chunk.contentBlockDelta.delta?.text) {
@@ -660,6 +800,7 @@ export class AwsBedrockHandler implements ApiHandler {
 							// Clean up buffers and tracking for this block
 							delete contentBuffers[blockIndex]
 							blockTypes.delete(blockIndex)
+							activeToolCalls.delete(blockIndex)
 						}
 					}
 
@@ -668,11 +809,7 @@ export class AwsBedrockHandler implements ApiHandler {
 				}
 			}
 		} catch (error) {
-			console.error("Error processing Converse API response:", error)
-			yield {
-				type: "text",
-				text: `[ERROR] Failed to process response: ${error instanceof Error ? error.message : String(error)}`,
-			}
+			throw error
 		}
 	}
 
@@ -691,9 +828,20 @@ export class AwsBedrockHandler implements ApiHandler {
 				text: `[ERROR] Model stream error: ${chunk.modelStreamErrorException.message}`,
 			}
 		} else if (chunk.validationException) {
+			// Check if this is a context window error - if so, throw it
+			// so the retry mechanism can handle truncation
+			const message = chunk.validationException.message || ""
+			const isContextError = /input.*too long|context.*exceed|maximum.*token|input length.*max.*tokens/i.test(message)
+
+			if (isContextError) {
+				// Throw as exception so context management can handle it
+				throw chunk.validationException
+			}
+
+			// Otherwise yield as error text
 			yield {
 				type: "text",
-				text: `[ERROR] Validation error: ${chunk.validationException.message}`,
+				text: `[ERROR] Validation error: ${message}`,
 			}
 		} else if (chunk.throttlingException) {
 			yield {
@@ -730,10 +878,7 @@ export class AwsBedrockHandler implements ApiHandler {
 		// For Anthropic models with thinking enabled, temperature must be 1
 		if (modelType === "anthropic") {
 			const budget_tokens = this.options.thinkingBudgetTokens || 0
-			const baseModelId =
-				(this.options.awsBedrockCustomSelected ? this.options.awsBedrockCustomModelBaseId : this.getModel().id) ||
-				this.getModel().id
-			const reasoningOn = this.shouldEnableReasoning(baseModelId, budget_tokens)
+			const reasoningOn = modelInfo.supportsReasoning && budget_tokens > 0
 
 			return {
 				maxTokens: modelInfo.maxTokens || 8192,
@@ -748,28 +893,16 @@ export class AwsBedrockHandler implements ApiHandler {
 	}
 
 	/**
-	 * Determines if reasoning should be enabled for Claude models
-	 */
-	private shouldEnableReasoning(baseModelId: string, budgetTokens: number): boolean {
-		return (
-			(baseModelId.includes("3-7") ||
-				baseModelId.includes("sonnet-4") ||
-				baseModelId.includes("opus-4") ||
-				baseModelId.includes("sonnet-4-5")) &&
-			budgetTokens !== 0
-		)
-	}
-
-	/**
 	 * Creates a message using Anthropic Claude models through AWS Bedrock Converse API
 	 * Implements support for Anthropic Claude models using the unified Converse API
 	 */
 	private async *createAnthropicMessage(
 		systemPrompt: string,
-		messages: Anthropic.Messages.MessageParam[],
+		messages: ClineStorageMessage[],
 		modelId: string,
 		model: { id: string; info: ModelInfo },
 		enable1mContextWindow: boolean,
+		tools?: ClineTool[],
 	): ApiStream {
 		// Format messages for Anthropic model using unified formatter
 		const formattedMessages = this.formatMessagesForConverseAPI(messages)
@@ -789,17 +922,16 @@ export class AwsBedrockHandler implements ApiHandler {
 
 		// Get thinking configuration
 		const budget_tokens = this.options.thinkingBudgetTokens || 0
-		const baseModelId =
-			(this.options.awsBedrockCustomSelected ? this.options.awsBedrockCustomModelBaseId : this.getModel().id) ||
-			this.getModel().id
-		const reasoningOn = this.shouldEnableReasoning(baseModelId, budget_tokens)
+		const reasoningOn = model.info.supportsReasoning && budget_tokens > 0
 
 		// Prepare request for Anthropic model using Converse API
+		const toolConfig = this.mapClineToolsToBedrockToolConfig(tools)
 		const command = new ConverseStreamCommand({
 			modelId: modelId,
 			messages: messagesWithCache,
 			system: systemMessages,
 			inferenceConfig: this.getInferenceConfig(model.info, "anthropic"),
+			...(toolConfig ? { toolConfig } : {}),
 			additionalModelRequestFields: {
 				// Add thinking configuration as per LangChain documentation
 				...(reasoningOn && {
@@ -822,7 +954,7 @@ export class AwsBedrockHandler implements ApiHandler {
 	 * Formats messages for models using the Converse API specification
 	 * Used by both Anthropic and Nova models to avoid code duplication
 	 */
-	private formatMessagesForConverseAPI(messages: Anthropic.Messages.MessageParam[]): Message[] {
+	private formatMessagesForConverseAPI(messages: ClineStorageMessage[]): Message[] {
 		return messages.map((message) => {
 			// Determine role (user or assistant)
 			const role = message.role === "user" ? ConversationRole.USER : ConversationRole.ASSISTANT
@@ -847,8 +979,55 @@ export class AwsBedrockHandler implements ApiHandler {
 							return this.processImageContent(item)
 						}
 
+						if (item.type === "tool_use") {
+							return {
+								toolUse: {
+									toolUseId: item.id,
+									name: item.name,
+									input: item.input,
+								},
+							}
+						}
+
+						// Skip thinking blocks - Bedrock Converse API handles thinking via
+						// the thinking config parameter, not by replaying blocks in history
+						if (item.type === "thinking" || item.type === "redacted_thinking") {
+							return null
+						}
+
+						if (item.type === "tool_result") {
+							const content = (() => {
+								if (typeof item.content === "string") {
+									return [{ text: item.content }]
+								}
+								if (Array.isArray(item.content)) {
+									return item.content
+										.map((block) => {
+											if (block.type === "text") {
+												return { text: block.text }
+											}
+											if (block.type === "image") {
+												return this.processImageContent(block)
+											}
+											return null
+										})
+										.filter((block): block is ContentBlock => block !== null)
+								}
+
+								return [{ text: JSON.stringify(item.content) }]
+							})()
+
+							return {
+								toolResult: {
+									toolUseId: item.tool_use_id,
+									content,
+									status: item.is_error ? "error" : "success",
+								},
+							}
+						}
+
 						// Log unsupported content types for debugging
-						console.warn(`Unsupported content type: ${(item as ContentItem).type}`)
+						Logger.warn(`Unsupported content type: ${(item as ContentItem).type}`)
 						return null
 					})
 					.filter((item): item is ContentBlock => item !== null)
@@ -906,7 +1085,7 @@ export class AwsBedrockHandler implements ApiHandler {
 				},
 			}
 		} catch (error) {
-			console.error("Failed to process image content:", error)
+			Logger.error("Failed to process image content:", error)
 			// Return a text content indicating the error instead of null
 			// This ensures users are aware of the issue
 			return {
@@ -955,9 +1134,10 @@ export class AwsBedrockHandler implements ApiHandler {
 	 */
 	private async *createNovaMessage(
 		systemPrompt: string,
-		messages: Anthropic.Messages.MessageParam[],
+		messages: ClineStorageMessage[],
 		modelId: string,
 		model: { id: string; info: ModelInfo },
+		tools?: ClineTool[],
 	): ApiStream {
 		// Format messages for Nova model using unified formatter
 		const formattedMessages = this.formatMessagesForConverseAPI(messages)
@@ -978,11 +1158,13 @@ export class AwsBedrockHandler implements ApiHandler {
 		const systemMessages = this.prepareSystemMessages(systemPrompt, enableCaching || false)
 
 		// Prepare request for Nova model
+		const toolConfig = this.mapClineToolsToBedrockToolConfig(tools)
 		const command = new ConverseStreamCommand({
 			modelId: modelId,
 			messages: messagesWithCache,
 			system: systemMessages,
 			inferenceConfig: this.getInferenceConfig(model.info, "nova"),
+			...(toolConfig ? { toolConfig } : {}),
 		})
 
 		// Execute the streaming request using unified handler
@@ -995,9 +1177,10 @@ export class AwsBedrockHandler implements ApiHandler {
 	 */
 	private async *createOpenAIMessage(
 		systemPrompt: string,
-		messages: Anthropic.Messages.MessageParam[],
+		messages: ClineStorageMessage[],
 		modelId: string,
 		model: { id: string; info: ModelInfo },
+		tools?: ClineTool[],
 	): ApiStream {
 		// Get Bedrock client with proper credentials
 		const client = await this.getBedrockClient()
@@ -1009,6 +1192,7 @@ export class AwsBedrockHandler implements ApiHandler {
 		const systemMessages = systemPrompt ? [{ text: systemPrompt }] : undefined
 
 		// Prepare the non-streaming Converse command
+		const toolConfig = this.mapClineToolsToBedrockToolConfig(tools)
 		const command = new ConverseCommand({
 			modelId: modelId,
 			messages: formattedMessages,
@@ -1017,6 +1201,7 @@ export class AwsBedrockHandler implements ApiHandler {
 				maxTokens: model.info.maxTokens || 8192,
 				temperature: 0,
 			},
+			...(toolConfig ? { toolConfig } : {}),
 		})
 
 		try {
@@ -1105,10 +1290,148 @@ export class AwsBedrockHandler implements ApiHandler {
 				}
 			}
 		} catch (error) {
-			console.error("Error with OpenAI model via Converse API:", error)
+			Logger.error("Error with OpenAI model via Converse API:", error)
 
 			// Try to extract more detailed error information
 			let errorMessage = "Failed to process OpenAI model request"
+			if (error instanceof Error) {
+				errorMessage = error.message
+				// Check for specific AWS SDK errors
+				if ("name" in error) {
+					errorMessage = `${error.name}: ${error.message}`
+				}
+			}
+
+			yield {
+				type: "text",
+				text: `[ERROR] ${errorMessage}`,
+			}
+		}
+	}
+
+	/**
+	 * Creates a message using Qwen models through AWS Bedrock
+	 * Uses non-streaming Converse API and simulates streaming for models that don't support it
+	 */
+	private async *createQwenMessage(
+		systemPrompt: string,
+		messages: ClineStorageMessage[],
+		modelId: string,
+		model: { id: string; info: ModelInfo },
+		tools?: ClineTool[],
+	): ApiStream {
+		// Get Bedrock client with proper credentials
+		const client = await this.getBedrockClient()
+
+		// Format messages for Converse API
+		const formattedMessages = this.formatMessagesForConverseAPI(messages)
+
+		// Prepare system message
+		const systemMessages = systemPrompt ? [{ text: systemPrompt }] : undefined
+
+		// Prepare the non-streaming Converse command
+		const toolConfig = this.mapClineToolsToBedrockToolConfig(tools)
+		const command = new ConverseCommand({
+			modelId: modelId,
+			messages: formattedMessages,
+			system: systemMessages,
+			inferenceConfig: {
+				maxTokens: model.info.maxTokens || 8192,
+				temperature: 0,
+			},
+			...(toolConfig ? { toolConfig } : {}),
+		})
+
+		try {
+			// Track token usage
+			const inputTokenEstimate = this.estimateInputTokens(systemPrompt, messages)
+			let outputTokens = 0
+
+			// Execute the non-streaming request
+			const response = await client.send(command)
+
+			// Extract the complete response text and reasoning content
+			let fullText = ""
+			let reasoningText = ""
+
+			if (response.output?.message?.content) {
+				for (const contentBlock of response.output.message.content) {
+					// Check for reasoning content first
+					if ("reasoningContent" in contentBlock && contentBlock.reasoningContent) {
+						// Handle nested reasoning structure
+						const reasoning = contentBlock.reasoningContent
+						if ("reasoningText" in reasoning && reasoning.reasoningText && "text" in reasoning.reasoningText) {
+							reasoningText += reasoning.reasoningText.text
+						}
+					}
+					// Handle regular text content
+					else if ("text" in contentBlock && contentBlock.text) {
+						fullText += contentBlock.text
+					}
+				}
+			}
+
+			// If we have actual usage data from the response, use it
+			if (response.usage) {
+				const actualInputTokens = response.usage.inputTokens || inputTokenEstimate
+				const actualOutputTokens = response.usage.outputTokens || this.estimateTokenCount(fullText + reasoningText)
+				outputTokens = actualOutputTokens
+
+				// Report actual usage after processing content
+				const actualCost = calculateApiCostQwen(model.info, actualInputTokens, actualOutputTokens, 0, 0)
+				yield {
+					type: "usage",
+					inputTokens: actualInputTokens,
+					outputTokens: actualOutputTokens,
+					totalCost: actualCost,
+				}
+			} else {
+				// Estimate output tokens if not provided (includes both regular text and reasoning)
+				outputTokens = this.estimateTokenCount(fullText + reasoningText)
+			}
+
+			// Yield reasoning content first if present
+			if (reasoningText) {
+				const reasoningChunkSize = 1000 // Characters per chunk
+				for (let i = 0; i < reasoningText.length; i += reasoningChunkSize) {
+					const chunk = reasoningText.slice(i, Math.min(i + reasoningChunkSize, reasoningText.length))
+
+					yield {
+						type: "reasoning",
+						reasoning: chunk,
+					}
+				}
+			}
+
+			// Simulate streaming by chunking the response text
+			if (fullText) {
+				const chunkSize = 1000 // Characters per chunk
+
+				for (let i = 0; i < fullText.length; i += chunkSize) {
+					const chunk = fullText.slice(i, Math.min(i + chunkSize, fullText.length))
+
+					yield {
+						type: "text",
+						text: chunk,
+					}
+				}
+			}
+
+			// Report final usage if we didn't have actual usage data earlier
+			if (!response.usage) {
+				const finalCost = calculateApiCostQwen(model.info, inputTokenEstimate, outputTokens, 0, 0)
+				yield {
+					type: "usage",
+					inputTokens: inputTokenEstimate,
+					outputTokens: outputTokens,
+					totalCost: finalCost,
+				}
+			}
+		} catch (error) {
+			Logger.error("Error with Qwen model via Converse API:", error)
+
+			// Try to extract more detailed error information
+			let errorMessage = "Failed to process Qwen model request"
 			if (error instanceof Error) {
 				errorMessage = error.message
 				// Check for specific AWS SDK errors

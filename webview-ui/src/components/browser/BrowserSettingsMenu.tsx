@@ -1,8 +1,8 @@
-import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
+import { EmptyRequest } from "@shared/proto/cline/common"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useEffect, useRef, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { BrowserServiceClient, UiServiceClient } from "../../services/grpc-client"
+import { BrowserServiceClient } from "../../services/grpc-client"
 
 interface ConnectionInfo {
 	isConnected: boolean
@@ -63,17 +63,7 @@ export const BrowserSettingsMenu = () => {
 	}, [showInfoPopover])
 
 	const openBrowserSettings = () => {
-		// First open the settings panel using direct navigation
-		navigateToSettings()
-
-		// After a short delay, send a message to scroll to browser settings
-		setTimeout(async () => {
-			try {
-				await UiServiceClient.scrollToSettings(StringRequest.create({ value: "browser" }))
-			} catch (error) {
-				console.error("Error scrolling to browser settings:", error)
-			}
-		}, 300) // Give the settings panel time to open
+		navigateToSettings("browser")
 	}
 
 	const toggleInfoPopover = () => {
@@ -102,20 +92,19 @@ export const BrowserSettingsMenu = () => {
 	const getIconClass = () => {
 		if (connectionInfo.isRemote) {
 			return "codicon-remote"
-		} else {
-			return connectionInfo.isConnected ? "codicon-vm-running" : "codicon-info"
 		}
+		return connectionInfo.isConnected ? "codicon-vm-running" : "codicon-info"
 	}
 
 	// Determine icon color based on connection state
 	const getIconColor = () => {
 		if (connectionInfo.isRemote) {
 			return connectionInfo.isConnected ? "var(--vscode-charts-blue)" : "var(--vscode-foreground)"
-		} else if (connectionInfo.isConnected) {
-			return "var(--vscode-charts-green)"
-		} else {
-			return "var(--vscode-foreground)"
 		}
+		if (connectionInfo.isConnected) {
+			return "var(--vscode-charts-green)"
+		}
+		return "var(--vscode-foreground)"
 	}
 
 	// Check connection status every second to keep icon in sync using gRPC
@@ -163,7 +152,7 @@ export const BrowserSettingsMenu = () => {
 			{showInfoPopover && (
 				// InfoPopover - Dropdown container with connection details
 				<div
-					className="absolute top-[30px] right-0 z-[100] w-[60dvw] max-w-[250px] rounded p-2.5 shadow-lg"
+					className="absolute top-[30px] right-0 z-100 w-[60dvw] max-w-[250px] rounded p-2.5 shadow-lg"
 					ref={popoverRef}
 					style={{
 						backgroundColor: "var(--vscode-editorWidget-background)",

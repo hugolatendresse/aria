@@ -2,16 +2,17 @@ import path from "node:path"
 import { Controller } from "@core/controller/index"
 import axios from "axios"
 import { readFile } from "fs/promises"
-import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
+import { ClineExtensionContext } from "@/shared/cline"
 import { ShowMessageType } from "@/shared/proto/host/window"
+import { Logger } from "@/shared/services/Logger"
 import { getNonce } from "./getNonce"
 
 export abstract class WebviewProvider {
 	private static instance: WebviewProvider | null = null
 	controller: Controller
 
-	constructor(readonly context: vscode.ExtensionContext) {
+	constructor(readonly context: ClineExtensionContext) {
 		WebviewProvider.instance = this
 
 		// Create controller with cache service
@@ -110,7 +111,7 @@ export abstract class WebviewProvider {
 				<link rel="stylesheet" type="text/css" href="${stylesUrl}">
 				<link href="${codiconsUrl}" rel="stylesheet" />
 				<meta http-equiv="Content-Security-Policy" content="default-src 'none';
-					connect-src https://*.posthog.com https://*.cline.bot https://*.firebaseauth.com https://*.firebaseio.com https://*.googleapis.com https://*.firebase.com; 
+					connect-src https://*.posthog.com https://*.cline.bot; 
 					font-src ${this.getCspSource()} data:; 
 					style-src ${this.getCspSource()} 'unsafe-inline'; 
 					img-src ${this.getCspSource()} https: data:; 
@@ -139,13 +140,13 @@ export abstract class WebviewProvider {
 
 		return readFile(portFilePath, "utf8")
 			.then((portFile) => {
-				const port = parseInt(portFile.trim()) || DEFAULT_PORT
-				console.info(`[getDevServerPort] Using dev server port ${port} from .vite-port file`)
+				const port = Number.parseInt(portFile.trim()) || DEFAULT_PORT
+				Logger.info(`[getDevServerPort] Using dev server port ${port} from .vite-port file`)
 
 				return port
 			})
 			.catch((_err) => {
-				console.warn(
+				Logger.warn(
 					`[getDevServerPort] Port file not found or couldn't be read at ${portFilePath}, using default port: ${DEFAULT_PORT}`,
 				)
 				return DEFAULT_PORT

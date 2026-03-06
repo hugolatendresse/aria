@@ -1,6 +1,9 @@
-import { Anthropic } from "@anthropic-ai/sdk"
 import { ApiConfiguration, ModelInfo, QwenApiRegions } from "@shared/api"
 import { Mode } from "@shared/storage/types"
+import { ClineStorageMessage } from "@/shared/messages/content"
+import { Logger } from "@/shared/services/Logger"
+import { ClineTool } from "@/shared/tools"
+import { AIhubmixHandler } from "./providers/aihubmix"
 import { AnthropicHandler } from "./providers/anthropic"
 import { AskSageHandler } from "./providers/asksage"
 import { BasetenHandler } from "./providers/baseten"
@@ -14,16 +17,20 @@ import { DoubaoHandler } from "./providers/doubao"
 import { FireworksHandler } from "./providers/fireworks"
 import { GeminiHandler } from "./providers/gemini"
 import { GroqHandler } from "./providers/groq"
+import { HicapHandler } from "./providers/hicap"
 import { HuaweiCloudMaaSHandler } from "./providers/huawei-cloud-maas"
 import { HuggingFaceHandler } from "./providers/huggingface"
 import { LiteLlmHandler } from "./providers/litellm"
 import { LmStudioHandler } from "./providers/lmstudio"
+import { MinimaxHandler } from "./providers/minimax"
 import { MistralHandler } from "./providers/mistral"
 import { MoonshotHandler } from "./providers/moonshot"
 import { NebiusHandler } from "./providers/nebius"
+import { NousResearchHandler } from "./providers/nousresearch"
 import { OcaHandler } from "./providers/oca"
 import { OllamaHandler } from "./providers/ollama"
 import { OpenAiHandler } from "./providers/openai"
+import { OpenAiCodexHandler } from "./providers/openai-codex"
 import { OpenAiNativeHandler } from "./providers/openai-native"
 import { OpenRouterHandler } from "./providers/openrouter"
 import { QwenHandler } from "./providers/qwen"
@@ -42,11 +49,11 @@ import { ApiStream, ApiStreamUsageChunk } from "./transform/stream"
 export type CommonApiHandlerOptions = {
 	onRetryAttempt?: ApiConfiguration["onRetryAttempt"]
 }
-
 export interface ApiHandler {
-	createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream
+	createMessage(systemPrompt: string, messages: ClineStorageMessage[], tools?: ClineTool[], useResponseApi?: boolean): ApiStream
 	getModel(): ApiHandlerModel
 	getApiStreamUsage?(): Promise<ApiStreamUsageChunk | undefined>
+	abort?(): void
 }
 
 export interface ApiHandlerModel {
@@ -57,8 +64,8 @@ export interface ApiHandlerModel {
 export interface ApiProviderInfo {
 	providerId: string
 	model: ApiHandlerModel
+	mode: Mode
 	customPrompt?: string // "compact"
-	autoCondenseThreshold?: number // 0-1 range
 }
 
 export interface SingleCompletionHandler {
@@ -124,6 +131,7 @@ function createHandlerForProvider(
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 				geminiApiKey: options.geminiApiKey,
 				geminiBaseUrl: options.geminiBaseUrl,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				ulid: options.ulid,
 			})
 		case "openai":
@@ -132,6 +140,7 @@ function createHandlerForProvider(
 				openAiApiKey: options.openAiApiKey,
 				openAiBaseUrl: options.openAiBaseUrl,
 				azureApiVersion: options.azureApiVersion,
+				azureIdentity: options.azureIdentity,
 				openAiHeaders: options.openAiHeaders,
 				openAiModelId: mode === "plan" ? options.planModeOpenAiModelId : options.actModeOpenAiModelId,
 				openAiModelInfo: mode === "plan" ? options.planModeOpenAiModelInfo : options.actModeOpenAiModelInfo,
@@ -162,6 +171,7 @@ function createHandlerForProvider(
 				geminiBaseUrl: options.geminiBaseUrl,
 				thinkingBudgetTokens:
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
 				ulid: options.ulid,
 			})
@@ -169,6 +179,14 @@ function createHandlerForProvider(
 			return new OpenAiNativeHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				openAiNativeApiKey: options.openAiNativeApiKey,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
+				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
+				thinkingBudgetTokens:
+					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
+			})
+		case "openai-codex":
+			return new OpenAiCodexHandler({
+				onRetryAttempt: options.onRetryAttempt,
 				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
 			})
@@ -235,18 +253,26 @@ function createHandlerForProvider(
 				vsCodeLmModelSelector:
 					mode === "plan" ? options.planModeVsCodeLmModelSelector : options.actModeVsCodeLmModelSelector,
 			})
-		case "cline":
+		case "cline": {
+			const clineModelId =
+				(mode === "plan" ? options.planModeClineModelId : options.actModeClineModelId) ||
+				(mode === "plan" ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId)
+			const clineModelInfo =
+				(mode === "plan" ? options.planModeClineModelInfo : options.actModeClineModelInfo) ||
+				(mode === "plan" ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo)
 			return new ClineHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				clineAccountId: options.clineAccountId,
+				clineApiKey: options.clineApiKey,
 				ulid: options.ulid,
 				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				thinkingBudgetTokens:
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 				openRouterProviderSorting: options.openRouterProviderSorting,
-				openRouterModelId: mode === "plan" ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId,
-				openRouterModelInfo: mode === "plan" ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo,
+				openRouterModelId: clineModelId,
+				openRouterModelInfo: clineModelInfo,
 			})
+		}
 		case "litellm":
 			return new LiteLlmHandler({
 				onRetryAttempt: options.onRetryAttempt,
@@ -363,10 +389,13 @@ function createHandlerForProvider(
 			return new VercelAIGatewayHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				vercelAiGatewayApiKey: options.vercelAiGatewayApiKey,
-				vercelAiGatewayModelId:
+				openRouterModelId:
 					mode === "plan" ? options.planModeVercelAiGatewayModelId : options.actModeVercelAiGatewayModelId,
-				vercelAiGatewayModelInfo:
+				openRouterModelInfo:
 					mode === "plan" ? options.planModeVercelAiGatewayModelInfo : options.actModeVercelAiGatewayModelInfo,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
+				thinkingBudgetTokens:
+					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 			})
 		case "zai":
 			return new ZAiHandler({
@@ -381,6 +410,7 @@ function createHandlerForProvider(
 				ocaBaseUrl: options.ocaBaseUrl,
 				ocaModelId: mode === "plan" ? options.planModeOcaModelId : options.actModeOcaModelId,
 				ocaModelInfo: mode === "plan" ? options.planModeOcaModelInfo : options.actModeOcaModelInfo,
+				ocaReasoningEffort: mode === "plan" ? options.planModeOcaReasoningEffort : options.actModeOcaReasoningEffort,
 				thinkingBudgetTokens:
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 				ocaUsePromptCache:
@@ -388,6 +418,37 @@ function createHandlerForProvider(
 						? options.planModeOcaModelInfo?.supportsPromptCache
 						: options.actModeOcaModelInfo?.supportsPromptCache,
 				taskId: options.ulid,
+			})
+		case "aihubmix":
+			return new AIhubmixHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				apiKey: options.aihubmixApiKey,
+				baseURL: options.aihubmixBaseUrl,
+				appCode: options.aihubmixAppCode,
+				modelId: mode === "plan" ? (options as any).planModeAihubmixModelId : (options as any).actModeAihubmixModelId,
+				modelInfo:
+					mode === "plan" ? (options as any).planModeAihubmixModelInfo : (options as any).actModeAihubmixModelInfo,
+			})
+		case "minimax":
+			return new MinimaxHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				minimaxApiKey: options.minimaxApiKey,
+				minimaxApiLine: options.minimaxApiLine,
+				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
+				thinkingBudgetTokens:
+					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
+			})
+		case "hicap":
+			return new HicapHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				hicapApiKey: options.hicapApiKey,
+				hicapModelId: mode === "plan" ? options.planModeHicapModelId : options.actModeHicapModelId,
+			})
+		case "nousResearch":
+			return new NousResearchHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				nousResearchApiKey: options.nousResearchApiKey,
+				apiModelId: mode === "plan" ? options.planModeNousResearchModelId : options.actModeNousResearchModelId,
 			})
 		default:
 			return new AnthropicHandler({
@@ -426,7 +487,7 @@ export function buildApiHandler(configuration: ApiConfiguration, mode: Mode): Ap
 			}
 		}
 	} catch (error) {
-		console.error("buildApiHandler error:", error)
+		Logger.error("buildApiHandler error:", error)
 	}
 
 	return createHandlerForProvider(apiProvider, options, mode)

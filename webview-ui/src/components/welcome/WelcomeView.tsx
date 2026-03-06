@@ -11,13 +11,17 @@ const WelcomeView = memo(() => {
 	const { apiConfiguration, mode } = useExtensionState()
 	const [apiErrorMessage, setApiErrorMessage] = useState<string | undefined>(undefined)
 	const [showApiOptions, setShowApiOptions] = useState(false)
+	const [isLoading, setIsLoading] = useState(false)
 
 	const disableLetsGoButton = apiErrorMessage != null
 
 	const handleLogin = () => {
-		AccountServiceClient.accountLoginClicked(EmptyRequest.create()).catch((err) =>
-			console.error("Failed to get login URL:", err),
-		)
+		setIsLoading(true)
+		AccountServiceClient.accountLoginClicked(EmptyRequest.create())
+			.catch((err) => console.error("Failed to get login URL:", err))
+			.finally(() => {
+				setIsLoading(false)
+			})
 	}
 
 	const handleSubmit = async () => {
@@ -34,28 +38,33 @@ const WelcomeView = memo(() => {
 
 	return (
 		<div className="fixed inset-0 p-0 flex flex-col">
-			<div className="h-full px-5 overflow-auto">
-				<h2>Hi, I'm Aria</h2>
+			<div className="h-full px-5 overflow-auto flex flex-col gap-2.5">
+				<h2 className="text-lg font-semibold">Hi, I'm Cline</h2>
 				<div className="flex justify-center my-5">
 					<ClineLogoWhite className="size-16" />
 				</div>
 				<p>
 					I can do all kinds of tasks thanks to breakthroughs in{" "}
 					<VSCodeLink className="inline" href="https://www.anthropic.com/claude/sonnet">
-						Claude 4 Sonnet's
+						Claude 4.6 Sonnet's
 					</VSCodeLink>
 					agentic coding capabilities and access to tools that let me create & edit files, explore complex projects, use
 					a browser, and execute terminal commands <i>(with your permission, of course)</i>. I can even use MCP to
 					create new tools and extend my own capabilities.
 				</p>
 
-				<p className="text-[var(--vscode-descriptionForeground)]">
+				<p className="text-(--vscode-descriptionForeground)">
 					Sign up for an account to get started for free, or use an API key that provides access to models like Claude
 					Sonnet.
 				</p>
 
-				<VSCodeButton appearance="primary" className="w-full mt-1" onClick={handleLogin}>
+				<VSCodeButton appearance="primary" className="w-full mt-1" disabled={isLoading} onClick={handleLogin}>
 					Get Started for Free
+					{isLoading && (
+						<span className="ml-1 animate-spin">
+							<span className="codicon codicon-refresh" />
+						</span>
+					)}
 				</VSCodeButton>
 
 				{!showApiOptions && (

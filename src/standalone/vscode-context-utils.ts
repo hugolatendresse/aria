@@ -107,13 +107,14 @@ export class JsonKeyValueStore<T> {
 		}
 	}
 	private save(): void {
-		fs.writeFileSync(this.filePath, JSON.stringify(Object.fromEntries(this.data), null, 2))
+		// Use mode 0o600 to restrict file permissions to owner read/write only (fixes #7778)
+		fs.writeFileSync(this.filePath, JSON.stringify(Object.fromEntries(this.data), null, 2), { mode: 0o600 })
 	}
 }
 
 /** This is not used in cline, none of the methods are implemented. */
 export class EnvironmentVariableCollection implements EnvironmentVariableCollection {
-	persistent: boolean = false
+	persistent = false
 	description: string | undefined = undefined
 	replace(_variable: string, _value: string, _options?: EnvironmentVariableMutatorOptions): void {
 		throw new Error("Method not implemented.")

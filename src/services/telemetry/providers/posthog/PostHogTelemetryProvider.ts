@@ -1,8 +1,11 @@
 import { PostHog } from "posthog-node"
-import * as vscode from "vscode"
+import { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
+import { getErrorLevelFromString } from "@/services/error"
 import { getDistinctId, setDistinctId } from "@/services/logging/distinctId"
+import { fetch } from "@/shared/net"
 import { Setting } from "@/shared/proto/index.host"
+import { Logger } from "@/shared/services/Logger"
 import { posthogConfig } from "../../../../shared/services/config/posthog-config"
 import type { ClineAccountUserInfo } from "../../../auth/AuthService"
 import type { ITelemetryProvider, TelemetryProperties, TelemetrySettings } from "../ITelemetryProvider"
@@ -14,6 +17,9 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 	private client: PostHog
 	private telemetrySettings: TelemetrySettings
 	private isSharedClient: boolean
+	private optInCache: boolean
+
+	readonly name = "PostHogTelemetryProvider"
 
 	constructor(sharedClient?: PostHog) {
 		this.isSharedClient = !!sharedClient
@@ -28,12 +34,13 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 			}
 			this.client = new PostHog(posthogConfig.apiKey, {
 				host: posthogConfig.host,
+				fetch: (url, options) => fetch(url, options),
 			})
 		}
 
 		// Initialize telemetry settings
+		this.optInCache = true
 		this.telemetrySettings = {
-			extensionEnabled: true,
 			hostEnabled: true,
 			level: "all",
 		}
@@ -43,7 +50,7 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 		HostProvider.env.subscribeToTelemetrySettings(
 			{},
 			{
-				onResponse: (event) => {
+				onResponse: (event: { isEnabled: Setting }) => {
 					const hostEnabled = event.isEnabled === Setting.ENABLED || event.isEnabled === Setting.UNSUPPORTED
 					this.telemetrySettings.hostEnabled = hostEnabled
 				},
@@ -58,6 +65,10 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 
 		this.telemetrySettings.level = await this.getTelemetryLevel()
 		return this
+	}
+
+	async forceFlush() {
+		return this.client.flush()
 	}
 
 	public log(event: string, properties?: TelemetryProperties): void {
@@ -98,7 +109,6 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 				distinctId: userInfo.id,
 				properties: {
 					uuid: userInfo.id,
-					email: userInfo.email,
 					name: userInfo.displayName,
 					...properties,
 					alias: distinctId,
@@ -109,19 +119,22 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 		}
 	}
 
-	// Set extension-specific telemetry setting - opt-in/opt-out via UI
-	public setOptIn(optIn: boolean): void {
-		if (optIn && !this.telemetrySettings.extensionEnabled) {
-			this.client.optIn()
-		}
-		if (!optIn && this.telemetrySettings.extensionEnabled) {
-			this.client.optOut()
-		}
-		this.telemetrySettings.extensionEnabled = optIn
-	}
-
 	public isEnabled(): boolean {
-		return this.telemetrySettings.extensionEnabled && this.telemetrySettings.hostEnabled
+		const isOptedIn = StateManager.get().getGlobalSettingsKey("telemetrySetting") !== "disabled"
+		const wasOptedIn = this.optInCache
+		try {
+			if (isOptedIn && !wasOptedIn) {
+				this.client.optIn()
+			}
+			if (!isOptedIn && wasOptedIn) {
+				this.client.optOut()
+			}
+		} catch (err) {
+			Logger.error("Failed to update the PostHog telemetry state", err)
+		}
+		this.optInCache = isOptedIn
+
+		return isOptedIn && this.telemetrySettings.hostEnabled
 	}
 
 	public getSettings(): TelemetrySettings {
@@ -129,14 +142,63 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 	}
 
 	/**
-	 * Metrics are not supported in PostHog provider. These are intentional no-ops.
+	 * Record a counter metric by converting to equivalent PostHog event
+	 * This maintains backward compatibility with existing dashboards
 	 */
-	public incrementCounter(name: string, value: number = 1, attributes?: TelemetryProperties): void {
-		// no-op
+	public recordCounter(
+		name: string,
+		value: number,
+		attributes?: TelemetryProperties,
+		_description?: string,
+		required = false,
+	): void {
+		if (!this.isEnabled() && !required) return
+
+		// Convert metric to event format for PostHog
+		// Most counters don't need individual events - they're aggregated in OpenTelemetry
+		// Only log significant counter events that have dashboard equivalents
+		if (name === "cline.tokens.input.total" || name === "cline.tokens.output.total") {
+			// These will be batched and emitted as a single "task.tokens" event
+			// Implementation will be added when we update captureTokenUsage
+		}
 	}
 
-	public recordHistogram(name: string, value: number, attributes?: TelemetryProperties): void {
-		// no-op
+	/**
+	 * Record a histogram metric by converting to equivalent PostHog event
+	 * Histograms track distributions, but PostHog events capture individual values
+	 */
+	public recordHistogram(
+		_name: string,
+		_value: number,
+		_attributes?: TelemetryProperties,
+		_description?: string,
+		_required = false,
+	): void {
+		// Histograms are for distribution analysis in OpenTelemetry
+		// PostHog gets the raw values through existing event capture methods
+		// No action needed here - events already capture these values
+	}
+
+	/**
+	 * Record a gauge metric by converting to equivalent PostHog event
+	 * Gauges track current state, which we can log as state change events
+	 */
+	public recordGauge(
+		name: string,
+		value: number | null,
+		attributes?: TelemetryProperties,
+		_description?: string,
+		required = false,
+	): void {
+		if ((!this.isEnabled() && !required) || value === null) return
+
+		// Convert gauge updates to state change events
+		if (name === "cline.workspace.active_roots") {
+			this.log("workspace.roots_changed", {
+				count: value,
+				...attributes,
+			})
+		}
 	}
 
 	public async dispose(): Promise<void> {
@@ -145,7 +207,7 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 			try {
 				await this.client.shutdown()
 			} catch (error) {
-				console.error("Error shutting down PostHog client:", error)
+				Logger.error("Error shutting down PostHog client:", error)
 			}
 		}
 	}
@@ -158,7 +220,6 @@ export class PostHogTelemetryProvider implements ITelemetryProvider {
 		if (hostSettings.isEnabled === Setting.DISABLED) {
 			return "off"
 		}
-		const config = vscode.workspace.getConfiguration("telemetry")
-		return config?.get<TelemetrySettings["level"]>("telemetryLevel") || "all"
+		return getErrorLevelFromString(hostSettings.errorLevel)
 	}
 }

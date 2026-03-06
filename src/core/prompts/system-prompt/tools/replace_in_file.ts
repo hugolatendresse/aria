@@ -1,27 +1,19 @@
 import { ModelFamily } from "@/shared/prompts"
 import { ClineDefaultTool } from "@/shared/tools"
 import type { ClineToolSpec } from "../spec"
-import { TASK_PROGRESS_PARAMETER } from "../types"
+import { SystemPromptContext, TASK_PROGRESS_PARAMETER } from "../types"
 
 const id = ClineDefaultTool.FILE_EDIT
 
-const generic: ClineToolSpec = {
-	variant: ModelFamily.GENERIC,
-	id,
-	name: "replace_in_file",
-	description:
-		"Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.",
-	parameters: [
-		{
-			name: "path",
-			required: true,
-			instruction: `The path of the file to modify (relative to the current working directory {{CWD}})`,
-			usage: "File path here",
-		},
-		{
-			name: "diff",
-			required: true,
-			instruction: `One or more SEARCH/REPLACE blocks following this exact format:
+const getOpenOrVisibleTabPaths = (context: SystemPromptContext) => {
+	return [...(context.editorTabs?.open ?? []), ...(context.editorTabs?.visible ?? [])]
+}
+
+const shouldIncludeNotebookInstructions = (context: SystemPromptContext) => {
+	return getOpenOrVisibleTabPaths(context).some((p) => p.endsWith(".ipynb"))
+}
+
+const BASE_DIFF_INSTRUCTIONS = `One or more SEARCH/REPLACE blocks following this exact format:
   \`\`\`
   ------- SEARCH
   [exact content to find]
@@ -44,15 +36,77 @@ const generic: ClineToolSpec = {
      * Each line must be complete. Never truncate lines mid-way through as this can cause matching failures.
   4. Special operations:
      * To move code: Use two SEARCH/REPLACE blocks (one to delete from original + one to insert at new location)
-     * To delete code: Use empty REPLACE section`,
+     * To delete code: Use empty REPLACE section`
+
+const NOTEBOOK_INSTRUCTIONS = `
+  5. For Jupyter Notebook (.ipynb) files:
+     * Match the exact JSON structure including quotes, commas, and \\n characters
+     * Each line in "source" array (except last) must end with "\\n"
+     * Each source line is a separate JSON string in the array
+     * Example SEARCH block for notebook:
+       ------- SEARCH
+         "source": [
+           "x = 10\\n",
+           "print(x)"
+         ]
+       =======
+         "source": [
+           "x = 100\\n",
+           "print(x)"
+         ]
+       +++++++ REPLACE`
+
+const diffInstruction = (context: SystemPromptContext) => {
+	return shouldIncludeNotebookInstructions(context) ? BASE_DIFF_INSTRUCTIONS + NOTEBOOK_INSTRUCTIONS : BASE_DIFF_INSTRUCTIONS
+}
+
+const generic: ClineToolSpec = {
+	variant: ModelFamily.GENERIC,
+	id,
+	name: "replace_in_file",
+	description:
+		"Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.",
+	parameters: [
+		{
+			name: "path",
+			required: true,
+			instruction: `The path of the file to modify (relative to the current working directory {{CWD}})`,
+			usage: "File path here",
+		},
+		{
+			name: "diff",
+			required: true,
+			instruction: diffInstruction,
 			usage: "Search and replace blocks here",
 		},
 		TASK_PROGRESS_PARAMETER,
 	],
 }
 
-const nextGen = { ...generic, variant: ModelFamily.NEXT_GEN }
-const gpt = { ...generic, variant: ModelFamily.GPT }
-const gemini = { ...generic, variant: ModelFamily.GEMINI }
+const NATIVE_NEXT_GEN: ClineToolSpec = {
+	variant: ModelFamily.NATIVE_NEXT_GEN,
+	id,
+	name: "replace_in_file",
+	description:
+		"[IMPORTANT: Always output the absolutePath first] Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.",
+	parameters: [
+		{
+			name: "absolutePath",
+			required: true,
+			instruction: "The absolute path to the file to write to.",
+		},
+		{
+			name: "diff",
+			required: true,
+			instruction: diffInstruction,
+		},
+		TASK_PROGRESS_PARAMETER,
+	],
+}
 
-export const replace_in_file_variants = [generic, nextGen, gpt, gemini]
+const NATIVE_GPT_5: ClineToolSpec = {
+	...NATIVE_NEXT_GEN,
+	variant: ModelFamily.NATIVE_GPT_5,
+}
+
+export const replace_in_file_variants = [generic, NATIVE_NEXT_GEN, NATIVE_GPT_5]

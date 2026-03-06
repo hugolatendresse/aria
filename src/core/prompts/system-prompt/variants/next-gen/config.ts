@@ -1,4 +1,6 @@
+import { isGPT5ModelFamily, isLocalModel, isNextGenModelFamily, isNextGenModelProvider } from "@utils/model-utils"
 import { ModelFamily } from "@/shared/prompts"
+import { Logger } from "@/shared/services/Logger"
 import { ClineDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
@@ -15,15 +17,29 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		production: 1,
 		advanced: 1,
 	})
+	.matcher((context) => {
+		// Match next-gen models
+		const providerInfo = context.providerInfo
+		if (isNextGenModelFamily(providerInfo.model.id) && !context.enableNativeToolCalls) {
+			return true
+		}
+		const modelId = providerInfo.model.id
+		return (
+			!(providerInfo.customPrompt === "compact" && isLocalModel(providerInfo)) &&
+			!isNextGenModelProvider(providerInfo) &&
+			isNextGenModelFamily(modelId) &&
+			!(isGPT5ModelFamily(modelId) && !modelId.includes("chat"))
+		)
+	})
 	.template(baseTemplate)
 	.components(
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TODO,
 		// SystemPromptSection.MCP,  // ← REMOVED FOR CHAINLADDER TESTING
+		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.ACT_VS_PLAN,
-		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.FEEDBACK,
 		SystemPromptSection.RULES,
@@ -31,6 +47,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		SystemPromptSection.OBJECTIVE,
 		SystemPromptSection.ACTUARIAL_RAG,
 		SystemPromptSection.USER_INSTRUCTIONS,
+		SystemPromptSection.SKILLS,
 	)
 	.tools(
 		ClineDefaultTool.BASH,
@@ -45,12 +62,15 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		ClineDefaultTool.WEB_FETCH,
 		// ClineDefaultTool.MCP_USE,  // ← REMOVED FOR CHAINLADDER TESTING
 		// ClineDefaultTool.MCP_ACCESS,  // ← REMOVED FOR CHAINLADDER TESTING
+		ClineDefaultTool.WEB_SEARCH,
 		ClineDefaultTool.ASK,
 		ClineDefaultTool.ATTEMPT,
-		ClineDefaultTool.NEW_TASK,
 		ClineDefaultTool.PLAN_MODE,
 		// ClineDefaultTool.MCP_DOCS,  // ← REMOVED FOR CHAINLADDER TESTING
 		ClineDefaultTool.TODO,
+		ClineDefaultTool.GENERATE_EXPLANATION,
+		ClineDefaultTool.USE_SKILL,
+		ClineDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({
 		MODEL_FAMILY: ModelFamily.NEXT_GEN,
@@ -64,14 +84,14 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 	.build()
 
 // Compile-time validation
-const validationResult = validateVariant({ ...config, id: "next-gen" }, { strict: true })
+const validationResult = validateVariant({ ...config, id: ModelFamily.NEXT_GEN }, { strict: true })
 if (!validationResult.isValid) {
-	console.error("Next-gen variant configuration validation failed:", validationResult.errors)
+	Logger.error("Next-gen variant configuration validation failed:", validationResult.errors)
 	throw new Error(`Invalid next-gen variant configuration: ${validationResult.errors.join(", ")}`)
 }
 
 if (validationResult.warnings.length > 0) {
-	console.warn("Next-gen variant configuration warnings:", validationResult.warnings)
+	Logger.warn("Next-gen variant configuration warnings:", validationResult.warnings)
 }
 
 // Export type information for better IDE support

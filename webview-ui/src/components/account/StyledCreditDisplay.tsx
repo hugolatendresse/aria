@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { formatCreditsBalance } from "@/utils/format"
 
 // Custom hook for animated credit display with styled decimals
-const useAnimatedCredits = (targetValue: number, duration: number = 660) => {
+const useAnimatedCredits = (targetValue: number, duration = 660) => {
 	const [currentValue, setCurrentValue] = useState(0)
 	const animationRef = useRef<number>()
 	const startTimeRef = useRef<number>()
@@ -52,9 +52,9 @@ export const StyledCreditDisplay = ({ balance }: { balance: number }) => {
 	const lastTwoDecimals = decimalPart.slice(2)
 
 	return (
-		<span className="font-azeret-mono font-light tabular-nums">
+		<span className="font-azeret-mono font-light tabular-nums text-2xl">
 			{wholePart}.{firstTwoDecimals}
-			<span className="text-[var(--vscode-descriptionForeground)]">{lastTwoDecimals}</span>
+			<span className="text-description text-2xl">{lastTwoDecimals}</span>
 		</span>
 	)
 }

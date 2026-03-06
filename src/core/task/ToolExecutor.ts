@@ -1,19 +1,21 @@
 import { ApiHandler } from "@core/api"
 import { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
+import { getHookModelContext } from "@core/hooks/hook-model-context"
+import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { ClineIgnoreController } from "@core/ignore/ClineIgnoreController"
+import { CommandPermissionController } from "@core/permissions"
 import { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
+import type { CommandExecutionOptions } from "@integrations/terminal"
 import { BrowserSession } from "@services/browser/BrowserSession"
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
-import { featureFlagsService } from "@services/feature-flags"
 import { McpHub } from "@services/mcp/McpHub"
 import { ClineAsk, ClineSay } from "@shared/ExtensionMessage"
-import { ClineDefaultTool } from "@shared/tools"
+import { ClineContent } from "@shared/messages/content"
+import { ClineDefaultTool, toolUseNames } from "@shared/tools"
 import { ClineAskResponse } from "@shared/WebviewMessage"
-import * as vscode from "vscode"
-import { modelDoesntSupportWebp } from "@/utils/model-utils"
+import { isParallelToolCallingEnabled, modelDoesntSupportWebp } from "@/utils/model-utils"
 import { ToolUse } from "../assistant-message"
 import { ContextManager } from "../context/context-management/ContextManager"
-import { HookFactory } from "../hooks/hook-factory"
 import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
@@ -47,6 +49,15 @@ import { createUIHelpers } from "./tools/types/UIHelpers"
 import { ToolDisplayUtils } from "./tools/utils/ToolDisplayUtils"
 import { ToolResultUtils } from "./tools/utils/ToolResultUtils"
 
+export function canonicalizeAttemptCompletionParams(block: ToolUse): boolean {
+	if (block.name === ClineDefaultTool.ATTEMPT && !block.params?.result && typeof block.params?.response === "string") {
+		block.params.result = block.params.response
+		return true
+	}
+
+	return false
+}
+
 export class ToolExecutor {
 	private autoApprover: AutoApprove
 	private coordinator: ToolExecutorCoordinator
@@ -65,7 +76,6 @@ export class ToolExecutor {
 
 	constructor(
 		// Core Services & Managers
-		private context: vscode.ExtensionContext,
 		private taskState: TaskState,
 		private messageStateHandler: MessageStateHandler,
 		private api: ApiHandler,
@@ -75,6 +85,7 @@ export class ToolExecutor {
 		private mcpHub: McpHub,
 		private fileContextTracker: FileContextTracker,
 		private clineIgnoreController: ClineIgnoreController,
+		private commandPermissionController: CommandPermissionController,
 		private contextManager: ContextManager,
 		private stateManager: StateManager,
 
@@ -83,6 +94,7 @@ export class ToolExecutor {
 		private cwd: string,
 		private taskId: string,
 		private ulid: string,
+		private vscodeTerminalExecutionMode: "vscodeTerminal" | "backgroundExec",
 
 		// Workspace Management
 		private workspaceManager: WorkspaceRootManager | undefined,
@@ -109,10 +121,25 @@ export class ToolExecutor {
 		private saveCheckpoint: (isAttemptCompletionMessage?: boolean, completionMessageTs?: number) => Promise<void>,
 		private sayAndCreateMissingParamError: (toolName: ClineDefaultTool, paramName: string, relPath?: string) => Promise<any>,
 		private removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: ClineAsk | ClineSay) => Promise<void>,
-		private executeCommandTool: (command: string, timeoutSeconds: number | undefined) => Promise<[boolean, any]>,
+		private executeCommandTool: (
+			command: string,
+			timeoutSeconds: number | undefined,
+			options?: CommandExecutionOptions,
+		) => Promise<[boolean, any]>,
+		private cancelRunningCommandTool: () => Promise<boolean>,
 		private doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>,
 		private updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>,
 		private switchToActMode: () => Promise<boolean>,
+		private cancelTask: () => Promise<void>,
+
+		// Atomic hook state helpers from Task
+		private setActiveHookExecution: (hookExecution: NonNullable<typeof taskState.activeHookExecution>) => Promise<void>,
+		private clearActiveHookExecution: () => Promise<void>,
+		private getActiveHookExecution: () => Promise<typeof taskState.activeHookExecution>,
+		private runUserPromptSubmitHook: (
+			userContent: ClineContent[],
+			context: "initial_task" | "resume" | "feedback",
+		) => Promise<{ cancel?: boolean; wasCancelled?: boolean; contextModification?: string; errorMessage?: string }>,
 	) {
 		this.autoApprover = new AutoApprove(this.stateManager)
 
@@ -127,10 +154,13 @@ export class ToolExecutor {
 		const config: TaskConfig = {
 			taskId: this.taskId,
 			ulid: this.ulid,
-			context: this.context,
 			mode: this.stateManager.getGlobalSettingsKey("mode"),
 			strictPlanModeEnabled: this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled"),
 			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
+			doubleCheckCompletionEnabled: this.stateManager.getGlobalSettingsKey("doubleCheckCompletionEnabled"),
+			vscodeTerminalExecutionMode: this.vscodeTerminalExecutionMode,
+			enableParallelToolCalling: this.isParallelToolCallingEnabled(),
+			isSubagentExecution: false,
 			cwd: this.cwd,
 			workspaceManager: this.workspaceManager,
 			isMultiRootEnabled: this.isMultiRootEnabled,
@@ -148,6 +178,7 @@ export class ToolExecutor {
 				diffViewProvider: this.diffViewProvider,
 				fileContextTracker: this.fileContextTracker,
 				clineIgnoreController: this.clineIgnoreController,
+				commandPermissionController: this.commandPermissionController,
 				contextManager: this.contextManager,
 				stateManager: this.stateManager,
 			},
@@ -157,9 +188,10 @@ export class ToolExecutor {
 				saveCheckpoint: this.saveCheckpoint,
 				postStateToWebview: async () => {},
 				reinitExistingTaskFromId: async () => {},
-				cancelTask: async () => {},
-				updateTaskHistory: async (_: any) => [],
+				cancelTask: this.cancelTask,
+				updateTaskHistory: async () => [],
 				executeCommandTool: this.executeCommandTool,
+				cancelRunningCommandTool: this.cancelRunningCommandTool,
 				doesLatestTaskCompletionHaveNewChanges: this.doesLatestTaskCompletionHaveNewChanges,
 				updateFCListFromToolResponse: this.updateFCListFromToolResponse,
 				sayAndCreateMissingParamError: this.sayAndCreateMissingParamError,
@@ -168,6 +200,10 @@ export class ToolExecutor {
 				shouldAutoApproveToolWithPath: this.shouldAutoApproveToolWithPath.bind(this),
 				applyLatestBrowserSettings: this.applyLatestBrowserSettings.bind(this),
 				switchToActMode: this.switchToActMode,
+				setActiveHookExecution: this.setActiveHookExecution,
+				clearActiveHookExecution: this.clearActiveHookExecution,
+				getActiveHookExecution: this.getActiveHookExecution,
+				runUserPromptSubmitHook: this.runUserPromptSubmitHook,
 			},
 			coordinator: this.coordinator,
 		}
@@ -207,8 +243,12 @@ export class ToolExecutor {
 		this.coordinator.register(new NewTaskHandler())
 		this.coordinator.register(new AttemptCompletionHandler())
 		this.coordinator.register(new CondenseHandler())
-		this.coordinator.register(new SummarizeTaskHandler())
+		this.coordinator.register(new SummarizeTaskHandler(validator))
 		this.coordinator.register(new ReportBugHandler())
+		// Register all tools via toolUseNames
+		for (const tool of toolUseNames) {
+			this.coordinator.registerByName(tool, validator)
+		}
 	}
 
 	/**
@@ -230,10 +270,16 @@ export class ToolExecutor {
 	}
 
 	/**
-	 * Handles errors during tool execution
+	 * Handles errors during tool execution.
+	 *
+	 * Logs the error, displays it to the user via the UI, and adds an error
+	 * result to the conversation context so the AI can see what went wrong.
+	 *
+	 * @param action Description of what was being attempted (e.g., "executing read_file")
+	 * @param error The error that occurred
+	 * @param block The tool use block that caused the error
 	 */
 	private async handleError(action: string, error: Error, block: ToolUse): Promise<void> {
-		console.log(error)
 		const errorString = `Error ${action}: ${error.message}`
 		await this.say("error", errorString)
 
@@ -242,6 +288,17 @@ export class ToolExecutor {
 		this.pushToolResult(errorResponse, block)
 	}
 
+	/**
+	 * Pushes a tool result to the user message content.
+	 *
+	 * This is a critical method that:
+	 * - Formats the tool result appropriately for the API
+	 * - Adds it to the conversation context
+	 * - Marks that a tool has been used in this turn
+	 *
+	 * @param content The tool response content to add
+	 * @param block The tool use block that generated this result
+	 */
 	private pushToolResult = (content: ToolResponse, block: ToolUse) => {
 		// Use the ToolResultUtils to properly format and push the tool result
 		ToolResultUtils.pushToolResult(
@@ -249,12 +306,28 @@ export class ToolExecutor {
 			block,
 			this.taskState.userMessageContent,
 			(block: ToolUse) => ToolDisplayUtils.getToolDescription(block),
-			this.api,
-			() => {
-				this.taskState.didAlreadyUseTool = true
-			},
 			this.coordinator,
+			this.taskState.toolUseIdMap,
 		)
+		// Mark that a tool has been used (only matters when parallel tool calling is disabled)
+		if (!this.isParallelToolCallingEnabled()) {
+			this.taskState.didAlreadyUseTool = true
+		}
+	}
+
+	/**
+	 * Check if parallel tool calling is enabled.
+	 * Parallel tool calling is enabled if:
+	 * 1. User has enabled it in settings, OR
+	 * 2. The current model/provider supports native tool calling and handles parallel tools well
+	 */
+	private isParallelToolCallingEnabled(): boolean {
+		const enableParallelSetting = this.stateManager.getGlobalSettingsKey("enableParallelToolCalling")
+		const model = this.api.getModel()
+		const apiConfig = this.stateManager.getApiConfiguration()
+		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const providerId = (mode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
+		return isParallelToolCallingEnabled(enableParallelSetting, { providerId, model, mode })
 	}
 
 	/**
@@ -264,15 +337,31 @@ export class ToolExecutor {
 		ClineDefaultTool.FILE_NEW,
 		ClineDefaultTool.FILE_EDIT,
 		ClineDefaultTool.NEW_RULE,
+		ClineDefaultTool.APPLY_PATCH,
 	]
 
 	/**
-	 * Execute a tool through the coordinator if it's registered
+	 * Execute a tool through the coordinator if it's registered.
+	 *
+	 * This is the main entry point for tool execution, called by the Task class.
+	 * It handles:
+	 * - Checking if the tool is registered with the coordinator
+	 * - Validating tool execution is allowed (not rejected, not already used, etc.)
+	 * - Enforcing plan mode restrictions on file modification tools
+	 * - Delegating to partial or complete block handlers
+	 * - Error handling and checkpointing
+	 *
+	 * @param block The tool use block to execute
+	 * @returns true if the tool was handled (even if execution failed), false if not registered
 	 */
 	private async execute(block: ToolUse): Promise<boolean> {
+		// Note: MCP tool name transformation happens earlier in ToolUseHandler.getPartialToolUsesAsContent()
+		// The toolUseIdMap is updated at the point of transformation in index.ts
+
 		if (!this.coordinator.has(block.name)) {
 			return false // Tool not handled by coordinator
 		}
+		canonicalizeAttemptCompletionParams(block)
 
 		const config = this.asToolConfig()
 
@@ -286,8 +375,8 @@ export class ToolExecutor {
 				return true
 			}
 
-			// Check if a tool has already been used in this message
-			if (this.taskState.didAlreadyUseTool) {
+			// Check if a tool has already been used in this message (only enforced when parallel tool calling is disabled)
+			if (!this.isParallelToolCallingEnabled() && this.taskState.didAlreadyUseTool) {
 				this.taskState.userMessageContent.push({
 					type: "text",
 					text: formatResponse.toolAlreadyUsed(block.name),
@@ -303,9 +392,12 @@ export class ToolExecutor {
 				this.isPlanModeToolRestricted(block.name)
 			) {
 				const errorMessage = `Tool '${block.name}' is not available in PLAN MODE. This tool is restricted to ACT MODE for file modifications. Only use tools available for PLAN MODE when in that mode.`
+				await this.removeLastPartialMessageIfExistsWithType("say", "error")
 				await this.say("error", errorMessage)
-				this.pushToolResult(formatResponse.toolError(errorMessage), block)
-				await this.saveCheckpoint()
+				// Only push the final error message when the streaming is done.
+				if (!block.partial) {
+					this.pushToolResult(formatResponse.toolError(errorMessage), block)
+				}
 				return true
 			}
 
@@ -322,24 +414,35 @@ export class ToolExecutor {
 
 			// Handle complete blocks
 			await this.handleCompleteBlock(block, config)
-			await this.saveCheckpoint()
 			return true
 		} catch (error) {
 			await this.handleError(`executing ${block.name}`, error as Error, block)
-			await this.saveCheckpoint()
 			return true
 		}
 	}
 
 	/**
-	 * Check if a tool is restricted in plan mode
+	 * Check if a tool is restricted in plan mode.
+	 *
+	 * In strict plan mode, file modification tools (write_to_file, editedExistingFile, etc.)
+	 * are blocked. The AI must switch to Act mode to use these tools.
+	 *
+	 * @param toolName The name of the tool to check
+	 * @returns true if the tool is restricted in plan mode, false otherwise
 	 */
 	private isPlanModeToolRestricted(toolName: ClineDefaultTool): boolean {
 		return ToolExecutor.PLAN_MODE_RESTRICTED_TOOLS.includes(toolName)
 	}
 
 	/**
-	 * Create a tool rejection message and add it to user message content
+	 * Create a tool rejection message and add it to user message content.
+	 *
+	 * Used when a tool cannot be executed (e.g., user rejected a previous tool,
+	 * tool was interrupted, etc.). Adds a text message to the conversation explaining
+	 * why the tool was not executed.
+	 *
+	 * @param block The tool use block that was rejected
+	 * @param reason Human-readable explanation of why the tool was rejected
 	 */
 	private createToolRejectionMessage(block: ToolUse, reason: string): void {
 		this.taskState.userMessageContent.push({
@@ -380,14 +483,83 @@ export class ToolExecutor {
 			content = typeMatch[2] ? [typeMatch[2], ...remainingLines].join("\n") : remainingLines.join("\n")
 		}
 
-		this.taskState.userMessageContent.push({
-			type: "text",
+		const hookContextBlock = {
+			type: "text" as const,
 			text: `<hook_context source="${source}" type="${contextType}">\n${content}\n</hook_context>`,
-		})
+		}
+
+		this.taskState.userMessageContent.push(hookContextBlock)
 	}
 
 	/**
-	 * Handle partial block streaming UI updates
+	 * Runs the PostToolUse hook after tool execution.
+	 * This is extracted from handleCompleteBlock to eliminate code duplication
+	 * between success and error paths.
+	 *
+	 * @param block The tool use block that was executed
+	 * @param toolResult The result from the tool execution
+	 * @param executionSuccess Whether the tool executed successfully
+	 * @param executionStartTime The timestamp when tool execution started
+	 * @returns true if hook requested cancellation, false otherwise
+	 */
+	private async runPostToolUseHook(
+		block: ToolUse,
+		toolResult: any,
+		executionSuccess: boolean,
+		executionStartTime: number,
+	): Promise<boolean> {
+		const { executeHook } = await import("../hooks/hook-executor")
+
+		const executionTimeMs = Date.now() - executionStartTime
+
+		const postToolResult = await executeHook({
+			hookName: "PostToolUse",
+			hookInput: {
+				postToolUse: {
+					toolName: block.name,
+					parameters: block.params,
+					result: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult),
+					success: executionSuccess,
+					executionTimeMs,
+				},
+			},
+			isCancellable: true,
+			say: this.say,
+			setActiveHookExecution: this.setActiveHookExecution,
+			clearActiveHookExecution: this.clearActiveHookExecution,
+			messageStateHandler: this.messageStateHandler,
+			taskId: this.taskId,
+			hooksEnabled: true, // Already checked by caller
+			model: getHookModelContext(this.api, this.stateManager),
+			toolName: block.name,
+		})
+
+		// Handle cancellation request
+		if (postToolResult.cancel === true) {
+			const errorMessage = postToolResult.errorMessage || "Hook requested task cancellation"
+			await this.say("error", errorMessage)
+			return true
+		}
+
+		// Add context modification to the conversation if provided
+		if (postToolResult.contextModification) {
+			this.addHookContextToConversation(postToolResult.contextModification, "PostToolUse")
+		}
+
+		return false
+	}
+
+	/**
+	 * Handle partial block streaming UI updates.
+	 *
+	 * During streaming API responses, the AI sends partial tool use blocks as they're
+	 * generated. This method updates the UI to show the tool being constructed in real-time.
+	 *
+	 * NOTE: This is ONLY for UI updates. No tool results are pushed to the conversation
+	 * during partial block handling. The complete block handler will add the final result.
+	 *
+	 * @param block The partial tool use block with incomplete parameters
+	 * @param config The task configuration containing all necessary context
 	 */
 	private async handlePartialBlock(block: ToolUse, config: TaskConfig): Promise<void> {
 		// NOTE: We don't push tool results in partial blocks because this is only for UI streaming.
@@ -404,86 +576,93 @@ export class ToolExecutor {
 	}
 
 	/**
-	 * Handle complete block execution
+	 * Handle complete block execution.
+	 *
+	 * This is the main execution flow for a tool:
+	 * 1. Execute the actual tool (tool handlers now run PreToolUse hooks post-approval)
+	 * 2. Run PostToolUse hooks (if enabled) - cannot block, only observe
+	 * 3. Add hook context modifications to the conversation
+	 * 4. Update focus chain tracking
+	 *
+	 * Note: PreToolUse hooks are now executed by individual tool handlers after approval
+	 * and before the actual tool operation. This provides better UX as approval dialogs
+	 * appear immediately without hook execution delay.
+	 *
+	 * PostToolUse hooks are for observation/logging only and cannot block.
+	 *
+	 * @param block The complete tool use block with all parameters
+	 * @param config The task configuration containing all necessary context
 	 */
 	private async handleCompleteBlock(block: ToolUse, config: any): Promise<void> {
-		// Check if hooks are enabled (both feature flag and user setting must be true)
-		const featureFlagEnabled = featureFlagsService.getHooksEnabled()
-		const userEnabled = this.stateManager.getGlobalSettingsKey("hooksEnabled")
-		const hooksEnabled = featureFlagEnabled && userEnabled
+		// Check abort flag at the very start to prevent execution after cancellation
+		if (this.taskState.abort) {
+			return
+		}
+
+		const hooksEnabled = getHooksEnabledSafe()
+
+		// Track if we need to cancel after hooks complete
+		let shouldCancelAfterHook = false
 
 		let executionSuccess = true
 		let toolResult: any = null
+		let toolWasExecuted = false
+		const executionStartTime = Date.now()
 
-		// Run PreToolUse hook, if enabled
-		if (hooksEnabled) {
-			let preToolUseResult: any = null
-			try {
-				const hookFactory = new HookFactory()
-				const preToolUseHook = await hookFactory.create("PreToolUse")
-
-				preToolUseResult = await preToolUseHook.run({
-					taskId: this.taskId,
-					preToolUse: {
-						toolName: block.name,
-						parameters: block.params,
-					},
-				})
-
-				// Check if hook wants to stop execution
-				if (!preToolUseResult.shouldContinue) {
-					const errorMessage = preToolUseResult.errorMessage || "PreToolUse hook prevented tool execution"
-					await this.say("error", errorMessage)
-					this.pushToolResult(formatResponse.toolError(errorMessage), block)
-					return
-				}
-
-				// Add context modification to the conversation if provided by the hook
-				this.addHookContextToConversation(preToolUseResult.contextModification, "PreToolUse")
-			} catch (hookError) {
-				const errorMessage = `PreToolUse hook failed: ${hookError.toString()}`
-				await this.say("error", errorMessage)
-				this.pushToolResult(formatResponse.toolError(errorMessage), block)
+		try {
+			// Final abort check immediately before tool execution
+			if (this.taskState.abort) {
 				return
 			}
-		}
 
-		const executionStartTime = Date.now()
-		try {
 			// Execute the actual tool
 			toolResult = await this.coordinator.execute(config, block)
+			toolWasExecuted = true
 			this.pushToolResult(toolResult, block)
+
+			// Track the last executed tool for consecutive call detection (used by act_mode_respond)
+			this.taskState.lastToolName = block.name
+
+			// Check abort before running PostToolUse hook (success path)
+			if (this.taskState.abort) {
+				return
+			}
+
+			// Run PostToolUse hook for successful tool execution
+			// Skip for attempt_completion since it marks task completion, not actual work
+			if (hooksEnabled && block.name !== "attempt_completion") {
+				const hookRequestedCancel = await this.runPostToolUseHook(block, toolResult, executionSuccess, executionStartTime)
+				if (hookRequestedCancel) {
+					await config.callbacks.cancelTask()
+					shouldCancelAfterHook = true
+				}
+			}
 		} catch (error) {
 			executionSuccess = false
 			toolResult = formatResponse.toolError(`Tool execution failed: ${error}`)
-			this.pushToolResult(toolResult, block)
-			throw error
-		} finally {
-			// Run PostToolUse hook if enabled
-			if (hooksEnabled) {
-				const hookFactory = new HookFactory()
-				const postToolUseHook = await hookFactory.create("PostToolUse")
 
-				const executionTimeMs = Date.now() - executionStartTime
-				const postToolUseResult = await postToolUseHook.run({
-					taskId: this.taskId,
-					postToolUse: {
-						toolName: block.name,
-						parameters: block.params,
-						result: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult),
-						success: executionSuccess,
-						executionTimeMs,
-					},
-				})
+			// Check abort before running PostToolUse hook (error path)
+			if (this.taskState.abort) {
+				throw error
+			}
 
-				// Add context modification to the conversation if provided by the hook
-				this.addHookContextToConversation(postToolUseResult.contextModification, "PostToolUse")
-
-				// Log any error messages from the hook
-				if (postToolUseResult.errorMessage) {
-					this.say("error", postToolUseResult.errorMessage)
+			// Run PostToolUse hook for failed tool execution
+			// Skip for attempt_completion since it marks task completion, not actual work
+			if (toolWasExecuted && hooksEnabled && block.name !== "attempt_completion") {
+				const hookRequestedCancel = await this.runPostToolUseHook(block, toolResult, executionSuccess, executionStartTime)
+				if (hookRequestedCancel) {
+					await config.callbacks.cancelTask()
+					shouldCancelAfterHook = true
 				}
 			}
+
+			// Re-throw the error after PostToolUse completes
+			throw error
+		}
+
+		// Early return if hook requested cancellation
+		if (shouldCancelAfterHook) {
+			return
 		}
 
 		// Handle focus chain updates
