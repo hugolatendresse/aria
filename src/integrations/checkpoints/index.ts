@@ -115,7 +115,7 @@ export class TaskCheckpointManager implements ICheckpointManager {
 	 * @param isAttemptCompletionMessage - Whether this checkpoint is for an attempt completion message
 	 * @param completionMessageTs - Optional timestamp of the completion message to update with checkpoint hash
 	 */
-	async saveCheckpoint(isAttemptCompletionMessage: boolean = false, completionMessageTs?: number): Promise<void> {
+	async saveCheckpoint(isAttemptCompletionMessage = false, completionMessageTs?: number): Promise<void> {
 		try {
 			// If checkpoints are disabled or previously encountered a timeout error, return early
 			if (

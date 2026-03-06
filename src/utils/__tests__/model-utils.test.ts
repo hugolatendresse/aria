@@ -1,6 +1,6 @@
 import { describe, it } from "mocha"
 import "should"
-import { isClaude4PlusModelFamily, isGptOssModelFamily, isGPT5ModelFamily, shouldSkipReasoningForModel } from "../model-utils"
+import { isClaude4PlusModelFamily, isGPT5ModelFamily, isGptOssModelFamily, shouldSkipReasoningForModel } from "../model-utils"
 
 describe("shouldSkipReasoningForModel", () => {
 	it("should return true for grok-4 models", () => {

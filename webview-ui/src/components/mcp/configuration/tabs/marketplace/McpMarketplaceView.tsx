@@ -73,7 +73,7 @@ const McpMarketplaceView = () => {
 		}
 	}, [mcpMarketplaceCatalog])
 
-	const fetchMarketplace = (forceRefresh: boolean = false) => {
+	const fetchMarketplace = (forceRefresh = false) => {
 		if (forceRefresh) {
 			setIsRefreshing(true)
 		} else {

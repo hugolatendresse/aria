@@ -1733,7 +1733,8 @@ export class Task {
 				// Extract text content from the message
 				if (typeof msg.content === "string") {
 					return msg.content
-				} else if (Array.isArray(msg.content)) {
+				}
+				if (Array.isArray(msg.content)) {
 					const textParts = msg.content
 						.filter((block) => block.type === "text")
 						.map((block) => (block as { type: "text"; text: string }).text)
@@ -1970,7 +1971,8 @@ export class Task {
 					// Handle different content types
 					if (typeof msg.content === "string") {
 						return msg.content
-					} else if (Array.isArray(msg.content)) {
+					}
+					if (Array.isArray(msg.content)) {
 						return msg.content
 							.filter((block) => block.type === "text")
 							.map((block) => (block as any).text)
