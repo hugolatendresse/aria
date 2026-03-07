@@ -9,13 +9,6 @@ on:
       - 'proto/**'
       - 'evals/**'
       - '.github/workflows/cline-evals-regression.yml'
-  pull_request:
-    paths:
-      - 'src/core/**'
-      - 'src/shared/**'
-      - 'proto/**'
-      - 'evals/**'
-      - '.github/workflows/cline-evals-regression.yml'
   workflow_dispatch:
 
 permissions:
