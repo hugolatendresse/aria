@@ -31,7 +31,7 @@ export class SearchActuarialDocsToolHandler implements IFullyManagedTool {
 		// Check if RAG is enabled
 		if (!isRagEnabled()) {
 			return formatResponse.toolError(
-				"Actuarial RAG is disabled. Enable it in Aria settings (cline.enableActuarialRag) to search actuarial documents.",
+				"Actuarial RAG is disabled. Enable it in Aria Settings > Features > Actuarial RAG to search actuarial documents.",
 			)
 		}
 
