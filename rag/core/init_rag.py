@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 from core.get_root_path import get_root_path
 
 # Standardized embedding model for Aria RAG
-# Using Gemini's text-embedding-004 for both index building and query embedding
-GEMINI_EMBEDDING_MODEL = "models/text-embedding-004"
+# Using Gemini's gemini-embedding-001 for both index building and query embedding
+GEMINI_EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 
 def init_rag(chunking_strategy: str):
