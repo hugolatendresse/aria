@@ -16,8 +16,11 @@ Usage:
 """
 
 import argparse
+import base64
 import json
+import math
 import os
+import struct
 import sys
 import warnings
 import sqlite3
@@ -121,7 +124,6 @@ def get_child_chunks_from_db(db_file: str, table_name: str) -> list[dict[str, An
         # Parse embedding from blob
         # sqlite_vec stores embeddings as float32 arrays
         if embedding_blob:
-            import struct
             # Determine number of floats (4 bytes each)
             num_floats = len(embedding_blob) // 4
             embedding = list(struct.unpack(f'{num_floats}f', embedding_blob))
@@ -260,6 +262,81 @@ def export_index(output_path: str, rebuild: bool = False):
     print("=" * 60)
 
 
+def quantize_index(input_path: str, output_path: str):
+    """
+    Quantize an existing v2 index to v3 with scalar quantization (float32 → uint8).
+
+    Uses global min/max across all embedding values to map to [0, 255].
+    Embeddings are stored as base64-encoded uint8 arrays.
+    """
+    print("=" * 60)
+    print("Aria RAG Index Quantization (float32 → uint8)")
+    print("=" * 60)
+
+    print(f"\nReading index from {input_path}...")
+    with open(input_path, "r", encoding="utf-8") as f:
+        index = json.load(f)
+
+    if index.get("version") == 3:
+        print("Index is already quantized (version 3). Nothing to do.")
+        return
+
+    if index.get("version") != 2:
+        print(f"Error: Expected version 2 index, got version {index.get('version')}")
+        return
+
+    child_chunks = index["child_chunks"]
+    print(f"Found {len(child_chunks)} child chunks to quantize")
+
+    # Compute global min/max across all embedding values
+    global_min = math.inf
+    global_max = -math.inf
+    for chunk in child_chunks:
+        emb = chunk["embedding"]
+        chunk_min = min(emb)
+        chunk_max = max(emb)
+        if chunk_min < global_min:
+            global_min = chunk_min
+        if chunk_max > global_max:
+            global_max = chunk_max
+
+    scale = (global_max - global_min) / 255.0
+    print(f"Global min: {global_min:.6f}, max: {global_max:.6f}, scale: {scale:.6f}")
+
+    # Quantize each embedding to uint8 and base64-encode
+    for chunk in child_chunks:
+        emb = chunk["embedding"]
+        quantized = bytes(
+            min(255, max(0, round((v - global_min) / scale)))
+            for v in emb
+        )
+        chunk["embedding"] = base64.b64encode(quantized).decode("ascii")
+
+    # Update index metadata
+    index["version"] = 3
+    index["quantization"] = {
+        "min": global_min,
+        "scale": scale,
+    }
+
+    # Capture original size before potentially overwriting
+    input_size_mb = os.path.getsize(input_path) / (1024 * 1024)
+
+    # Write quantized index
+    print(f"\nWriting quantized index to {output_path}...")
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(index, f, ensure_ascii=False)
+
+    file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
+    print(f"Original size: {input_size_mb:.2f} MB")
+    print(f"Quantized size: {file_size_mb:.2f} MB")
+    print(f"Reduction: {(1 - file_size_mb / input_size_mb) * 100:.1f}%")
+
+    print("\n" + "=" * 60)
+    print("Quantization complete!")
+    print("=" * 60)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Export the RAG index to a JSON file for the Aria VS Code extension"
@@ -270,25 +347,43 @@ def main():
         help="Force rebuild of the vector database before exporting"
     )
     parser.add_argument(
+        "--quantize",
+        action="store_true",
+        help="Quantize embeddings from float32 to uint8 (can run on existing index)"
+    )
+    parser.add_argument(
+        "--input",
+        type=str,
+        default=None,
+        help="Input path for quantization (default: dist/actuarial-index.json)"
+    )
+    parser.add_argument(
         "--output",
         type=str,
         default=None,
         help="Output path for the JSON index file (default: dist/actuarial-index.json)"
     )
-    
+
     args = parser.parse_args()
-    
-    # Default output path
-    if args.output:
-        output_path = args.output
+
+    repo_root = get_root_path()
+    default_path = os.path.join(repo_root, "dist", "actuarial-index.json")
+
+    if args.quantize and not args.rebuild:
+        # Quantize-only mode: read existing index, quantize, write output
+        input_path = args.input or default_path
+        output_path = args.output or default_path
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        quantize_index(input_path, output_path)
     else:
-        repo_root = get_root_path()
-        output_path = os.path.join(repo_root, "dist", "actuarial-index.json")
-    
-    # Ensure output directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    
-    export_index(output_path, rebuild=args.rebuild)
+        # Export mode (optionally with rebuild)
+        output_path = args.output or default_path
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        export_index(output_path, rebuild=args.rebuild)
+
+        # If --quantize flag is also set, quantize the just-exported index
+        if args.quantize:
+            quantize_index(output_path, output_path)
 
 
 if __name__ == "__main__":
