@@ -44,6 +44,8 @@ export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 {{${SystemPromptSection.OBJECTIVE}}}
 
+{{${SystemPromptSection.ACTUARIAL_RAG}}}
+
 ====
 
 {{${SystemPromptSection.USER_INSTRUCTIONS}}}`

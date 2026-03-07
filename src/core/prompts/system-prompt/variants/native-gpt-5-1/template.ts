@@ -39,6 +39,8 @@ export const BASE = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 {{${SystemPromptSection.OBJECTIVE}}}
 
+{{${SystemPromptSection.ACTUARIAL_RAG}}}
+
 ====
 
 {{${SystemPromptSection.USER_INSTRUCTIONS}}}`

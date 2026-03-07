@@ -31,6 +31,7 @@ export const config = createVariant(ModelFamily.DEVSTRAL)
 		SystemPromptSection.RULES,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
+		SystemPromptSection.ACTUARIAL_RAG,
 		SystemPromptSection.USER_INSTRUCTIONS,
 		SystemPromptSection.SKILLS,
 	)
@@ -54,6 +55,7 @@ export const config = createVariant(ModelFamily.DEVSTRAL)
 		ClineDefaultTool.TODO,
 		ClineDefaultTool.USE_SKILL,
 		ClineDefaultTool.USE_SUBAGENTS,
+		ClineDefaultTool.RAG_SEARCH,
 	)
 	.placeholders({
 		MODEL_FAMILY: "devstral",

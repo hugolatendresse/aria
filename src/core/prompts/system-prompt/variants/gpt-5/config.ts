@@ -41,6 +41,7 @@ export const config = createVariant(ModelFamily.GPT_5)
 		SystemPromptSection.RULES,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
+		SystemPromptSection.ACTUARIAL_RAG,
 		SystemPromptSection.USER_INSTRUCTIONS,
 		SystemPromptSection.SKILLS,
 	)
@@ -65,6 +66,7 @@ export const config = createVariant(ModelFamily.GPT_5)
 		ClineDefaultTool.GENERATE_EXPLANATION,
 		ClineDefaultTool.USE_SKILL,
 		ClineDefaultTool.USE_SUBAGENTS,
+		ClineDefaultTool.RAG_SEARCH,
 	)
 	.placeholders({
 		MODEL_FAMILY: ModelFamily.GPT_5,
