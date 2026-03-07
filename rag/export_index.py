@@ -319,13 +319,15 @@ def quantize_index(input_path: str, output_path: str):
         "scale": scale,
     }
 
+    # Capture original size before potentially overwriting
+    input_size_mb = os.path.getsize(input_path) / (1024 * 1024)
+
     # Write quantized index
     print(f"\nWriting quantized index to {output_path}...")
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(index, f, ensure_ascii=False)
 
     file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
-    input_size_mb = os.path.getsize(input_path) / (1024 * 1024)
     print(f"Original size: {input_size_mb:.2f} MB")
     print(f"Quantized size: {file_size_mb:.2f} MB")
     print(f"Reduction: {(1 - file_size_mb / input_size_mb) * 100:.1f}%")
