@@ -13,8 +13,8 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { Logger } from "@/shared/services/Logger"
-import type { RagChildChunk, RagIndex, RagParentChunk, RagSearchResult, RagServiceConfig } from "./types"
-import { cosineSimilarity } from "./vectorMath"
+import type { RagChildChunk, RagIndex, RagParentChunk, RagQuantizationParams, RagSearchResult, RagServiceConfig } from "./types"
+import { cosineSimilarity, cosineSimilarityQuantized, quantizeVector } from "./vectorMath"
 
 // Gemini embedding model - must match the one used in Python export_index.py
 const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"
@@ -41,6 +41,8 @@ export class RagService {
 
 	private index: RagIndex | null = null
 	private parentChunkMap: Map<string, RagParentChunk> = new Map()
+	private quantizedEmbeddings: Uint8Array[] | null = null
+	private quantizationParams: RagQuantizationParams | null = null
 	private isLoading = false
 	private loadError: Error | null = null
 	private config: Required<RagServiceConfig>
@@ -108,8 +110,8 @@ export class RagService {
 			const loadTime = Date.now() - startTime
 
 			// Validate the index version
-			if (index.version !== 2) {
-				throw new Error(`Unsupported RAG index version: ${index.version}. Expected version 2 (parent-child hierarchy).`)
+			if (index.version !== 2 && index.version !== 3) {
+				throw new Error(`Unsupported RAG index version: ${index.version}. Expected version 2 or 3.`)
 			}
 
 			// Validate the index content
@@ -142,11 +144,38 @@ export class RagService {
 				Logger.log(`[RagService] Warning: ${orphanCount} child chunks have missing parent chunks`)
 			}
 
-			// Check embedding dimensions are consistent
-			const embeddingDim = index.child_chunks[0].embedding.length
-			const inconsistent = index.child_chunks.filter((c) => c.embedding.length !== embeddingDim)
-			if (inconsistent.length > 0) {
-				Logger.log(`[RagService] Warning: ${inconsistent.length} child chunks have inconsistent embedding dimensions`)
+			// Handle quantized (v3) vs unquantized (v2) embeddings
+			if (index.version === 3) {
+				if (!index.quantization) {
+					throw new Error("Version 3 index missing quantization parameters")
+				}
+				this.quantizationParams = index.quantization
+
+				// Decode base64 embeddings to Uint8Arrays
+				this.quantizedEmbeddings = []
+				for (const child of index.child_chunks) {
+					if (typeof child.embedding !== "string") {
+						throw new Error("Version 3 index has non-string embedding")
+					}
+					this.quantizedEmbeddings.push(new Uint8Array(Buffer.from(child.embedding, "base64")))
+				}
+
+				const embeddingDim = this.quantizedEmbeddings[0].length
+				const inconsistent = this.quantizedEmbeddings.filter((e) => e.length !== embeddingDim)
+				if (inconsistent.length > 0) {
+					Logger.log(`[RagService] Warning: ${inconsistent.length} child chunks have inconsistent embedding dimensions`)
+				}
+			} else {
+				// Check embedding dimensions are consistent
+				const firstEmb = index.child_chunks[0].embedding
+				if (typeof firstEmb !== "object") {
+					throw new Error("Version 2 index has non-array embedding")
+				}
+				const embeddingDim = (firstEmb as number[]).length
+				const inconsistent = index.child_chunks.filter((c) => (c.embedding as number[]).length !== embeddingDim)
+				if (inconsistent.length > 0) {
+					Logger.log(`[RagService] Warning: ${inconsistent.length} child chunks have inconsistent embedding dimensions`)
+				}
 			}
 
 			this.index = index
@@ -206,11 +235,22 @@ export class RagService {
 			// Compute similarity scores for all child chunks
 			const childMatches: Array<{ child: RagChildChunk; score: number }> = []
 
-			for (const child of this.index.child_chunks) {
-				const score = cosineSimilarity(queryEmbedding, child.embedding)
-
-				if (score >= searchConfig.minScore) {
-					childMatches.push({ child, score })
+			if (this.quantizedEmbeddings && this.quantizationParams) {
+				// Quantized path: quantize the query, compare with uint8 embeddings
+				const queryQuantized = quantizeVector(queryEmbedding, this.quantizationParams.min, this.quantizationParams.scale)
+				for (let i = 0; i < this.index.child_chunks.length; i++) {
+					const score = cosineSimilarityQuantized(queryQuantized, this.quantizedEmbeddings[i])
+					if (score >= searchConfig.minScore) {
+						childMatches.push({ child: this.index.child_chunks[i], score })
+					}
+				}
+			} else {
+				// Unquantized path: direct float comparison
+				for (const child of this.index.child_chunks) {
+					const score = cosineSimilarity(queryEmbedding, child.embedding as number[])
+					if (score >= searchConfig.minScore) {
+						childMatches.push({ child, score })
+					}
 				}
 			}
 

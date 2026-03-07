@@ -33,11 +33,23 @@ export interface RagChildChunk {
 		page?: number
 		[key: string]: unknown
 	}
-	embedding: number[]
+	/** float32 array (v2) or base64-encoded uint8 array (v3) */
+	embedding: number[] | string
 }
 
 /**
- * The pre-built RAG index file format (version 2 with parent-child hierarchy)
+ * Quantization parameters for scalar quantization (float32 → uint8)
+ */
+export interface RagQuantizationParams {
+	/** Global minimum value across all embeddings */
+	min: number
+	/** Scale factor: (max - min) / 255 */
+	scale: number
+}
+
+/**
+ * The pre-built RAG index file format (version 2 or 3 with parent-child hierarchy)
+ * Version 3 adds scalar quantization of embeddings (base64-encoded uint8 arrays)
  */
 export interface RagIndex {
 	version: number
@@ -45,6 +57,8 @@ export interface RagIndex {
 	chunking_strategy: string
 	parent_chunks: RagParentChunk[]
 	child_chunks: RagChildChunk[]
+	/** Present in version 3 (quantized) indexes */
+	quantization?: RagQuantizationParams
 }
 
 /**
