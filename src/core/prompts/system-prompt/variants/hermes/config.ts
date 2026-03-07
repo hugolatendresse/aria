@@ -33,6 +33,7 @@ export const config = createVariant(ModelFamily.HERMES)
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
+		SystemPromptSection.ACTUARIAL_RAG,
 		SystemPromptSection.USER_INSTRUCTIONS,
 		SystemPromptSection.SKILLS,
 	)
@@ -56,6 +57,7 @@ export const config = createVariant(ModelFamily.HERMES)
 		ClineDefaultTool.GENERATE_EXPLANATION,
 		ClineDefaultTool.USE_SKILL,
 		ClineDefaultTool.USE_SUBAGENTS,
+		ClineDefaultTool.RAG_SEARCH,
 	)
 	.placeholders({
 		MODEL_FAMILY: "hermes",

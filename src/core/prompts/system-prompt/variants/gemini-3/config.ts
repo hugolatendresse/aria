@@ -41,6 +41,7 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
+		SystemPromptSection.ACTUARIAL_RAG,
 		SystemPromptSection.USER_INSTRUCTIONS,
 		SystemPromptSection.SKILLS,
 	)
@@ -66,6 +67,7 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 		ClineDefaultTool.GENERATE_EXPLANATION,
 		ClineDefaultTool.USE_SKILL,
 		ClineDefaultTool.USE_SUBAGENTS,
+		ClineDefaultTool.RAG_SEARCH,
 	)
 	.placeholders({
 		MODEL_FAMILY: ModelFamily.GEMINI_3,
