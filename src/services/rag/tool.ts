@@ -2,7 +2,6 @@
  * RAG search tool for exposing actuarial document search to the AI
  */
 
-import * as vscode from "vscode"
 import { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import { RagService } from "./RagService"
@@ -14,8 +13,7 @@ import { formatRagContext } from "./ragFormatter"
  * @returns True if RAG is enabled, false otherwise
  */
 export function isRagEnabled(): boolean {
-	const config = vscode.workspace.getConfiguration("cline")
-	return config.get<boolean>("enableActuarialRag", true)
+	return StateManager.get().getGlobalSettingsKey("enableActuarialRag") ?? true
 }
 
 /**

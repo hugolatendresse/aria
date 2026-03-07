@@ -76,6 +76,13 @@ const agentFeatures: FeatureToggle[] = [
 		settingKey: "focusChainSettings",
 		nestedKey: "enabled",
 	},
+	{
+		id: "actuarial-rag",
+		label: "Actuarial RAG",
+		description: "Search actuarial textbooks and inject relevant context when actuarial keywords are detected.",
+		stateKey: "enableActuarialRag",
+		settingKey: "enableActuarialRag",
+	},
 ]
 
 const editorFeatures: FeatureToggle[] = [
@@ -200,6 +207,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		enableParallelToolCalling,
 		backgroundEditEnabled,
 		doubleCheckCompletionEnabled,
+		enableActuarialRag,
 	} = useExtensionState()
 
 	const handleFocusChainIntervalChange = useCallback(
@@ -224,6 +232,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		enableParallelToolCalling,
 		backgroundEditEnabled,
 		doubleCheckCompletionEnabled,
+		enableActuarialRag,
 		yoloModeToggled: isYoloRemoteLocked ? remoteConfigSettings?.yoloModeToggled : yoloModeToggled,
 	}
 

@@ -312,6 +312,10 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("enableParallelToolCalling", !!request.enableParallelToolCalling)
 		}
 
+		if (request.enableActuarialRag !== undefined) {
+			controller.stateManager.setGlobalState("enableActuarialRag", !!request.enableActuarialRag)
+		}
+
 		if (request.optOutOfRemoteConfig !== undefined) {
 			const hadOptedOut = controller.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig")
 			const isOptingOut = !!request.optOutOfRemoteConfig
