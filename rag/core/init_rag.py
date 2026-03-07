@@ -1,6 +1,6 @@
 import os
 from core.chunking_strategies import get_splitters
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from core.rate_limited_embeddings import RateLimitedEmbeddings
 from dotenv import load_dotenv
 from core.get_root_path import get_root_path
 
@@ -29,7 +29,7 @@ def init_rag(chunking_strategy: str):
         )
 
     # Always use Gemini embeddings for consistency between index building and querying
-    embedding_function = GoogleGenerativeAIEmbeddings(model=GEMINI_EMBEDDING_MODEL)
+    embedding_function = RateLimitedEmbeddings(model=GEMINI_EMBEDDING_MODEL)
     db_filename = "gemini_vector.db"
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
