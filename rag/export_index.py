@@ -36,7 +36,7 @@ from langchain_classic.storage import LocalFileStore, create_kv_docstore
 # Suppress PDF parsing warnings
 warnings.filterwarnings("ignore", message=".*Ignoring wrong pointing object.*")
 
-# Configuration - must match rag_standalone.py
+# Configuration
 CHUNKING_STRATEGY = "recursive"
 SQLITE_TABLE_NAME_PREFIX = "actuarial_docs"
 SQLITE_TABLE_NAME = SQLITE_TABLE_NAME_PREFIX + "_" + CHUNKING_STRATEGY

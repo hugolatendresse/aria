@@ -18,7 +18,7 @@ import { cosineSimilarity } from "./vectorMath"
 
 // Gemini embedding model - must match the one used in Python export_index.py
 const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"
-const GEMINI_EMBEDDING_API_URL = "https://generativelanguage.googleapis.com/v1/models"
+const GEMINI_EMBEDDING_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 /**
  * Default configuration for RAG searches
