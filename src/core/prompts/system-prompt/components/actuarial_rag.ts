@@ -7,7 +7,7 @@
  */
 
 import { Logger } from "@services/logging/Logger"
-import { formatRagContext, mightBenefitFromActuarialContext, RagService } from "@services/rag"
+import { formatRagContext, isRagEnabled, mightBenefitFromActuarialContext, RagService } from "@services/rag"
 import { StateManager } from "@/core/storage/StateManager"
 import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
@@ -34,11 +34,17 @@ export interface ActuarialRagContext extends SystemPromptContext {
  * @param context The system prompt context (should include userQuery)
  * @returns The formatted RAG context, or undefined if not applicable
  */
-export async function getActuarialRagSection(variant: PromptVariant, context: ActuarialRagContext): Promise<string | undefined> {
+export async function getActuarialRagSection(variant: PromptVariant, context: ActuarialRagContext): Promise<string> {
+	// Check if RAG is enabled in settings
+	if (!isRagEnabled()) {
+		Logger.log("[ActuarialRag] RAG is disabled in settings")
+		return ""
+	}
+
 	// Need a query to search
 	if (!context.userQuery) {
-		Logger.log("[ActuarialRag] No userQuery in context, skipping RAG")
-		return undefined
+		Logger.log("[ActuarialRag] No userQuery in context")
+		return ""
 	}
 
 	Logger.log(`[ActuarialRag] Processing query: "${context.userQuery.substring(0, 100)}..."`)
@@ -46,7 +52,7 @@ export async function getActuarialRagSection(variant: PromptVariant, context: Ac
 	// Quick heuristic check - avoid API calls for clearly non-actuarial queries
 	if (!mightBenefitFromActuarialContext(context.userQuery)) {
 		Logger.log("[ActuarialRag] Query does not appear to benefit from actuarial context")
-		return undefined
+		return ""
 	}
 
 	Logger.log("[ActuarialRag] Query appears actuarial, proceeding with RAG search")
@@ -55,7 +61,7 @@ export async function getActuarialRagSection(variant: PromptVariant, context: Ac
 	const ragService = RagService.getInstance()
 	if (!ragService.isReady()) {
 		Logger.log("[ActuarialRag] RAG service not ready, skipping context retrieval")
-		return undefined
+		return ""
 	}
 
 	// Get the Gemini API key from state
@@ -65,7 +71,7 @@ export async function getActuarialRagSection(variant: PromptVariant, context: Ac
 
 	if (!geminiApiKey) {
 		Logger.log("[ActuarialRag] No Gemini API key available, skipping RAG search")
-		return undefined
+		return ""
 	}
 
 	try {
@@ -77,7 +83,7 @@ export async function getActuarialRagSection(variant: PromptVariant, context: Ac
 
 		if (results.length === 0) {
 			Logger.log("[ActuarialRag] No relevant actuarial context found")
-			return undefined
+			return ""
 		}
 
 		Logger.log(`[ActuarialRag] Found ${results.length} relevant document(s) for query`)
@@ -86,7 +92,7 @@ export async function getActuarialRagSection(variant: PromptVariant, context: Ac
 		const ragContext = formatRagContext(results, context.userQuery)
 
 		if (!ragContext) {
-			return undefined
+			return ""
 		}
 
 		// Use template engine for any overrides
@@ -97,6 +103,6 @@ export async function getActuarialRagSection(variant: PromptVariant, context: Ac
 		})
 	} catch (error) {
 		Logger.log(`[ActuarialRag] Error during RAG search: ${error instanceof Error ? error.message : String(error)}`)
-		return undefined
+		return ""
 	}
 }

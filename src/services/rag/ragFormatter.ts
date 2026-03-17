@@ -19,7 +19,7 @@ export function formatRagContext(results: RagSearchResult[], _query?: string): s
 	const sections: string[] = []
 
 	sections.push("ACTUARIAL REFERENCE CONTEXT")
-	sections.push("The following excerpts from actuarial textbooks may be relevant to the user's question:")
+	sections.push("The following excerpts from actuarial literature may be relevant to the user's question:")
 	sections.push("")
 
 	for (let i = 0; i < results.length; i++) {
@@ -57,24 +57,12 @@ export function mightBenefitFromActuarialContext(query: string): boolean {
 
 	// Actuarial keywords and phrases that suggest RAG would be helpful
 	const actuarialKeywords = [
-		// General actuarial terms
-		"actuarial",
-		"actuary",
-		"insurance",
-		"reserving",
-		"reserves",
-		"claims",
-		"loss",
-		"losses",
-		"premium",
-		"premiums",
-		"underwriting",
-		"reinsurance",
-
 		// Methods and techniques
 		"bornhuetter",
 		"ferguson",
-		"chain ladder",
+		"bf",
+		"chainladder",
+		"development",
 		"development factor",
 		"development triangle",
 		"loss triangle",
@@ -84,34 +72,25 @@ export function mightBenefitFromActuarialContext(query: string): boolean {
 		"incurred but not reported",
 		"case reserves",
 		"bulk reserves",
-
-		// Ratemaking
-		"ratemaking",
-		"rate making",
-		"pricing",
-		"rating",
-		"classification",
-		"credibility",
-		"exposure",
+		"indication",
 		"pure premium",
 		"loss ratio",
-		"combined ratio",
-		"expense ratio",
-
-		// Statistical methods
-		"glm",
-		"generalized linear",
-		"regression",
-		"cart",
-		"classification tree",
-		"regression tree",
-		"random forest",
-		"gradient boosting",
+		"credibility",
+		"frequency",
+		"severity",
+		"alae",
+		"ulae",
+		"profit",
+		"trend",
+		"claim",
+		"incurred",
+		"reported",
 
 		// Specific book references
 		"friedland",
 		"werner",
 		"modlin",
+		"asop",
 
 		// Lines of business
 		"auto insurance",

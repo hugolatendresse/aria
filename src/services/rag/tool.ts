@@ -3,9 +3,20 @@
  */
 
 import { Logger } from "@services/logging/Logger"
+import * as vscode from "vscode"
 import { StateManager } from "@/core/storage/StateManager"
 import { RagService } from "./RagService"
 import { formatRagContext } from "./ragFormatter"
+
+/**
+ * Check if RAG is enabled in VS Code settings
+ *
+ * @returns True if RAG is enabled, false otherwise
+ */
+export function isRagEnabled(): boolean {
+	const config = vscode.workspace.getConfiguration("cline")
+	return config.get<boolean>("enableActuarialRag", true)
+}
 
 /**
  * Parameters for the RAG search tool
