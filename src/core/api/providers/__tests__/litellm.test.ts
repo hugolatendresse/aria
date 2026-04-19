@@ -1,8 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk"
 import { LiteLlmHandler, type LiteLlmModelInfoResponse } from "@core/api/providers/litellm"
 import { convertToOpenAiMessages } from "@core/api/transform/openai-format"
+import { liteLlmModelInfoSaneDefaults } from "@shared/api" // used in getModel tests
 import { expect } from "chai"
 import sinon from "sinon"
+import { StateManager } from "@/core/storage/StateManager" // used in getModel tests
+import { ClineStorageMessage } from "@/shared/messages/content"
+import { mockFetchForTesting } from "@/shared/net"
 
 const fakeClient = {
 	chat: {
@@ -10,12 +13,12 @@ const fakeClient = {
 			create: sinon.stub(),
 		},
 	},
-	baseURL: "fake",
+	baseURL: "https://fake.example",
 }
 
 describe("LiteLlmHandler", () => {
-	const originalFetch = global.fetch
 	const mockFetch = sinon.stub()
+	let doneMockingFetch: (value: any) => void = () => {}
 
 	const mockModelFetch = (modelInfo: LiteLlmModelInfoResponse["data"][number]) => {
 		mockFetch.resolves({
@@ -45,7 +48,13 @@ describe("LiteLlmHandler", () => {
 	}
 
 	beforeEach(() => {
-		global.fetch = mockFetch
+		fakeClient.chat.completions.create.resetHistory()
+
+		mockFetchForTesting(mockFetch, () => {
+			return new Promise((resolve) => {
+				doneMockingFetch = resolve
+			})
+		})
 
 		// Configure the stub to return a stream that closes immediately with usage data
 		fakeClient.chat.completions.create.resolves(
@@ -68,8 +77,7 @@ describe("LiteLlmHandler", () => {
 
 	afterEach(() => {
 		sinon.reset()
-
-		global.fetch = originalFetch
+		doneMockingFetch(void 0)
 	})
 
 	const createAsyncIterable = (data: any[] = []) => {
@@ -105,7 +113,7 @@ describe("LiteLlmHandler", () => {
 
 			it("sends the system prompt and messages with the openai format", async () => {
 				const systemPrompt = "Test System Prompt"
-				const messages: Anthropic.Messages.MessageParam[] = [
+				const messages: ClineStorageMessage[] = [
 					{
 						role: "user",
 						content: "first message",
@@ -157,7 +165,7 @@ describe("LiteLlmHandler", () => {
 
 			it("inserts the cache control in the system prompt and the last two user messages", async () => {
 				const systemPrompt = "Test System Prompt"
-				const messages: Anthropic.Messages.MessageParam[] = [
+				const messages: ClineStorageMessage[] = [
 					{
 						role: "user",
 						content: "first message",
@@ -238,6 +246,81 @@ describe("LiteLlmHandler", () => {
 				expect(callArgs.stream).to.equal(true)
 				expect(callArgs.stream_options).to.deep.equal({ include_usage: true })
 			})
+		})
+	})
+
+	describe("getModel", () => {
+		let stateManagerStub: sinon.SinonStub
+
+		beforeEach(() => {
+			stateManagerStub = sinon.stub(StateManager, "get").returns({
+				getModelInfo: () => null,
+			} as any)
+		})
+
+		afterEach(() => {
+			stateManagerStub.restore()
+		})
+
+		it("returns sane defaults when no liteLlmModelInfo option is provided", () => {
+			const h = new LiteLlmHandler({
+				liteLlmApiKey: "test",
+				liteLlmModelId: "some-model",
+			})
+			const model = h.getModel()
+			expect(model.id).to.equal("some-model")
+			expect(model.info.contextWindow).to.equal(liteLlmModelInfoSaneDefaults.contextWindow)
+		})
+
+		it("returns user-configured model info when liteLlmModelInfo is provided and no cache exists", () => {
+			const h = new LiteLlmHandler({
+				liteLlmApiKey: "test",
+				liteLlmModelId: "claude-sonnet-4-6",
+				liteLlmModelInfo: {
+					contextWindow: 1_000_000,
+					maxTokens: 8192,
+					supportsImages: true,
+					supportsPromptCache: true,
+					inputPrice: 3,
+					outputPrice: 15,
+					cacheWritesPrice: 3.75,
+					cacheReadsPrice: 0.3,
+				},
+			})
+			const model = h.getModel()
+			expect(model.id).to.equal("claude-sonnet-4-6")
+			expect(model.info.contextWindow).to.equal(1_000_000)
+		})
+
+		it("prefers StateManager cached model info over user-configured liteLlmModelInfo", () => {
+			const cachedInfo = {
+				contextWindow: 200_000,
+				maxTokens: 4096,
+				supportsImages: true,
+				supportsPromptCache: true,
+				inputPrice: 0,
+				outputPrice: 0,
+			}
+			stateManagerStub.returns({
+				getModelInfo: () => cachedInfo,
+			} as any)
+
+			const h = new LiteLlmHandler({
+				liteLlmApiKey: "test",
+				liteLlmModelId: "claude-sonnet-4-6",
+				liteLlmModelInfo: {
+					contextWindow: 1_000_000,
+					maxTokens: 8192,
+					supportsImages: true,
+					supportsPromptCache: true,
+					inputPrice: 3,
+					outputPrice: 15,
+					cacheWritesPrice: 3.75,
+					cacheReadsPrice: 0.3,
+				},
+			})
+			const model = h.getModel()
+			expect(model.info.contextWindow).to.equal(200_000)
 		})
 	})
 })

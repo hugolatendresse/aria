@@ -8,7 +8,9 @@ vi.mock("@/context/ClineAuthContext", () => ({
 	useClineAuth: () => ({
 		clineUser: null,
 	}),
-	handleSignIn: vi.fn(),
+	useClineSignIn: () => ({
+		isLoginLoading: false,
+	}),
 	handleSignOut: vi.fn(),
 }))
 
@@ -52,13 +54,6 @@ describe("ErrorRow", () => {
 		render(<ErrorRow errorType="mistake_limit_reached" message={mistakeMessage} />)
 
 		expect(screen.getByText("Mistake limit reached")).toBeInTheDocument()
-	})
-
-	it("renders auto approval max requests error", () => {
-		const maxReqMessage = { ...mockMessage, text: "Max requests reached" }
-		render(<ErrorRow errorType="auto_approval_max_req_reached" message={maxReqMessage} />)
-
-		expect(screen.getByText("Max requests reached")).toBeInTheDocument()
 	})
 
 	it("renders diff error", () => {
@@ -120,7 +115,7 @@ describe("ErrorRow", () => {
 			expect(screen.getByText("Request ID: req_123456")).toBeInTheDocument()
 		})
 
-		it("renders auth error with sign in button when user is not signed in", async () => {
+		it("renders friendly logged-out message and sign in button when user is not signed in", async () => {
 			const mockClineError = {
 				message: "Authentication failed",
 				isErrorType: vi.fn((type) => type === "auth"),
@@ -133,7 +128,8 @@ describe("ErrorRow", () => {
 
 			render(<ErrorRow apiRequestFailedMessage="Authentication failed" errorType="error" message={mockMessage} />)
 
-			expect(screen.getByText("Authentication failed")).toBeInTheDocument()
+			expect(screen.queryByText("Authentication failed")).not.toBeInTheDocument()
+			expect(screen.getByText(/Whoops looks like you're logged out/)).toBeInTheDocument()
 			expect(screen.getByText("Sign in to Cline")).toBeInTheDocument()
 		})
 
@@ -184,11 +180,9 @@ describe("ErrorRow", () => {
 
 			render(<ErrorRow apiRequestFailedMessage="Some API error" errorType="error" message={mockMessage} />)
 
-			// When ClineError.parse returns null, clineErrorMessage is undefined, so it renders an empty paragraph
-			// The fallback to message.text only happens when there's no apiRequestFailedMessage at all
-			const paragraph = screen.getByRole("paragraph")
-			expect(paragraph).toBeInTheDocument()
-			expect(paragraph).toBeEmptyDOMElement()
+			// When ClineError.parse returns null, we display the raw error message for non-Cline providers
+			// Since clineError is undefined, isClineProvider is false, so we show the raw apiRequestFailedMessage
+			expect(screen.getByText("Some API error")).toBeInTheDocument()
 		})
 
 		it("renders regular error message when no API error messages are provided", () => {

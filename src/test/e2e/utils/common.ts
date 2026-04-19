@@ -13,13 +13,15 @@ export const addSelectedCodeToClineWebview = async (_page: Page) => {
 
 	// Open Code Actions via keyboard for cross-platform reliability
 	await _page.keyboard.press("ControlOrMeta+.")
-	// Wait for the Code Actions UI to appear (listbox or menu depending on platform/version)
-	try {
-		await _page.getByRole("listbox").first().waitFor({ state: "visible", timeout: 5000 })
-	} catch {
-		await _page.getByRole("menu").first().waitFor({ state: "visible", timeout: 5000 })
-	}
-	await _page.keyboard.press("Enter", { delay: 100 }) // First action - "Add to Cline"
+
+	// Target the explicit action instead of pressing Enter on the first item.
+	// The first item can vary by platform or diagnostics.
+	const addToCline = _page.getByText(/Add to Cline/i)
+	await addToCline.waitFor({ state: "visible" })
+	// For whatever reason, we need to move the mouse to make the context menu item clickable
+	await _page.mouse.move(10, 10)
+	await _page.mouse.move(20, 10)
+	await addToCline.click()
 }
 
 export const toggleNotifications = async (_page: Page) => {
@@ -33,34 +35,4 @@ export const toggleNotifications = async (_page: Page) => {
 	await editorSearchBar.fill("> Toggle Do Not Disturb Mode")
 	await _page.keyboard.press("Enter")
 	return _page
-}
-
-export const closeBanners = async (sidebar: Page) => {
-	const banners = ["Get Started for Free", "Close banner and enable"]
-
-	for (const banner of banners) {
-		await sidebar.getByRole("button", { name: banner }).click({ delay: 100 })
-	}
-}
-
-export async function cleanChatView(sidebar: Page): Promise<Page> {
-	const signUpBtn = sidebar.getByRole("button", { name: "Get Started for Free" })
-	if (await signUpBtn.isVisible()) {
-		await signUpBtn.click({ delay: 50 })
-	}
-	// Verify the help improve banner is visible and can be closed.
-	const helpBanner = sidebar.getByText("Help Improve Cline")
-	if (await helpBanner.isVisible()) {
-		await sidebar.getByRole("button", { name: "Close banner and enable" }).click()
-	}
-
-	// Verify the release banner is visible for new installs and can be closed.
-	const releaseBanner = sidebar.getByRole("heading", {
-		name: /^🎉 New in v\d/,
-	})
-	if (await releaseBanner.isVisible()) {
-		await sidebar.getByTestId("close-button").locator("span").first().click()
-	}
-
-	return sidebar
 }

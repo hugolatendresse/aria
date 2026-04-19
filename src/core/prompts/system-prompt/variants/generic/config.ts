@@ -1,4 +1,12 @@
+import {
+	isGLMModelFamily,
+	isLocalModel,
+	isNextGenModelFamily,
+	isNextGenModelProvider,
+	isTrinityModelFamily,
+} from "@utils/model-utils"
 import { ModelFamily } from "@/shared/prompts"
+import { Logger } from "@/shared/services/Logger"
 import { ClineDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
@@ -13,6 +21,25 @@ export const config = createVariant(ModelFamily.GENERIC)
 		stable: 1,
 		fallback: 1,
 	})
+	// Generic matcher - fallback for everything that doesn't match other variants
+	// This will match anything that doesn't match the other specific variants
+	.matcher((context) => {
+		const providerInfo = context.providerInfo
+		if (!providerInfo.providerId || !providerInfo.model.id) {
+			return true
+		}
+		const modelId = providerInfo.model.id.toLowerCase()
+		return (
+			// Not a local model with compact prompt enabled
+			!(providerInfo.customPrompt === "compact" && isLocalModel(providerInfo)) &&
+			// Not a next-gen model
+			!(isNextGenModelProvider(providerInfo) && isNextGenModelFamily(modelId)) &&
+			// Not a GLM model
+			!isGLMModelFamily(modelId) &&
+			// Not a Trinity model
+			!isTrinityModelFamily(modelId)
+		)
+	})
 	.template(baseTemplate)
 	.components(
 		SystemPromptSection.AGENT_ROLE,
@@ -21,13 +48,13 @@ export const config = createVariant(ModelFamily.GENERIC)
 		// SystemPromptSection.MCP, // ← REMOVED FOR CHAINLADDER TESTING
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.ACT_VS_PLAN,
-		SystemPromptSection.TODO,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.RULES,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
 		SystemPromptSection.ACTUARIAL_RAG,
 		SystemPromptSection.USER_INSTRUCTIONS,
+		SystemPromptSection.SKILLS,
 	)
 	.tools(
 		ClineDefaultTool.BASH,
@@ -43,10 +70,12 @@ export const config = createVariant(ModelFamily.GENERIC)
 		// ClineDefaultTool.MCP_ACCESS, // ← REMOVED FOR CHAINLADDER TESTING
 		ClineDefaultTool.ASK,
 		ClineDefaultTool.ATTEMPT,
-		ClineDefaultTool.NEW_TASK,
 		ClineDefaultTool.PLAN_MODE,
 		// ClineDefaultTool.MCP_DOCS, // ← REMOVED FOR CHAINLADDER TESTING
 		ClineDefaultTool.TODO,
+		ClineDefaultTool.GENERATE_EXPLANATION,
+		ClineDefaultTool.USE_SKILL,
+		ClineDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({
 		MODEL_FAMILY: "generic",
@@ -58,12 +87,12 @@ export const config = createVariant(ModelFamily.GENERIC)
 // Compile-time validation
 const validationResult = validateVariant({ ...config, id: "generic" }, { strict: true })
 if (!validationResult.isValid) {
-	console.error("Generic variant configuration validation failed:", validationResult.errors)
+	Logger.error("Generic variant configuration validation failed:", validationResult.errors)
 	throw new Error(`Invalid generic variant configuration: ${validationResult.errors.join(", ")}`)
 }
 
 if (validationResult.warnings.length > 0) {
-	console.warn("Generic variant configuration warnings:", validationResult.warnings)
+	Logger.warn("Generic variant configuration warnings:", validationResult.warnings)
 }
 
 // Export type information for better IDE support

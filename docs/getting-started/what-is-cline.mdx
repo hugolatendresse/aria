@@ -1,72 +1,60 @@
 ---
 title: "What is Cline?"
-description: "An introduction to Cline, your AI-powered development assistant for modern IDEs."
+sidebarTitle: "What is Cline?"
+description: "An AI coding agent that lives in your editor. Read files, run commands, and build features through natural language."
 ---
 
-Cline is an open source AI coding agent that brings frontier AI models directly to your IDE. Unlike autocomplete tools, Cline is a true coding agent that can understand entire codebases, plan complex changes, and execute multi-step tasks.
+Cline is an open-source AI coding agent that runs in your editor. It gives you direct, transparent access to frontier AI with no limits, no surprises, and no model ecosystem lock-in. See every decision. Choose any model. Control your costs.
 
-## Open Source AI Coding, Uncompromised
+<Tip>
+  **New to coding agents?** Watch [What is a Coding Agent?](https://youtu.be/CYIteJeNcuw) to see how Cline works in action.
+</Tip>
 
-Cline gives you direct, transparent access to frontier AI with no limits, no surprises, and no model ecosystem lock-in. See every decision. Choose any model. Control your costs.
+## Get Started
 
-### Complete Transparency
+<Steps>
+  <Step title="Install Cline">
+    Add Cline to VS Code, Cursor, or JetBrains from the extension marketplace; or download Cline CLI to work in the terminal.
+    
+    [Install Guide →](/getting-started/installing-cline)
+  </Step>
+  <Step title="Pick Your Model">
+    Connect your API key from Anthropic, OpenRouter, or any supported provider.
+    
+    [Model Setup →](/getting-started/authorizing-with-cline)
+  </Step>
+  <Step title="Start Building">
+    Open Cline from the sidebar and describe what you want to build.
+    
+    [Your First Project →](/getting-started/your-first-project)
+  </Step>
+</Steps>
 
-Watch in real-time as Cline reads files, considers approaches, and proposes changes. Every decision is visible, every edit reviewable before it's made. This isn't just "explainable AI" - it's complete transparency.
+## What Cline Can Do
 
-### Your Models, Your Control
+Cline operates directly in your codebase with your permission:
 
-Use Claude for complex reasoning, Gemini for massive contexts, or Qwen3 Coder for efficiency. Switch instantly as new models launch. Your API keys, your choice. No gatekeeping innovation.
+- **Read and write files** - Navigate your codebase, create new files, and make targeted edits. You approve every change before it happens.
+- **Run terminal commands** - Execute shell commands, run tests, install packages, and debug errors in real-time.
+- **Use a browser** - Launch a browser to test web apps, capture screenshots, and interact with pages.
+- **Connect external tools** - Extend capabilities with [MCP servers](/mcp/mcp-overview) for databases, APIs, and documentation.
+- **Run from the command line** - Use the [Cline CLI](/cline-cli/getting-started) for headless automation, CI/CD pipelines, and shell workflows.
 
-### Built for Real Engineering
+## Core Workflows
 
-Cline can:
-- **Read and write files** across your entire codebase
-- **Execute terminal commands** and debug errors
-- **Plan complex features** before writing code
-- **Connect to external systems** through MCP servers
-- **Understand large codebases** with intelligent context management
+These are the patterns you'll use daily with Cline:
 
-## Plan & Act Mode
+| Workflow | What It Does |
+|----------|--------------|
+| [Plan & Act](/core-workflows/plan-and-act) | Think first, then build. Plan mode explores your codebase without making changes. Act mode implements the solution. |
+| [Task Management](/core-workflows/task-management) | Start tasks, resume previous work, and manage long-running sessions. |
+| [Working with Files](/core-workflows/working-with-files) | Use @ mentions to reference files, folders, URLs, and terminal output in your prompts. |
+| [Commands](/core-workflows/using-commands) | Keyboard shortcuts, slash commands, and terminal integration. |
+| [Checkpoints](/core-workflows/checkpoints) | Automatic snapshots of your project. Restore to any previous state instantly. |
 
-Cline explores your codebase and works with you to create comprehensive plans before writing a single line of code, ensuring it understands the full context of your project.
+## Why Cline
 
-**Plan Mode** for complex tasks - Cline explores, asks questions, and creates detailed implementation plans.
-
-**Act Mode** for execution - Cline implements the plan with full transparency and control.
-
-## Zero Trust by Design
-
-Your code never touches our servers. Cline runs entirely client-side with your API keys, making it the only option for enterprises with strict security requirements.
-
-**Open source** means your security team can review every line. See exactly how Cline works, what it sends to AI providers, and how decisions are made.
-
-## Key Features
-
-### Focus Chain
-Automatic todo list management with real-time progress tracking throughout your tasks. Keeps Cline on track across long projects.
-
-### Auto Compact
-When conversations get long, Cline automatically summarizes to preserve context while freeing up space to continue working.
-
-### Deep Planning
-For complex features, Cline investigates your codebase, asks clarifying questions, and creates comprehensive implementation plans.
-
-### MCP Integration
-Connect to databases, APIs, and documentation through the Model Context Protocol. Cline becomes your bridge to any external system.
-
-### .clinerules
-Define project-specific instructions that Cline follows including coding standards, architecture patterns, or team conventions.
-
-## Why Developers Choose Cline
-
-**100% Open Source** - Every line of code on GitHub. 48k+ stars from developers who've read it, improved it, and trust it with their work.
-
-**No Inference Games** - We don't profit from AI usage. While others limit context or route to cheaper models, we give you unrestricted access to any model's full capabilities.
-
-**Future-Proof by Design** - New model released? Use it immediately. Cline works with any AI provider, any model.
-
-**True Visibility** - See every file read, every decision considered, every token used.
-
-## Getting Started
-
-Ready to experience AI coding without limits? [Install Cline](/getting-started/installing-cline) for your preferred IDE and start with our [Model Selection Guide](/getting-started/model-selection-guide) to choose the right AI model for your needs.
+- **Transparent by default** - Watch every file read, every decision considered, every token used. No black box.
+- **Any model, any provider** - Use Claude, GPT-4, Gemini, DeepSeek, or local models. Switch instantly as new models launch.
+- **Zero trust architecture** - Your code never touches our servers. Cline runs entirely client-side with your API keys.
+- **Open source** - Every line of code on [GitHub](https://github.com/cline/cline). 50k+ stars from developers who use it daily.

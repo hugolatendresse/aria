@@ -8,9 +8,10 @@ import { WorkspacePathAdapter } from "@/core/workspace/WorkspacePathAdapter"
 import { resolveWorkspacePath } from "@/core/workspace/WorkspaceResolver"
 import { telemetryService } from "@/services/telemetry"
 import { ClineSayTool } from "@/shared/ExtensionMessage"
+import { Logger } from "@/shared/services/Logger"
 import { ClineDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
-import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
+import { showNotificationForApproval } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -50,23 +51,21 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 				const workspaceRoots = adapter.getWorkspaceRoots()
 				const root = workspaceRoots.find((r) => r.name === workspaceHint)
 				return [{ absolutePath, workspaceName: workspaceHint, workspaceRoot: root?.path }]
-			} else {
-				// As a fallback, perform the search across all available workspaces.
-				// Typically, models should provide explicit hints to target specific workspaces for searching.
-				const allPaths = adapter.getAllPossiblePaths(parsedPath)
-				const workspaceRoots = adapter.getWorkspaceRoots()
-				return allPaths.map((absPath, index) => ({
-					absolutePath: absPath,
-					workspaceName: workspaceRoots[index]?.name || path.basename(workspaceRoots[index]?.path || absPath),
-					workspaceRoot: workspaceRoots[index]?.path,
-				}))
 			}
-		} else {
-			// Single-workspace mode (backward compatible)
-			const pathResult = resolveWorkspacePath(config, originalPath, "SearchFilesTool.execute")
-			const absolutePath = typeof pathResult === "string" ? pathResult : pathResult.absolutePath
-			return [{ absolutePath, workspaceRoot: config.cwd }]
+			// As a fallback, perform the search across all available workspaces.
+			// Typically, models should provide explicit hints to target specific workspaces for searching.
+			const allPaths = adapter.getAllPossiblePaths(parsedPath)
+			const workspaceRoots = adapter.getWorkspaceRoots()
+			return allPaths.map((absPath, index) => ({
+				absolutePath: absPath,
+				workspaceName: workspaceRoots[index]?.name || path.basename(workspaceRoots[index]?.path || absPath),
+				workspaceRoot: workspaceRoots[index]?.path,
+			}))
 		}
+		// Single-workspace mode (backward compatible)
+		const pathResult = resolveWorkspacePath(config, originalPath, "SearchFilesTool.execute")
+		const absolutePath = typeof pathResult === "string" ? pathResult : pathResult.absolutePath
+		return [{ absolutePath, workspaceRoot: config.cwd }]
 	}
 
 	/**
@@ -95,7 +94,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			// Parse the result count from the first line
 			const firstLine = workspaceResults.split("\n")[0]
 			const resultMatch = firstLine.match(/Found (\d+) result/)
-			const resultCount = resultMatch ? parseInt(resultMatch[1], 10) : 0
+			const resultCount = resultMatch ? Number.parseInt(resultMatch[1], 10) : 0
 
 			return {
 				workspaceName,
@@ -105,7 +104,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			}
 		} catch (error) {
 			// If search fails in one workspace, return error info
-			console.error(`Search failed in ${absolutePath}:`, error)
+			Logger.error(`Search failed in ${absolutePath}:`, error)
 			return {
 				workspaceName,
 				workspaceResults: "",
@@ -163,13 +162,11 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			// Multi-workspace search result
 			if (totalResultCount === 0) {
 				return "Found 0 results."
-			} else {
-				return `Found ${totalResultCount === 1 ? "1 result" : `${totalResultCount.toLocaleString()} results`} across ${searchPaths.length} workspace${searchPaths.length > 1 ? "s" : ""}.\n\n${allResults.join("\n\n")}`
 			}
-		} else {
-			// Single workspace result
-			return allResults[0] || "Found 0 results."
+			return `Found ${totalResultCount === 1 ? "1 result" : `${totalResultCount.toLocaleString()} results`} across ${searchPaths.length} workspace${searchPaths.length > 1 ? "s" : ""}.\n\n${allResults.join("\n\n")}`
 		}
+		// Single workspace result
+		return allResults[0] || "Found 0 results."
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
@@ -177,6 +174,9 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		const regex = block.params.regex
 
 		const config = uiHelpers.getConfig()
+		if (config.isSubagentExecution) {
+			return
+		}
 
 		// Create and show partial UI message
 		const filePattern = block.params.file_pattern
@@ -207,6 +207,11 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		const regex: string | undefined = block.params.regex
 		const filePattern: string | undefined = block.params.file_pattern
 
+		// Extract provider information for telemetry
+		const apiConfig = config.services.stateManager.getApiConfiguration()
+		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
+		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
+
 		// Validate required parameters
 		const pathValidation = this.validator.assertRequiredParams(block, "path")
 		if (!pathValidation.ok) {
@@ -219,13 +224,22 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "regex")
 		}
 
-		config.taskState.consecutiveMistakeCount = 0
-
-		// Parse workspace hint from the path
-		const { workspaceHint, relPath: parsedPath } = parseWorkspaceInlinePath(relDirPath!)
-
-		// Determine which paths to search
-		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath!)
+		// Parse workspace hint from the path and determine search targets.
+		// These can throw if the workspace configuration is invalid or the
+		// path cannot be resolved, so catch and return a graceful tool error.
+		let parsedPath: string
+		let workspaceHint: string | undefined
+		let searchPaths: ReturnType<SearchFilesToolHandler["determineSearchPaths"]>
+		try {
+			const parsed = parseWorkspaceInlinePath(relDirPath!)
+			parsedPath = parsed.relPath
+			workspaceHint = parsed.workspaceHint
+			searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath!)
+		} catch (error) {
+			config.taskState.consecutiveMistakeCount++
+			const errorMessage = error instanceof Error ? error.message : String(error)
+			return formatResponse.toolError(`Error resolving search path: ${errorMessage}`)
+		}
 
 		// Determine workspace context for telemetry
 		const primaryWorkspaceRoot = searchPaths[0]?.workspaceRoot
@@ -274,6 +288,16 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		// Format and combine results
 		const results = this.formatSearchResults(config, searchResults, searchPaths)
 
+		// Only reset after a successful operation so repeated failures
+		// accumulate toward the yolo-mode mistake limit.
+		// If ALL searches failed, increment the mistake counter.
+		const anySucceeded = searchResults.some((result) => result.success)
+		if (anySucceeded) {
+			config.taskState.consecutiveMistakeCount = 0
+		} else {
+			config.taskState.consecutiveMistakeCount++
+		}
+
 		// Capture workspace search pattern telemetry
 		if (config.isMultiRootEnabled && config.workspaceManager) {
 			const searchType = workspaceHint ? "targeted" : searchPaths.length > 1 ? "cross_workspace" : "primary_only"
@@ -300,24 +324,32 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 		const completeMessage = JSON.stringify(sharedMessageProps)
 
-		if (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath)) {
+		const shouldAutoApprove =
+			config.isSubagentExecution || (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
+		if (shouldAutoApprove) {
 			// Auto-approval flow
-			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-			await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-			config.taskState.consecutiveAutoApprovedRequestsCount++
+			if (!config.isSubagentExecution) {
+				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
+				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
+			}
 
 			// Capture telemetry
-			telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, true, true, workspaceContext)
+			telemetryService.captureToolUsage(
+				config.ulid,
+				block.name,
+				config.api.getModel().id,
+				provider,
+				true,
+				true,
+				workspaceContext,
+				block.isNativeToolCall,
+			)
 		} else {
 			// Manual approval flow
 			const notificationMessage = `Cline wants to search files for ${regex}`
 
 			// Show notification
-			showNotificationForApprovalIfAutoApprovalEnabled(
-				notificationMessage,
-				config.autoApprovalSettings.enabled,
-				config.autoApprovalSettings.enableNotifications,
-			)
+			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
 
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
 
@@ -327,21 +359,36 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 					config.ulid,
 					block.name,
 					config.api.getModel().id,
+					provider,
 					false,
 					false,
 					workspaceContext,
+					block.isNativeToolCall,
 				)
 				return formatResponse.toolDenied()
-			} else {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					false,
-					true,
-					workspaceContext,
-				)
 			}
+			telemetryService.captureToolUsage(
+				config.ulid,
+				block.name,
+				config.api.getModel().id,
+				provider,
+				false,
+				true,
+				workspaceContext,
+				block.isNativeToolCall,
+			)
+		}
+
+		// Run PreToolUse hook after approval but before execution
+		try {
+			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
+			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+		} catch (error) {
+			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
+			if (error instanceof PreToolUseHookCancellationError) {
+				return formatResponse.toolDenied()
+			}
+			throw error
 		}
 
 		return results
