@@ -28,7 +28,6 @@ concurrency:
 jobs:
   smoke-tests:
     name: Smoke Tests
-    if: github.repository == 'cline/cline'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
