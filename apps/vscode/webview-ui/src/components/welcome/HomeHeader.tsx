@@ -1,5 +1,5 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
-import ariaLogoUrl from "@/assets/icon.png"
+import ariaLogoUrl from "@/assets/aria-logo.svg?inline"
 import { UiServiceClient } from "@/services/grpc-client"
 
 interface HomeHeaderProps {
