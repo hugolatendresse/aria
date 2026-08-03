@@ -104,6 +104,20 @@ export function isGPT52Model(id: string): boolean {
 	return modelId.includes("gpt-5.2") || modelId.includes("gpt-5-2")
 }
 
+export function isGPT51PlusModel(id: string): boolean {
+	const modelId = normalize(id)
+	return (
+		isGPT51Model(modelId) ||
+		isGPT52Model(modelId) ||
+		modelId.includes("gpt-5.3") ||
+		modelId.includes("gpt-5-3") ||
+		modelId.includes("gpt-5.4") ||
+		modelId.includes("gpt-5-4") ||
+		modelId.includes("gpt-5.5") ||
+		modelId.includes("gpt-5-5")
+	)
+}
+
 export function isGLMModelFamily(id: string): boolean {
 	const modelId = normalize(id)
 	return (
@@ -175,6 +189,11 @@ export function isDeepSeekNativeModelFamily(id: string): boolean {
 	return modelId.includes("deepseek-chat") || modelId.includes("deepseek-reasoner")
 }
 
+export function isPoolsideModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("laguna")
+}
+
 export function isNextGenModelFamily(id: string): boolean {
 	const modelId = normalize(id)
 	return (
@@ -187,7 +206,8 @@ export function isNextGenModelFamily(id: string): boolean {
 		isGemini3ModelFamily(modelId) ||
 		isNextGenOpenSourceModelFamily(modelId) ||
 		isDeepSeek32ModelFamily(modelId) ||
-		isDeepSeekNativeModelFamily(modelId)
+		isDeepSeekNativeModelFamily(modelId) ||
+		isPoolsideModelFamily(modelId)
 	)
 }
 
