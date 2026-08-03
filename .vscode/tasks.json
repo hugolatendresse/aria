@@ -36,6 +36,20 @@
 			"label": "watch",
 			"dependsOn": [
 				"npm: protos",
+				"watch:processes"
+			],
+			"dependsOrder": "sequence",
+			"presentation": {
+				"reveal": "always"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "watch:processes",
+			"dependsOn": [
 				"npm: build:webview",
 				"npm: dev:webview",
 				"npm: watch:tsc",
@@ -43,10 +57,6 @@
 			],
 			"presentation": {
 				"reveal": "always"
-			},
-			"group": {
-				"kind": "build",
-				"isDefault": true
 			}
 		},
 		{
