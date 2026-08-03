@@ -1,7 +1,12 @@
 import { name, publisher, version } from "../package.json"
 import { HostProvider } from "./hosts/host-provider"
 
-const prefix = name === "claude-dev" ? "cline" : name
+// aria-dev (fork) and upstream's claude-dev both ship the production package.json
+// contributes: commands under the "cline" namespace and views under "claude-dev".
+// Only nightly-style renamed builds derive the prefix from the package name.
+const usesProductionNamespace = name === "claude-dev" || name === "aria-dev"
+const prefix = usesProductionNamespace ? "cline" : name
+const viewPrefix = usesProductionNamespace ? "claude-dev" : name
 
 /**
  * List of commands with the name of the extension they are registered under.
@@ -37,7 +42,7 @@ const ClineCommands = {
  * These should match the name + view IDs defined in package.json.
  */
 const ClineViewIds = {
-	Sidebar: name + ".SidebarProvider",
+	Sidebar: viewPrefix + ".SidebarProvider",
 }
 
 /**
