@@ -1,21 +1,12 @@
 import { ApiHandler } from "@core/api"
 import { execSync } from "child_process"
-import { showSystemNotification } from "@/integrations/notifications"
+import { showApprovalNotification } from "@/integrations/notifications"
 import { ClineApiReqCancelReason, ClineApiReqInfo } from "@/shared/ExtensionMessage"
 import { calculateApiCostAnthropic } from "@/utils/cost"
 import { MessageStateHandler } from "./message-state"
 
-export const showNotificationForApprovalIfAutoApprovalEnabled = (
-	message: string,
-	autoApprovalSettingsEnabled: boolean,
-	notificationsEnabled: boolean,
-) => {
-	if (autoApprovalSettingsEnabled && notificationsEnabled) {
-		showSystemNotification({
-			subtitle: "Approval Required",
-			message,
-		})
-	}
+export const showNotificationForApproval = (message: string, notificationsEnabled: boolean) => {
+	void showApprovalNotification({ message }, notificationsEnabled)
 }
 
 type UpdateApiReqMsgParams = {
@@ -131,4 +122,21 @@ export async function detectAvailableCliTools(): Promise<string[]> {
 	}
 
 	return availableCommands
+}
+
+/**
+ * Extracts the domain from a provider URL string
+ * @param url The URL to extract domain from
+ * @returns The domain/hostname or undefined if invalid
+ */
+export function extractProviderDomainFromUrl(url: string | undefined): string | undefined {
+	if (!url) {
+		return undefined
+	}
+	try {
+		const urlObj = new URL(url)
+		return urlObj.hostname
+	} catch {
+		return undefined
+	}
 }

@@ -1,4 +1,4 @@
-import type { Environment } from "../../../src/config"
+import type { Environment } from "../../../src/shared/config-types"
 
 /**
  * Gets the appropriate color for the current environment.
@@ -26,4 +26,28 @@ export const getEnvironmentColor = (environment: Environment | undefined, type: 
 		: environment === "staging"
 			? "var(--vscode-focusBorder)" // Blue for staging
 			: "var(--vscode-foreground)" // Default for production
+}
+
+export function getClineEnvironmentClassname(environment: Environment | undefined, type = "text") {
+	if (type === "border") {
+		switch (environment) {
+			case "local":
+				return "border-(--vscode-activityWarningBadge-background)"
+			case "staging":
+				return "border-(--vscode-focusBorder)"
+			case "production":
+			default:
+				return "border-(--vscode-editorGroup-border)"
+		}
+	}
+
+	switch (environment) {
+		case "local":
+			return "var(--vscode-activityWarningBadge-background)"
+		case "staging":
+			return "var(--vscode-focusBorder)"
+		case "production":
+		default:
+			return "var(--vscode-foreground)"
+	}
 }

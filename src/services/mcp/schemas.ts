@@ -8,6 +8,9 @@ export const BaseConfigSchema = z.object({
 	autoApprove: AutoApproveSchema.optional(),
 	disabled: z.boolean().optional(),
 	timeout: z.number().min(MIN_MCP_TIMEOUT_SECONDS).optional().default(DEFAULT_MCP_TIMEOUT_SECONDS),
+	// Marker for servers that were added by remote config sync.
+	// Used to identify which servers should be removed when they are no longer in the remote config.
+	remoteConfigured: z.boolean().optional(),
 })
 
 // Helper function to create a refined schema with better error messages
@@ -37,6 +40,7 @@ const createServerTypeSchema = () => {
 			})
 			.refine((data) => data.type === "stdio", { message: TYPE_ERROR_MESSAGE }),
 		// SSE config (has url field)
+		// IMPORTANT: The fact that this is listed first before streamableHttp means that when type is not specified, it will default to sse. Since there may be users with older MCP servers configured without a type specified, rearranging this to make streamableHttp first will be a breaking change.
 		BaseConfigSchema.extend({
 			type: z.literal("sse").optional(),
 			transportType: z.string().optional(), // Support legacy field

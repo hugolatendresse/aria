@@ -1,5 +1,7 @@
 import { WebviewProvider } from "@/core/webview"
+import { CommentReviewController } from "@/integrations/editor/CommentReviewController"
 import { DiffViewProvider } from "@/integrations/editor/DiffViewProvider"
+import { ITerminalManager } from "@/integrations/terminal/types"
 import { HostBridgeClientProvider } from "./host-provider-types"
 /**
  * Singleton class that manages host-specific providers for dependency injection.
@@ -19,13 +21,18 @@ export class HostProvider {
 
 	createWebviewProvider: WebviewProviderCreator
 	createDiffViewProvider: DiffViewProviderCreator
+	createCommentReviewController: CommentReviewControllerCreator
+	createTerminalManager: TerminalManagerCreator
 	hostBridge: HostBridgeClientProvider
 
 	// Logs to a user-visible output channel.
 	logToChannel: LogToChannel
 
 	// Returns a callback URL that will redirect to Cline.
-	getCallbackUrl: () => Promise<string>
+	// The path parameter specifies the route for the callback (e.g., "/auth", "/openrouter").
+	// The optional preferredPort parameter hints that the provider should try to bind
+	// this specific port first (used to preserve OAuth client registrations across sessions).
+	getCallbackUrl: (path: string, preferredPort?: number) => Promise<string>
 
 	// Returns the location of the binary `name`.
 	// Use `getBinaryLocation()` from utils/ts.ts instead of using
@@ -44,15 +51,19 @@ export class HostProvider {
 	private constructor(
 		createWebviewProvider: WebviewProviderCreator,
 		createDiffViewProvider: DiffViewProviderCreator,
+		createCommentReviewController: CommentReviewControllerCreator,
+		createTerminalManager: TerminalManagerCreator,
 		hostBridge: HostBridgeClientProvider,
 		logToChannel: LogToChannel,
-		getCallbackUrl: () => Promise<string>,
+		getCallbackUrl: (path: string, preferredPort?: number) => Promise<string>,
 		getBinaryLocation: (name: string) => Promise<string>,
 		extensionFsPath: string,
 		globalStorageFsPath: string,
 	) {
 		this.createWebviewProvider = createWebviewProvider
 		this.createDiffViewProvider = createDiffViewProvider
+		this.createCommentReviewController = createCommentReviewController
+		this.createTerminalManager = createTerminalManager
 		this.hostBridge = hostBridge
 		this.logToChannel = logToChannel
 		this.getCallbackUrl = getCallbackUrl
@@ -64,9 +75,11 @@ export class HostProvider {
 	public static initialize(
 		webviewProviderCreator: WebviewProviderCreator,
 		diffViewProviderCreator: DiffViewProviderCreator,
+		commentReviewControllerCreator: CommentReviewControllerCreator,
+		terminalManagerCreator: TerminalManagerCreator,
 		hostBridgeProvider: HostBridgeClientProvider,
 		logToChannel: LogToChannel,
-		getCallbackUrl: () => Promise<string>,
+		getCallbackUrl: (path: string, preferredPort?: number) => Promise<string>,
 		getBinaryLocation: (name: string) => Promise<string>,
 		extensionFsPath: string,
 		globalStorageFsPath: string,
@@ -77,6 +90,8 @@ export class HostProvider {
 		HostProvider.instance = new HostProvider(
 			webviewProviderCreator,
 			diffViewProviderCreator,
+			commentReviewControllerCreator,
+			terminalManagerCreator,
 			hostBridgeProvider,
 			logToChannel,
 			getCallbackUrl,
@@ -136,4 +151,15 @@ export type WebviewProviderCreator = () => WebviewProvider
  */
 export type DiffViewProviderCreator = () => DiffViewProvider
 
+/**
+ * A function that creates CommentReviewController instances
+ */
+export type CommentReviewControllerCreator = () => CommentReviewController
+
 export type LogToChannel = (message: string) => void
+
+/**
+ * A function that creates TerminalManager instances
+ * Returns the platform-appropriate terminal manager (VSCode TerminalManager or StandaloneTerminalManager)
+ */
+export type TerminalManagerCreator = () => ITerminalManager

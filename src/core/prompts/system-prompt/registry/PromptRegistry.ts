@@ -1,5 +1,7 @@
 import { ModelFamily } from "@/shared/prompts"
-import { getModelFamily } from ".."
+import { Logger } from "@/shared/services/Logger"
+import type { ClineTool } from "@/shared/tools"
+import { ClineToolSet } from ".."
 import { getSystemPromptComponents } from "../components"
 import { registerClineToolSets } from "../tools"
 import type { ComponentFunction, ComponentRegistry, PromptVariant, SystemPromptContext } from "../types"
@@ -11,10 +13,11 @@ export class PromptRegistry {
 	private static instance: PromptRegistry
 	private variants: Map<string, PromptVariant> = new Map()
 	private components: ComponentRegistry = {}
-	private loaded: boolean = false
+	public nativeTools: ClineTool[] | undefined = undefined
 
 	private constructor() {
 		registerClineToolSets()
+		this.load()
 	}
 
 	static getInstance(): PromptRegistry {
@@ -27,79 +30,64 @@ export class PromptRegistry {
 	/**
 	 * Load all prompts and components on initialization
 	 */
-	async load(): Promise<void> {
-		if (this.loaded) {
-			return
-		}
-
-		await Promise.all([this.loadVariants(), this.loadComponents()])
-
-		// Perform health check to ensure critical variants are available
-		this.performHealthCheck()
-
-		this.loaded = true
+	load(): void {
+		this.loadVariants()
+		this.loadComponents()
 	}
 
-	/**
-	 * Perform health check to ensure registry is in a valid state
-	 */
-	private performHealthCheck(): void {
-		const criticalVariants = [ModelFamily.GENERIC]
-		const missingVariants = criticalVariants.filter((variant) => !this.variants.has(variant))
-
-		if (missingVariants.length > 0) {
-			console.error(`Registry health check failed: Missing critical variants: ${missingVariants.join(", ")}`)
-			console.error(`Available variants: ${Array.from(this.variants.keys()).join(", ")}`)
+	getModelFamily(context: SystemPromptContext) {
+		// Ensure providerInfo and model ID are available
+		if (context.providerInfo?.model?.id) {
+			const modelId = context.providerInfo.model.id
+			// Loop through all registered variants to find the first one that matches
+			for (const [_, v] of this.variants.entries()) {
+				try {
+					if (v.matcher(context)) {
+						Logger.log(`[Prompt variant] Selected: ${v.family} (model: ${modelId})`)
+						return v.family
+					}
+				} catch {
+					// Continue to next variant if matcher throws
+				}
+			}
 		}
-
-		if (this.variants.size === 0) {
-			console.error("Registry health check failed: No variants loaded at all")
-		}
-
-		if (Object.keys(this.components).length === 0) {
-			console.warn("Registry health check warning: No components loaded")
-		}
-
-		console.log(
-			`Registry health check: ${this.variants.size} variants, ${Object.keys(this.components).length} components loaded`,
-		)
+		// Fallback to generic variant if no match found
+		const modelId = context.providerInfo?.model?.id ?? "unknown"
+		Logger.log(`[Prompt variant] No matching variant found for model: ${modelId}, falling back to generic`)
+		return ModelFamily.GENERIC
 	}
 
-	/**
-	 * Get prompt by model ID with fallback to generic
-	 */
-	async get(context: SystemPromptContext): Promise<string> {
-		await this.load()
-
-		// Try model family fallback (e.g., "claude-4" -> "claude")
-		const modelFamily = getModelFamily(context.providerInfo)
-		let variant = this.variants.get(modelFamily ?? ModelFamily.GENERIC)
-
-		// If no variant found for the detected family, explicitly try generic
-		if (!variant && modelFamily !== ModelFamily.GENERIC) {
-			variant = this.variants.get(ModelFamily.GENERIC)
-		}
-
+	getVariant(context: SystemPromptContext): PromptVariant {
+		const family = this.getModelFamily(context)
+		const variant = this.variants.get(family) || this.variants.get(ModelFamily.GENERIC)
 		if (!variant) {
 			// Enhanced error with debugging information
 			const availableVariants = Array.from(this.variants.keys())
 			const errorDetails = {
 				requestedModel: context.providerInfo.model.id,
-				detectedFamily: modelFamily,
 				availableVariants,
 				variantsCount: this.variants.size,
 				componentsCount: Object.keys(this.components).length,
-				isLoaded: this.loaded,
 			}
 
-			console.error("Prompt variant lookup failed:", errorDetails)
+			Logger.error("Prompt variant lookup failed:", errorDetails)
 
 			throw new Error(
-				`No prompt variant found for model '${context.providerInfo.model.id}' (family: ${modelFamily}) and no generic fallback available. ` +
+				`No prompt variant found for model '${context.providerInfo.model.id}' and no generic fallback available. ` +
 					`Available variants: [${availableVariants.join(", ")}]. ` +
-					`Registry state: loaded=${this.loaded}, variants=${this.variants.size}, components=${Object.keys(this.components).length}`,
+					`Registry state: variants=${this.variants.size}, components=${Object.keys(this.components).length}`,
 			)
 		}
+		return variant
+	}
+	/**
+	 * Get prompt by matching against all registered variants
+	 */
+	async get(context: SystemPromptContext): Promise<string> {
+		const variant = this.getVariant(context)
+
+		// Hacky way to get native tools for the current variant - it's bad and ugly
+		this.nativeTools = ClineToolSet.getNativeTools(variant, context)
 
 		const builder = new PromptBuilder(variant, context, this.components)
 		return await builder.build()
@@ -114,8 +102,6 @@ export class PromptRegistry {
 		context: SystemPromptContext,
 		isNextGenModelFamily?: boolean,
 	): Promise<string> {
-		await this.load()
-
 		// If isNextGenModelFamily is true, prioritize next-gen variant with the specified version
 		if (isNextGenModelFamily) {
 			const nextGenVariant = this.variants.get(ModelFamily.NEXT_GEN)
@@ -157,8 +143,6 @@ export class PromptRegistry {
 		context?: SystemPromptContext,
 		isNextGenModelFamily?: boolean,
 	): Promise<string> {
-		await this.load()
-
 		if (!context) {
 			throw new Error("Context is required for prompt building")
 		}
@@ -245,7 +229,7 @@ export class PromptRegistry {
 			// Ensure generic variant is always available as a safety fallback
 			this.ensureGenericFallback()
 		} catch (error) {
-			console.warn("Warning: Could not load variants:", error)
+			Logger.warn("Warning: Could not load variants:", error)
 			// Even if variant loading fails completely, create a minimal generic fallback
 			this.createMinimalGenericFallback()
 		}
@@ -256,7 +240,7 @@ export class PromptRegistry {
 	 */
 	private ensureGenericFallback(): void {
 		if (!this.variants.has(ModelFamily.GENERIC)) {
-			console.warn("Generic variant not found, creating minimal fallback")
+			Logger.warn("Generic variant not found, creating minimal fallback")
 			this.createMinimalGenericFallback()
 		}
 	}
@@ -285,14 +269,14 @@ export class PromptRegistry {
 				this.variants.set(`${variantId}@${variant.version}`, variant)
 			}
 		} catch (error) {
-			console.warn(`Warning: Could not load variant '${variantId}':`, error)
+			Logger.warn(`Warning: Could not load variant '${variantId}':`, error)
 		}
 	}
 
 	/**
 	 * Load all components from the components directory
 	 */
-	private async loadComponents(): Promise<void> {
+	private loadComponents(): void {
 		try {
 			// Register each component function
 			const componentMappings = getSystemPromptComponents()
@@ -303,7 +287,7 @@ export class PromptRegistry {
 				}
 			}
 		} catch (error) {
-			console.warn("Warning: Could not load some components:", error)
+			Logger.warn("Warning: Could not load some components:", error)
 		}
 	}
 

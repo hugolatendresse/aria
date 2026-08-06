@@ -11,21 +11,22 @@ import { syncModeConfigurations } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
 interface ApiConfigurationSectionProps {
-	renderSectionHeader: (tabId: string) => JSX.Element | null
+	renderSectionHeader?: (tabId: string) => JSX.Element | null
+	initialModelTab?: "recommended" | "free"
 }
 
-const ApiConfigurationSection = ({ renderSectionHeader }: ApiConfigurationSectionProps) => {
+const ApiConfigurationSection = ({ renderSectionHeader, initialModelTab }: ApiConfigurationSectionProps) => {
 	const { planActSeparateModelsSetting, mode, apiConfiguration } = useExtensionState()
 	const [currentTab, setCurrentTab] = useState<Mode>(mode)
 	const { handleFieldsChange } = useApiConfigurationHandlers()
 	return (
 		<div>
-			{renderSectionHeader("api-config")}
+			{renderSectionHeader?.("api-config")}
 			<Section>
 				{/* Tabs container */}
 				{planActSeparateModelsSetting ? (
 					<div className="rounded-md mb-5">
-						<div className="flex gap-[1px] mb-[10px] -mt-2 border-0 border-b border-solid border-[var(--vscode-panel-border)]">
+						<div className="flex gap-px mb-[10px] -mt-2 border-0 border-b border-solid border-(--vscode-panel-border)">
 							<TabButton
 								disabled={currentTab === "plan"}
 								isActive={currentTab === "plan"}
@@ -50,11 +51,11 @@ const ApiConfigurationSection = ({ renderSectionHeader }: ApiConfigurationSectio
 
 						{/* Content container */}
 						<div className="-mb-3">
-							<ApiOptions currentMode={currentTab} showModelOptions={true} />
+							<ApiOptions currentMode={currentTab} initialModelTab={initialModelTab} showModelOptions={true} />
 						</div>
 					</div>
 				) : (
-					<ApiOptions currentMode={mode} showModelOptions={true} />
+					<ApiOptions currentMode={mode} initialModelTab={initialModelTab} showModelOptions={true} />
 				)}
 
 				<div className="mb-[5px]">
@@ -79,7 +80,7 @@ const ApiConfigurationSection = ({ renderSectionHeader }: ApiConfigurationSectio
 						}}>
 						Use different models for Plan and Act modes
 					</VSCodeCheckbox>
-					<p className="text-xs mt-[5px] text-[var(--vscode-descriptionForeground)]">
+					<p className="text-xs mt-[5px] text-(--vscode-descriptionForeground)">
 						Switching between Plan and Act mode will persist the API and model used in the previous mode. This may be
 						helpful e.g. when using a strong reasoning model to architect a plan for a cheaper coding model to act on.
 					</p>

@@ -21,6 +21,10 @@ export interface BalanceResponse {
 	userId: string
 }
 
+export interface FeaturebaseTokenResponse {
+	featurebaseJwt: string
+}
+
 export interface UsageTransaction {
 	aiInferenceProviderName: string
 	aiModelName: string
@@ -36,6 +40,7 @@ export interface UsageTransaction {
 		additionalProp2: string
 		additionalProp3: string
 	}
+	operation?: string
 	organizationId: string
 	promptTokens: number
 	totalTokens: number
@@ -71,10 +76,22 @@ export interface OrganizationUsageTransaction {
 		additionalProp2: string
 		additionalProp3: string
 	}
+	operation?: string
 	organizationId: string
 	promptTokens: number
 	totalTokens: number
 	userId: string
+}
+
+export interface UserRemoteConfigOrganization {
+	organizationId: string
+	name: string
+}
+
+export interface UserRemoteConfigDiscoveryResponse {
+	organizationId: string
+	value: string
+	organizations?: UserRemoteConfigOrganization[]
 }
 
 // Used in cline.ts provider and in webview-ui/src/components/chat/ChatRow.tsx to display the login button

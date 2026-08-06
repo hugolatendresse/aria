@@ -71,7 +71,7 @@ export const Default: Story = {
 	argTypes: {
 		errorType: {
 			control: { type: "select" },
-			options: ["error", "mistake_limit_reached", "auto_approval_max_req_reached", "diff_error", "clineignore_error"],
+			options: ["error", "mistake_limit_reached", "diff_error", "clineignore_error"],
 			description: "Type of error to display",
 		},
 		message: {
@@ -149,6 +149,67 @@ export const ClineRateLimitError: Story = {
 			message: "Rate limit exceeded. Please wait before making another request.",
 			request_id: "req_987654321",
 			providerId: "cline",
+		}),
+	},
+}
+
+export const ClineSpendLimitDaily: Story = {
+	args: {
+		message: createMockMessage(),
+		errorType: "error",
+		apiRequestFailedMessage: JSON.stringify({
+			message: "$20.00 daily limit has been reached.",
+			status: 429,
+			code: "SPEND_LIMIT_EXCEEDED",
+			providerId: "cline",
+			details: {
+				code: "SPEND_LIMIT_EXCEEDED",
+				limit_scope: "user",
+				budget_period: "daily",
+				limit_usd: 20.0,
+				spent_usd: 20.5,
+				resets_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+				message: "$20.00 daily limit has been reached.",
+			},
+		}),
+	},
+}
+
+export const ClineSpendLimitMonthly: Story = {
+	args: {
+		message: createMockMessage(),
+		errorType: "error",
+		apiRequestFailedMessage: JSON.stringify({
+			message: "$100.00 monthly limit has been reached.",
+			status: 429,
+			code: "SPEND_LIMIT_EXCEEDED",
+			providerId: "cline",
+			details: {
+				code: "SPEND_LIMIT_EXCEEDED",
+				limit_scope: "user",
+				budget_period: "monthly",
+				limit_usd: 100.0,
+				spent_usd: 103.22,
+				resets_at: null,
+				message: "$100.00 monthly limit has been reached.",
+			},
+		}),
+	},
+}
+
+export const ClineSpendLimitMinimal: Story = {
+	args: {
+		message: createMockMessage(),
+		errorType: "error",
+		apiRequestFailedMessage: JSON.stringify({
+			message: "Spend limit reached.",
+			status: 429,
+			code: "SPEND_LIMIT_EXCEEDED",
+			providerId: "cline",
+			details: {
+				code: "SPEND_LIMIT_EXCEEDED",
+				message: "Spend limit reached.",
+			},
 		}),
 	},
 }

@@ -64,20 +64,16 @@ export class SearchActuarialDocsToolHandler implements IFullyManagedTool {
 			false,
 		)
 
-		// Capture telemetry
-		telemetryService.captureToolUsage(
-			config.ulid,
-			block.name,
-			config.api.getModel().id,
-			true, // auto-approved (no user approval needed for searches)
-			!isError,
-			{
-				isMultiRootEnabled: false,
-				usedWorkspaceHint: false,
-				resolvedToNonPrimary: false,
-				resolutionMethod: "primary_fallback" as const,
-			},
-		)
+		const apiConfig = config.services.stateManager.getApiConfiguration()
+		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
+		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
+
+		telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, provider, true, !isError, {
+			isMultiRootEnabled: false,
+			usedWorkspaceHint: false,
+			resolvedToNonPrimary: false,
+			resolutionMethod: "primary_fallback" as const,
+		})
 
 		if (isError) {
 			return formatResponse.toolError(result)

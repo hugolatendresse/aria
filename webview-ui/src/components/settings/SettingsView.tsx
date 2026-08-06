@@ -1,24 +1,27 @@
-import { ExtensionMessage } from "@shared/ExtensionMessage"
+import type { ExtensionMessage } from "@shared/ExtensionMessage"
 import { ResetStateRequest } from "@shared/proto/cline/state"
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import debounce from "debounce"
+import { UserOrganization } from "@shared/proto/index.cline"
 import {
 	CheckCheck,
 	FlaskConical,
+	HardDriveDownload,
 	Info,
-	LucideIcon,
+	type LucideIcon,
 	SlidersHorizontal,
 	SquareMousePointer,
 	SquareTerminal,
 	Wrench,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useEvent } from "react-use"
-import HeroTooltip from "@/components/common/HeroTooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useClineAuth } from "@/context/ClineAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { cn } from "@/lib/utils"
 import { StateServiceClient } from "@/services/grpc-client"
-import { getEnvironmentColor } from "@/utils/environmentColors"
-import { Tab, TabContent, TabHeader, TabList, TabTrigger } from "../common/Tab"
+import { isAdminOrOwner } from "../account/helpers"
+import { Tab, TabContent, TabList, TabTrigger } from "../common/Tab"
+import ViewHeader from "../common/ViewHeader"
 import SectionHeader from "./SectionHeader"
 import AboutSection from "./sections/AboutSection"
 import ApiConfigurationSection from "./sections/ApiConfigurationSection"
@@ -26,27 +29,20 @@ import BrowserSettingsSection from "./sections/BrowserSettingsSection"
 import DebugSection from "./sections/DebugSection"
 import FeatureSettingsSection from "./sections/FeatureSettingsSection"
 import GeneralSettingsSection from "./sections/GeneralSettingsSection"
+import { RemoteConfigSection } from "./sections/RemoteConfigSection"
 import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 
 const IS_DEV = process.env.IS_DEV
 
-// Styles for the tab system
-const settingsTabsContainer = "flex flex-1 overflow-hidden [&.narrow_.tab-label]:hidden"
-const settingsTabList =
-	"w-48 data-[compact=true]:w-12 flex-shrink-0 flex flex-col overflow-y-auto overflow-x-hidden border-r border-[var(--vscode-sideBar-background)]"
-const settingsTabTrigger =
-	"whitespace-nowrap overflow-hidden min-w-0 h-12 px-4 py-3 box-border flex items-center border-l-2 border-transparent text-[var(--vscode-foreground)] opacity-70 bg-transparent hover:bg-[var(--vscode-list-hoverBackground)] data-[compact=true]:w-12 data-[compact=true]:p-4 cursor-pointer"
-const settingsTabTriggerActive =
-	"opacity-100 border-l-2 border-l-[var(--vscode-focusBorder)] border-t-0 border-r-0 border-b-0 bg-[var(--vscode-list-activeSelectionBackground)]"
-
 // Tab definitions
+type SettingsTabID = "api-config" | "features" | "browser" | "terminal" | "general" | "about" | "debug" | "remote-config"
 interface SettingsTab {
-	id: string
+	id: SettingsTabID
 	name: string
 	tooltipText: string
 	headerText: string
 	icon: LucideIcon
-	hidden?: boolean
+	hidden?: (params?: { activeOrganization: UserOrganization | null }) => boolean
 }
 
 export const SETTINGS_TABS: SettingsTab[] = [
@@ -78,15 +74,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		headerText: "Terminal Settings",
 		icon: SquareTerminal,
 	},
-	// Only show in dev mode
-	{
-		id: "debug",
-		name: "Debug",
-		tooltipText: "Debug Tools",
-		headerText: "Debug",
-		icon: FlaskConical,
-		hidden: !IS_DEV,
-	},
 	{
 		id: "general",
 		name: "General",
@@ -95,11 +82,29 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		icon: Wrench,
 	},
 	{
+		id: "remote-config",
+		name: "Remote Config",
+		tooltipText: "Remotely configured fields",
+		headerText: "Remote Config",
+		icon: HardDriveDownload,
+		hidden: ({ activeOrganization } = { activeOrganization: null }) =>
+			!activeOrganization || !isAdminOrOwner(activeOrganization),
+	},
+	{
 		id: "about",
 		name: "About",
 		tooltipText: "About Cline",
 		headerText: "About",
 		icon: Info,
+	},
+	// Only show in dev mode
+	{
+		id: "debug",
+		name: "Debug",
+		tooltipText: "Debug Tools",
+		headerText: "Debug",
+		icon: FlaskConical,
+		hidden: () => !IS_DEV,
 	},
 ]
 
@@ -127,27 +132,24 @@ const renderSectionHeader = (tabId: string) => {
 
 const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 	// Memoize to avoid recreation
-	const TAB_CONTENT_MAP = useMemo(
+	const TAB_CONTENT_MAP: Record<SettingsTabID, React.FC<any>> = useMemo(
 		() => ({
 			"api-config": ApiConfigurationSection,
 			general: GeneralSettingsSection,
 			features: FeatureSettingsSection,
 			browser: BrowserSettingsSection,
 			terminal: TerminalSettingsSection,
+			"remote-config": RemoteConfigSection,
 			about: AboutSection,
 			debug: DebugSection,
 		}),
 		[],
 	) // Empty deps - these imports never change
 
-	const { version, environment } = useExtensionState()
+	const { version, environment, settingsInitialModelTab } = useExtensionState()
+	const { activeOrganization } = useClineAuth()
 
-	// Initialize active tab with memoized calculation
-	const initialTab = useMemo(() => targetSection || SETTINGS_TABS[0].id, [targetSection])
-
-	const [activeTab, setActiveTab] = useState<string>(initialTab)
-	const [isCompactMode, setIsCompactMode] = useState(true)
-	const containerRef = useRef<HTMLDivElement>(null)
+	const [activeTab, setActiveTab] = useState<string>(targetSection || SETTINGS_TABS[0].id)
 
 	// Optimized message handler with early returns
 	const handleMessage = useCallback((event: MessageEvent) => {
@@ -207,75 +209,31 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 		}
 	}, [targetSection])
 
-	// Simplified tab change handler without debugging
-	const handleTabChange = useCallback((tabId: string) => {
-		setActiveTab(tabId)
-	}, [])
-
-	// Optimized resize observer with debouncing
-	useEffect(() => {
-		const container = containerRef.current
-		if (!container) {
-			return
-		}
-
-		const checkCompactMode = debounce((width: number) => {
-			setIsCompactMode(width < 500)
-		}, 100)
-
-		const observer = new ResizeObserver((entries) => {
-			const entry = entries[0]
-			if (entry) {
-				checkCompactMode(entry.contentRect.width)
-			}
-		})
-
-		observer.observe(container)
-		return () => observer.disconnect()
-	}, [])
-
 	// Memoized tab item renderer
 	const renderTabItem = useCallback(
 		(tab: (typeof SETTINGS_TABS)[0]) => {
-			const isActive = activeTab === tab.id
-			const tabClassName = `${isActive ? `${settingsTabTrigger} ${settingsTabTriggerActive}` : settingsTabTrigger} focus:ring-0`
-			const iconContainerClassName = `flex items-center gap-2 ${isCompactMode ? "justify-center" : ""}`
-
-			const TabIcon = tab.icon
-			const tabContent = (
-				<div className={iconContainerClassName}>
-					<TabIcon className="w-4 h-4" />
-					<span className="tab-label">{tab.name}</span>
-				</div>
-			)
-
-			if (isCompactMode) {
-				return (
-					<HeroTooltip content={tab.tooltipText} key={tab.id} placement="right">
-						<div
-							className={tabClassName}
-							data-compact={isCompactMode}
-							data-testid={`tab-${tab.id}`}
-							data-value={tab.id}
-							onClick={() => handleTabChange(tab.id)}>
-							{tabContent}
-						</div>
-					</HeroTooltip>
-				)
-			}
-
 			return (
-				<TabTrigger
-					className={tabClassName}
-					data-compact={isCompactMode}
-					data-testid={`tab-${tab.id}`}
-					key={tab.id}
-					value={tab.id}>
-					{tabContent}
+				<TabTrigger className="flex justify-baseline" data-testid={`tab-${tab.id}`} key={tab.id} value={tab.id}>
+					<Tooltip key={tab.id}>
+						<TooltipTrigger>
+							<div
+								className={cn(
+									"whitespace-nowrap overflow-hidden h-12 sm:py-3 box-border flex items-center border-l-2 border-transparent text-foreground opacity-70 bg-transparent hover:bg-list-hover p-4 cursor-pointer gap-2",
+									{
+										"opacity-100 border-l-2 border-l-foreground border-t-0 border-r-0 border-b-0 bg-selection":
+											activeTab === tab.id,
+									},
+								)}>
+								<tab.icon className="w-4 h-4" />
+								<span className="hidden sm:block">{tab.name}</span>
+							</div>
+						</TooltipTrigger>
+						<TooltipContent side="right">{tab.tooltipText}</TooltipContent>
+					</Tooltip>
 				</TabTrigger>
 			)
 		},
-		[activeTab, isCompactMode, handleTabChange],
+		[activeTab],
 	)
 
 	// Memoized active content component
@@ -291,33 +249,23 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			props.onResetState = handleResetState
 		} else if (activeTab === "about") {
 			props.version = version
+		} else if (activeTab === "api-config") {
+			props.initialModelTab = settingsInitialModelTab
 		}
 
 		return <Component {...props} />
-	}, [activeTab, handleResetState, version])
-
-	const titleColor = getEnvironmentColor(environment)
+	}, [activeTab, handleResetState, settingsInitialModelTab, version])
 
 	return (
 		<Tab>
-			<TabHeader className="flex justify-between items-center gap-2">
-				<div className="flex items-center gap-1">
-					<h3 className="m-0" style={{ color: titleColor }}>
-						Settings
-					</h3>
-				</div>
-				<div className="flex gap-2">
-					<VSCodeButton onClick={onDone}>Done</VSCodeButton>
-				</div>
-			</TabHeader>
+			<ViewHeader environment={environment} onDone={onDone} title="Settings" />
 
-			<div className={`${settingsTabsContainer} ${isCompactMode ? "narrow" : ""}`} ref={containerRef}>
+			<div className="flex flex-1 overflow-hidden">
 				<TabList
-					className={settingsTabList}
-					data-compact={isCompactMode}
-					onValueChange={handleTabChange}
+					className="shrink-0 flex flex-col overflow-y-auto border-r border-sidebar-background"
+					onValueChange={setActiveTab}
 					value={activeTab}>
-					{SETTINGS_TABS.filter((tab) => !tab.hidden).map(renderTabItem)}
+					{SETTINGS_TABS.filter((tab) => !tab.hidden?.({ activeOrganization })).map(renderTabItem)}
 				</TabList>
 
 				<TabContent className="flex-1 overflow-auto">{ActiveContent}</TabContent>
