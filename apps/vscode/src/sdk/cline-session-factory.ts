@@ -36,6 +36,7 @@ import type { Settings } from "@shared/storage/state-keys"
 import type { Mode } from "@shared/storage/types"
 import { reasoningEffortFromThinkingBudget } from "@shared/utils/reasoning-support"
 import { stringifyVsCodeLmModelSelector } from "@shared/vsCodeSelectorUtils"
+import { createAriaActuarialExtension } from "@/aria"
 import { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
@@ -1012,6 +1013,7 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 			},
 			logger: sdkLogger,
 		},
+		extensions: [createAriaActuarialExtension()],
 		hooks: buildAgentHooks(StateManager.get()),
 	}
 
