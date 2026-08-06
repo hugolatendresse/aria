@@ -979,6 +979,22 @@ export const OPENROUTER_PROVIDER_PREFERENCES: Record<string, { order: string[]; 
 export type VertexModelId = keyof typeof vertexModels
 export const vertexDefaultModelId: VertexModelId = "gemini-3-pro-preview"
 export const vertexModels = {
+	"gemini-3.5-flash": {
+		maxTokens: 65536,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsGlobalEndpoint: true,
+		inputPrice: 1.5,
+		outputPrice: 9.0,
+		cacheReadsPrice: 0.15,
+		temperature: 1.0,
+		supportsReasoning: true,
+		thinkingConfig: {
+			geminiThinkingLevel: "low",
+			supportsThinkingLevel: true,
+		},
+	},
 	"gemini-3.1-pro-preview": {
 		maxTokens: 8192,
 		contextWindow: 1_048_576,
@@ -1466,6 +1482,20 @@ export const openAiModelInfoSaneDefaults: OpenAiCompatibleModelInfo = {
 export type GeminiModelId = keyof typeof geminiModels
 export const geminiDefaultModelId: GeminiModelId = "gemini-3.1-pro-preview"
 export const geminiModels = {
+	"gemini-3.5-flash": {
+		maxTokens: 65536,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 1.5,
+		outputPrice: 9.0,
+		cacheReadsPrice: 0.15,
+		supportsReasoning: true,
+		thinkingConfig: {
+			geminiThinkingLevel: "low",
+			supportsThinkingLevel: true,
+		},
+	},
 	"gemini-3.1-pro-preview": {
 		maxTokens: 65536,
 		contextWindow: 1_048_576,
@@ -1723,8 +1753,100 @@ export const geminiModels = {
 // OpenAI Native
 // https://openai.com/api/pricing/
 export type OpenAiNativeModelId = keyof typeof openAiNativeModels
-export const openAiNativeDefaultModelId: OpenAiNativeModelId = "gpt-5.2"
+export const openAiNativeDefaultModelId: OpenAiNativeModelId = "gpt-5.5"
 export const openAiNativeModels = {
+	"gpt-5.5": {
+		maxTokens: 8_192,
+		contextWindow: 1_050_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 5.0,
+		outputPrice: 30.0,
+		cacheReadsPrice: 0.5,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		temperature: 1,
+		systemRole: "developer",
+		supportsReasoning: true,
+		supportsReasoningEffort: true,
+	},
+	"gpt-5.4": {
+		maxTokens: 8_192,
+		contextWindow: 1_050_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 2.5,
+		outputPrice: 15.0,
+		cacheReadsPrice: 0.25,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		temperature: 1,
+		systemRole: "developer",
+		supportsReasoning: true,
+		supportsReasoningEffort: true,
+	},
+	"gpt-5.4-mini": {
+		maxTokens: 8_192,
+		contextWindow: 400_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0.75,
+		outputPrice: 4.5,
+		cacheReadsPrice: 0.075,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		temperature: 1,
+		systemRole: "developer",
+		supportsReasoning: true,
+		supportsReasoningEffort: true,
+	},
+	"gpt-5.4-nano": {
+		maxTokens: 8_192,
+		contextWindow: 400_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0.2,
+		outputPrice: 1.25,
+		cacheReadsPrice: 0.02,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		temperature: 1,
+		systemRole: "developer",
+		supportsReasoning: true,
+		supportsReasoningEffort: true,
+	},
+	"gpt-5.3-codex": {
+		maxTokens: 8_192, // 128000 breaks context window truncation
+		contextWindow: 400000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 1.75,
+		outputPrice: 14.0,
+		cacheReadsPrice: 0.175,
+		apiFormat: ApiFormat.OPENAI_RESPONSES_WEBSOCKET_MODE,
+		temperature: 1,
+		systemRole: "developer",
+		supportsReasoning: true,
+		supportsReasoningEffort: true,
+	},
+	"gpt-5.3-chat-latest": {
+		maxTokens: 16_384,
+		contextWindow: 128_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 1.75,
+		outputPrice: 14.0,
+		cacheReadsPrice: 0.175,
+		temperature: 1,
+		systemRole: "developer",
+	},
+	"gpt-5.2-chat-latest": {
+		maxTokens: 16_384,
+		contextWindow: 128_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 1.75,
+		outputPrice: 14.0,
+		cacheReadsPrice: 0.175,
+		temperature: 1,
+		systemRole: "developer",
+	},
 	"gpt-5.2": {
 		maxTokens: 8_192,
 		contextWindow: 272000,
@@ -2008,6 +2130,18 @@ export const openAiNativeModels = {
 export type OpenAiCodexModelId = keyof typeof openAiCodexModels
 export const openAiCodexDefaultModelId: OpenAiCodexModelId = "gpt-5.3-codex"
 export const openAiCodexModels = {
+	"gpt-5.5": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		// Subscription-based: no per-token costs
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.5 Codex: OpenAI's latest flagship coding model via ChatGPT subscription",
+	},
 	"gpt-5.4": {
 		maxTokens: 128_000,
 		contextWindow: 1_000_000,
@@ -2089,6 +2223,28 @@ export const azureOpenAiDefaultApiVersion = "2024-08-01-preview"
 export type DeepSeekModelId = keyof typeof deepSeekModels
 export const deepSeekDefaultModelId: DeepSeekModelId = "deepseek-chat"
 export const deepSeekModels = {
+	"deepseek-v4-flash": {
+		maxTokens: 384_000,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 0, // all input is either a cache hit or miss
+		outputPrice: 0.28,
+		cacheWritesPrice: 0.14,
+		cacheReadsPrice: 0.0028,
+	},
+	"deepseek-v4-pro": {
+		maxTokens: 384_000,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 0, // all input is either a cache hit or miss
+		outputPrice: 0.87,
+		cacheWritesPrice: 0.435,
+		cacheReadsPrice: 0.003625,
+	},
 	"deepseek-chat": {
 		maxTokens: 8_000,
 		contextWindow: 128_000,
@@ -4067,6 +4223,20 @@ export const sapAiCoreModels = {
 		supportsPromptCache: true,
 		description: sapAiCoreModelDescription,
 	},
+	"anthropic--claude-4.7-opus": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		description: sapAiCoreModelDescription,
+	},
+	"anthropic--claude-4.6-opus": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		description: sapAiCoreModelDescription,
+	},
 	"anthropic--claude-4.5-opus": {
 		maxTokens: 64_000,
 		contextWindow: 200_000,
@@ -4116,6 +4286,27 @@ export const sapAiCoreModels = {
 		supportsPromptCache: false,
 		description: sapAiCoreModelDescription,
 	},
+	"amazon--nova-pro": {
+		maxTokens: 10_000,
+		contextWindow: 300_000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		description: sapAiCoreModelDescription,
+	},
+	"amazon--nova-lite": {
+		maxTokens: 10_000,
+		contextWindow: 300_000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		description: sapAiCoreModelDescription,
+	},
+	"amazon--nova-micro": {
+		maxTokens: 10_000,
+		contextWindow: 128_000,
+		supportsImages: false,
+		supportsPromptCache: false,
+		description: sapAiCoreModelDescription,
+	},
 	"gemini-2.5-pro": {
 		maxTokens: 65536,
 		contextWindow: 1_048_576,
@@ -4134,6 +4325,23 @@ export const sapAiCoreModels = {
 		thinkingConfig: {
 			maxBudget: 24576,
 		},
+		description: sapAiCoreModelDescription,
+	},
+	"gemini-2.5-flash-lite": {
+		maxTokens: 65535,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		thinkingConfig: {
+			maxBudget: 24576,
+		},
+		description: sapAiCoreModelDescription,
+	},
+	"gemini-2.5-flash-image": {
+		maxTokens: 32_768,
+		contextWindow: 32_768,
+		supportsImages: true,
+		supportsPromptCache: false,
 		description: sapAiCoreModelDescription,
 	},
 	"gpt-4": {
@@ -4199,6 +4407,27 @@ export const sapAiCoreModels = {
 		supportsPromptCache: true,
 		description: sapAiCoreModelDescription,
 	},
+	"gpt-5.5": {
+		maxTokens: 128_000,
+		contextWindow: 1_050_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		description: sapAiCoreModelDescription,
+	},
+	"gpt-5.4": {
+		maxTokens: 128_000,
+		contextWindow: 1_050_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		description: sapAiCoreModelDescription,
+	},
+	"gpt-5.4-nano": {
+		maxTokens: 128_000,
+		contextWindow: 400_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		description: sapAiCoreModelDescription,
+	},
 	o1: {
 		maxTokens: 4096,
 		contextWindow: 200_000,
@@ -4237,6 +4466,41 @@ export const sapAiCoreModels = {
 	"sonar-pro": {
 		maxTokens: 128_000,
 		contextWindow: 200_000,
+		supportsImages: false,
+		supportsPromptCache: false,
+		description: sapAiCoreModelDescription,
+	},
+	"mistralai--mistral-medium-instruct": {
+		maxTokens: 8192,
+		contextWindow: 128_000,
+		supportsImages: false,
+		supportsPromptCache: false,
+		description: sapAiCoreModelDescription,
+	},
+	"mistralai--mistral-large-instruct": {
+		maxTokens: 8192,
+		contextWindow: 64_000,
+		supportsImages: false,
+		supportsPromptCache: false,
+		description: sapAiCoreModelDescription,
+	},
+	"mistralai--mistral-small-instruct": {
+		maxTokens: 8192,
+		contextWindow: 128_000,
+		supportsImages: false,
+		supportsPromptCache: false,
+		description: sapAiCoreModelDescription,
+	},
+	"mistralai--mistral-small": {
+		maxTokens: 8192,
+		contextWindow: 128_000,
+		supportsImages: false,
+		supportsPromptCache: false,
+		description: sapAiCoreModelDescription,
+	},
+	"cohere--command-a-reasoning": {
+		maxTokens: 8192,
+		contextWindow: 256_000,
 		supportsImages: false,
 		supportsPromptCache: false,
 		description: sapAiCoreModelDescription,
@@ -4524,11 +4788,21 @@ export type BasetenModelId = keyof typeof basetenModels
 export const basetenDefaultModelId = "zai-org/GLM-4.6" satisfies BasetenModelId
 
 // Z AI
+// https://docs.z.ai/guides/llm/glm-5.1
 // https://docs.z.ai/guides/llm/glm-5
 // https://docs.z.ai/guides/overview/pricing
 export type internationalZAiModelId = keyof typeof internationalZAiModels
-export const internationalZAiDefaultModelId: internationalZAiModelId = "glm-5"
+export const internationalZAiDefaultModelId: internationalZAiModelId = "glm-5.1"
 export const internationalZAiModels = {
+	"glm-5.1": {
+		maxTokens: 128_000,
+		contextWindow: 200_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		cacheReadsPrice: 0.26,
+		inputPrice: 1.4,
+		outputPrice: 4.4,
+	},
 	"glm-5": {
 		maxTokens: 128_000,
 		contextWindow: 200_000,
@@ -4583,8 +4857,17 @@ export const internationalZAiModels = {
 } as const satisfies Record<string, ModelInfo>
 
 export type mainlandZAiModelId = keyof typeof mainlandZAiModels
-export const mainlandZAiDefaultModelId: mainlandZAiModelId = "glm-5"
+export const mainlandZAiDefaultModelId: mainlandZAiModelId = "glm-5.1"
 export const mainlandZAiModels = {
+	"glm-5.1": {
+		maxTokens: 128_000,
+		contextWindow: 200_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		cacheReadsPrice: 0.26,
+		inputPrice: 1.4,
+		outputPrice: 4.4,
+	},
 	"glm-5": {
 		maxTokens: 128_000,
 		contextWindow: 200_000,
